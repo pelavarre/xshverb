@@ -109,7 +109,7 @@ but with their defaults rethought and corrected to fit our new world of large me
 + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
 + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 + |m is for **Make**, but timestamp the work and never print the same Line twice
-+ |n is for **Number** with the '|cat -n |expand' index, whereas |n -0 is '|nl -v0 |expand'
++ |n is for **NL** with the '|cat -n |expand' index, whereas |n -0 is '|nl -v0 |expand'
 + |o is for **Py Line Strip**
 + |p is for **Python**, but stop making you spell out the Imports
 + |p dedent is for Py Str TextWrap DeDent
