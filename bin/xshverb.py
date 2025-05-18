@@ -13,11 +13,21 @@ positional args:
   HINT  enough of a hint to search out the correct Shell Pipe Filter
 
 quirks:
-  strips leading and trailing blank space from each File, but does end with 1 Line-Break
-  strips trailing blank space from each Line
+  strips leading and trailing Blanks from each File, and ends with 1 Line-Break, by default
+  strips trailing Blanks from each Line, by default
   more doc at https://github.com/pelavarre/xshverb
 
-most common words:
+most common Python words:
+  bytes decode dedent encode join list lower str title upper
+
+python examples:
+  p lower  # convert the Os/Copy Paste Buffer to lower case
+  p lower c  # preview changes without saving changes
+  p str lower  # change Chars without first stripping off the Blanks
+  p bytes lower  # change Bytes without first stripping off the Blanks
+  p join --sep=.  # join Lines into a single Line, with a Dot between each Line
+
+most common Shell words:
   awk b cat diff emacs find grep head str.split jq less ls make
   nl for.str.strip python git reversed sorted tail unique vi w xargs yes z
 
@@ -26,8 +36,9 @@ examples:
   p  # chat with Python, and don't make you spell out the Imports, or Build & run a Shell Pipe
   v  # fix up the Os/Copy Paste Buffer and call Vim to edit it
 """
+# todo: --py to show the Python chosen, --py=... to supply your own Python
 
-# code reviewed by People, Black, Flake8, MyPy Strict, & PyLance-Standard
+# code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
 
 
 import dataclasses
@@ -35,19 +46,43 @@ import hashlib
 import os
 import pathlib
 import sys
+import textwrap
 import typing
+
+
+YYYY_MM_DD = "2025-05-18"  # date of last change to this Code, or an earlier date
+
+
+class ShellFunc(typing.Protocol):
+    def __call__(self, argv: list[str]) -> None: ...
+
+
+assert __doc__, (__doc__,)
+DOCS: dict[str, str] = dict()
+DOCS["python"] = __doc__
 
 
 @dataclasses.dataclass(order=True)  # , frozen=True)
 class ShellVerb:
     """A Shell Pipe Filter"""
 
-    argv: tuple[str, ...]
+    nm: str  # 'p'
+    name: str  # 'python'
+    func: ShellFunc  # the .do_python of a ShellPipe
+    argv: list[str]  # ['p', '--version']
 
-    def __init__(self, hints: list[str]) -> None:
+    name_by_nm = {  # each of our .nm's is the .name itself, or an alias of the .name
+        "p": "python",
+        "xshverb": "python",
+        "xshverb.py": "python",
+    }
+
+    def __init__(self, hints: list[str], func_by_name: dict[str, ShellFunc]) -> None:
         """Parse a Hint, else show Help and exit"""
 
         assert hints, (hints,)
+
+        name_by_nm = self.name_by_nm
 
         # Pop the Sh Verb, and zero or more Dashed Options
 
@@ -59,21 +94,27 @@ class ShellVerb:
             if hints and not hints[0].startswith("-"):
                 break
 
-        self.argv = tuple(argv)
+        # Require a Well-Known Alias of a Well-Known Verb, or the Well-Known Verb itself
 
-        # Require a Well-Known Verb
+        nm = argv[0]
 
-        shverb = argv[0]
-        if shverb == "p":
-            return
-        if shverb == "xshverb":
-            return
-        if shverb == "xshverb.py":
-            return
+        name = nm
+        if nm in name_by_nm.keys():
+            name = name_by_nm[nm]
 
-        text = f"xshverb: command not found: {shverb}"
-        eprint(text)
-        sys.exit(2)  # exits 2 for bad Sh Verb
+        if name not in func_by_name.keys():
+            text = f"xshverb: command not found: {nm}"
+            eprint(text)
+            sys.exit(2)  # exits 2 for bad Sh Verb
+
+        func = func_by_name[name]
+
+        # Succeed
+
+        self.nm = nm
+        self.name = name
+        self.func = func
+        self.argv = argv
 
     def parse_shverb_args_else(self) -> None:
         """Parse Args, else show Version or Help and exit zero"""
@@ -110,8 +151,16 @@ class ShellVerb:
     def do_show_help(self) -> None:
         """Show help and exit zero"""
 
-        assert __doc__, (__doc__, __file__)
-        doc = __doc__.strip()
+        nm = self.nm
+        name = self.name
+
+        full_doc = DOCS[name]
+
+        key = "usage: xshverb.py "
+        doc = textwrap.dedent(full_doc).strip()
+        if doc.startswith(key) and (nm != "xshverb.py"):
+            count_eq_1 = 1
+            doc = doc.replace(key, f"usage: {nm} ", count_eq_1)
 
         print(doc)
 
@@ -120,45 +169,53 @@ class ShellVerb:
 
         version = pathname_read_version(__file__)
 
-        print("2025-05-17", version)
-
-    def shverb_run(self) -> None:
-        """Run as a step of a Shell Pipe"""
-
-        sys.exit(1)
+        print(YYYY_MM_DD, version)
 
 
 class ShellPipe:
     """Pump Bytes in, and on through Pipe Filters, and then out again"""
+
+    func_by_name: dict[str, ShellFunc]
+
+    def __init__(self) -> None:
+        self.func_by_name = dict(
+            python=self.do_python,
+        )
 
     def shpipe_main(self, argv: list[str]) -> None:
         """Run from the Sh Command Line"""
 
         shverbs = self.parse_shpipe_args_else(argv)
 
-        eprint(shverbs)
         for shverb in shverbs:
-            shverb.shverb_run()
+            eprint(shverb)
+
+        for shverb in shverbs:
+            shverb.func(shverb.argv)
 
         sys.exit(1)
 
     def parse_shpipe_args_else(self, argv: list[str]) -> list[ShellVerb]:
         """Parse Args, else show Version or Help and exit"""
 
-        # Compile Hints in order, but show version or help and exit zero, when asked
-
         hints = list(argv)
         hints[0] = os.path.split(argv[0])[-1]  # 'xshverb.py' from 'bin/xshverb.py'
 
+        func_by_name = self.func_by_name
+
         shverbs = list()
         while hints:
-            shverb = ShellVerb(hints)  # exits 2 for bad Hints
+            shverb = ShellVerb(hints, func_by_name=func_by_name)  # exits 2 for bad Hints
             shverb.parse_shverb_args_else()
             shverbs.append(shverb)
 
-        # Succeed
-
         return shverbs
+
+    def do_python(self, argv: list[str]) -> None:
+        """Run Python"""
+
+        print(argv)
+        sys.exit(1)
 
 
 #
@@ -178,7 +235,6 @@ def pathname_read_version(pathname: str) -> str:
 
     str_hash = hash_bytes.hex()
     str_hash = str_hash.upper()  # such as 32 nybbles 'C24931F77721476EF76D85F3451118DB'
-    print(str_hash)
 
     major = 0
     minor = int(str_hash[0], 0x10)  # 0..15
