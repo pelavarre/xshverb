@@ -13,7 +13,7 @@ positional args:
   HINT  enough of a hint to search out the correct Shell Pipe Filter
 
 quirks:
-  strips leading and trailing blank space from each File
+  strips leading and trailing blank space from each File, but does end with 1 Line-Break
   strips trailing blank space from each Line
   more doc at https://github.com/pelavarre/xshverb
 
@@ -23,55 +23,107 @@ most common words:
 
 examples:
   git show |i  s  u  s -nr  h  c  # show the most common words in the last Git Commit
-  e  # fix up the Os/Copy Paste Buffer and call Emacs to edit it
-  p  # chat with Python, but don't make you spell out the Imports
+  p  # chat with Python, and don't make you spell out the Imports, or Build & run a Shell Pipe
   v  # fix up the Os/Copy Paste Buffer and call Vim to edit it
 """
 
 # code reviewed by People, Black, Flake8, MyPy Strict, & PyLance-Standard
 
 
+import dataclasses
 import hashlib
 import os
 import pathlib
 import sys
+import typing
+
+
+@dataclasses.dataclass(order=True)  # , frozen=True)
+class ShellVerb:
+    """A Shell Pipe Filter"""
+
+    hint: str
+
+    def __init__(self, hints: list[str]) -> None:
+        """Parse a Hint, else show Help and exit"""
+
+        hint = hints.pop(0)
+        self.hint = hint
+
+        if hint == "xshverb":
+            return
+
+        if hint == "p":
+            return
+
+        text = f"xshverb: command not found: {hint}"
+        eprint(text)
+        sys.exit(2)  # exits 2 for undefined Hint
 
 
 class ShellPipe:
-    """Pump Bytes in, on through Pipe Filters, and out again"""
+    """Pump Bytes in, and on through Pipe Filters, and then out again"""
 
     def main(self, argv: list[str]) -> None:
         """Run from the Sh Command Line"""
 
-        hints = self.parse_args_else(argv)
+        shverbs = self.parse_args_else(argv)
 
-        print(hints)
+        print(shverbs)
         sys.exit(1)
 
-    def parse_args_else(self, argv: list[str]) -> list[str]:
+    def parse_args_else(self, argv: list[str]) -> list[ShellVerb]:
+        """Parse Args, else show Verson or Help and exit"""
 
-        # Show help and exit zero, when asked
-
-        for arg in argv[1:]:
-            if arg == "--":
-                break
-
-            if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
-                self.do_show_help()
-                sys.exit(0)
-
-            if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
-                self.do_show_version()
-                sys.exit(0)
+        assert __doc__, (__doc__, __file__)
+        doc = __doc__.strip()
+        usage = doc.splitlines()[0]
 
         # Compile Hints in order
 
         hints = list(argv)
         hints[0] = os.path.split(argv[0])[-1]  # 'xshverb.py' from 'bin/xshverb.py'
 
+        # Show help and exit zero, when asked
+
+        shverbs = list()
+
+        shverb: ShellVerb | None = None
+        double_dashed = False
+
+        while hints:
+            hint = hints[0]
+
+            if hint == "--":
+                hints.pop(0)
+                double_dashed = True
+                continue
+
+            if not double_dashed:
+
+                if (hint == "-h") or ("--help".startswith(hint) and hint.startswith("--h")):
+                    hints.pop(0)
+                    self.do_show_help()
+                    sys.exit(0)
+
+                if (hint == "-V") or ("--version".startswith(hint) and hint.startswith("--v")):
+                    hints.pop(0)
+                    self.do_show_version()
+                    sys.exit(0)
+
+                text = f"{shverb}: error: unrecognized arguments: {hint}"
+                if hint.startswith("-"):
+                    hints.pop(0)
+                    eprint(usage)
+                    eprint(text)
+                    sys.exit(2)  # exits 2 for bad Sh Args
+
+            shverb = ShellVerb(hints)  # exits 2 for undefined Hint
+            shverbs.append(shverb)
+
         # Succeed
 
-        return hints
+        return shverbs
 
     def do_show_help(self) -> None:
         """Show help and exit zero"""
@@ -116,6 +168,15 @@ def pathname_read_version(pathname: str) -> str:
     return version
 
     # 0.15.255
+
+
+#
+# Amp up Import Sys
+#
+
+
+def eprint(*args: typing.Any, **kwargs: typing.Any) -> None:
+    print(*args, **kwargs, file=sys.stderr)
 
 
 #
