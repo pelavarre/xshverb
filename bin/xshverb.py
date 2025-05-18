@@ -42,88 +42,70 @@ import typing
 class ShellVerb:
     """A Shell Pipe Filter"""
 
-    hint: str
+    argv: tuple[str, ...]
 
     def __init__(self, hints: list[str]) -> None:
         """Parse a Hint, else show Help and exit"""
 
-        hint = hints.pop(0)
-        self.hint = hint
+        assert hints, (hints,)
 
-        if hint == "xshverb":
+        # Pop the Sh Verb, and zero or more Dashed Options
+
+        argv = list()
+        while hints:
+            arg = hints.pop(0)
+            argv.append(arg)  # may be '--', and may be '--' more than once
+
+            if hints and not hints[0].startswith("-"):
+                break
+
+        self.argv = tuple(argv)
+
+        # Require a Well-Known Verb
+
+        shverb = argv[0]
+        if shverb == "p":
+            return
+        if shverb == "xshverb":
+            return
+        if shverb == "xshverb.py":
             return
 
-        if hint == "p":
-            return
-
-        text = f"xshverb: command not found: {hint}"
+        text = f"xshverb: command not found: {shverb}"
         eprint(text)
-        sys.exit(2)  # exits 2 for undefined Hint
+        sys.exit(2)  # exits 2 for bad Sh Verb
 
+    def parse_shverb_args_else(self) -> None:
+        """Parse Args, else show Version or Help and exit zero"""
 
-class ShellPipe:
-    """Pump Bytes in, and on through Pipe Filters, and then out again"""
-
-    def main(self, argv: list[str]) -> None:
-        """Run from the Sh Command Line"""
-
-        shverbs = self.parse_args_else(argv)
-
-        print(shverbs)
-        sys.exit(1)
-
-    def parse_args_else(self, argv: list[str]) -> list[ShellVerb]:
-        """Parse Args, else show Verson or Help and exit"""
+        argv = self.argv
 
         assert __doc__, (__doc__, __file__)
         doc = __doc__.strip()
         usage = doc.splitlines()[0]
 
-        # Compile Hints in order
-
-        hints = list(argv)
-        hints[0] = os.path.split(argv[0])[-1]  # 'xshverb.py' from 'bin/xshverb.py'
-
-        # Show help and exit zero, when asked
-
-        shverbs = list()
-
-        shverb: ShellVerb | None = None
+        shverb = argv[0]
         double_dashed = False
-
-        while hints:
-            hint = hints[0]
-
-            if hint == "--":
-                hints.pop(0)
-                double_dashed = True
-                continue
+        for arg in argv[1:]:
 
             if not double_dashed:
 
-                if (hint == "-h") or ("--help".startswith(hint) and hint.startswith("--h")):
-                    hints.pop(0)
+                if arg == "--":
+                    double_dashed = True
+                    continue
+
+                if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
                     self.do_show_help()
                     sys.exit(0)
 
-                if (hint == "-V") or ("--version".startswith(hint) and hint.startswith("--v")):
-                    hints.pop(0)
+                if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
                     self.do_show_version()
                     sys.exit(0)
 
-                text = f"{shverb}: error: unrecognized arguments: {hint}"
-                if hint.startswith("-"):
-                    hints.pop(0)
-                    eprint(usage)
-                    eprint(text)
-                    sys.exit(2)  # exits 2 for bad Sh Args
-
-            shverb = ShellVerb(hints)  # exits 2 for undefined Hint
-            shverbs.append(shverb)
-
-        # Succeed
-
-        return shverbs
+            text = f"{shverb}: error: unrecognized arguments: {arg}"
+            eprint(usage)
+            eprint(text)
+            sys.exit(2)  # exits 2 for bad Sh Arg
 
     def do_show_help(self) -> None:
         """Show help and exit zero"""
@@ -139,6 +121,44 @@ class ShellPipe:
         version = pathname_read_version(__file__)
 
         print("2025-05-17", version)
+
+    def shverb_run(self) -> None:
+        """Run as a step of a Shell Pipe"""
+
+        sys.exit(1)
+
+
+class ShellPipe:
+    """Pump Bytes in, and on through Pipe Filters, and then out again"""
+
+    def shpipe_main(self, argv: list[str]) -> None:
+        """Run from the Sh Command Line"""
+
+        shverbs = self.parse_shpipe_args_else(argv)
+
+        eprint(shverbs)
+        for shverb in shverbs:
+            shverb.shverb_run()
+
+        sys.exit(1)
+
+    def parse_shpipe_args_else(self, argv: list[str]) -> list[ShellVerb]:
+        """Parse Args, else show Version or Help and exit"""
+
+        # Compile Hints in order, but show version or help and exit zero, when asked
+
+        hints = list(argv)
+        hints[0] = os.path.split(argv[0])[-1]  # 'xshverb.py' from 'bin/xshverb.py'
+
+        shverbs = list()
+        while hints:
+            shverb = ShellVerb(hints)  # exits 2 for bad Hints
+            shverb.parse_shverb_args_else()
+            shverbs.append(shverb)
+
+        # Succeed
+
+        return shverbs
 
 
 #
@@ -186,7 +206,7 @@ def eprint(*args: typing.Any, **kwargs: typing.Any) -> None:
 
 if __name__ == "__main__":
     p = ShellPipe()
-    p.main(sys.argv)
+    p.shpipe_main(sys.argv)
 
 
 # posted as:  https://github.com/pelavarre/xshverb/blob/main/bin/xshverb.py
