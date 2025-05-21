@@ -1,4 +1,25 @@
+<!-- omit in toc -->
 # xshverb
+
+Contents
+
+- [Welcome](#welcome)
+- [23 is just barely enough](#23-is-just-barely-enough)
+- [Arguments that don't begin with a Dash '-'](#arguments-that-dont-begin-with-a-dash--)
+  - [Punctuated Arguments](#punctuated-arguments)
+  - [Regular Expressions Unions](#regular-expressions-unions)
+- [Bugs abandoned, not perpetuated](#bugs-abandoned-not-perpetuated)
+  - [|awk -vOFS=$'\\x00'](#awk--vofsx00)
+  - [|awk -vOFS=$'\\x0A'](#awk--vofsx0a)
+  - [|awk -vOSEP=:](#awk--vosep)
+  - [|grep -e=O -e=U](#grep--eo--eu)
+  - [|grep hello](#grep-hello)
+- [Future work](#future-work)
+- [Past work](#past-work)
+- [Up online](#up-online)
+
+<!-- I'd fear people need the headings numbered, if it were just me -->
+<!-- VsCode autogenerates this unnumbered Table-of-Contents. Maybe people will cope -->
 
 ## Welcome
 
@@ -13,7 +34,7 @@ to have us say what we'll do, before you agree to have us to do it
 
     $ git show |y  i  s  u  s -nr  h  c
 
-    + |p split |p sort |p uniq -c --expand |p sort -nr |p head |p cat -
+    + |p split |p sort |p counter |p sort -nr |p head |cat -
 
     >> Press ⌃D to run, or ⌃C to quit <<
 
@@ -23,7 +44,7 @@ the classic 1970s work of Terminal Shell designs has fallen
 
     $ git show |y  y  i  s  u  s -nr  h  c
 
-    + |tr '\t' ' ' |sed 's,^  *,,' |sed 's,  *$,,' |tr ' ' '\n' |grep . |LC_ALL=C sort |uniq -c |expand |LC_ALL=C sort -nr |head |cat -
+    + |tr '\t' ' ' |sed 's,^  *,,' |sed 's,  *$,,' |tr ' ' '\n' |grep . |LC_ALL=C sort |uniq -c |expand |LC_ALL=C sort -nr |head -$((LINES / 3)) |cat -
 
     >> Press ⌃D to run, or ⌃C to quit <<
 
@@ -144,6 +165,93 @@ but not at 'cal -h' and 'df -h' and 'du -h' and 'ls -h' and so on
 My actual Shell sometimes quits on me, refusing to work with unusual bytes.
 Our kind of Python runs well in place of my actual Shell,
 practically never slapping me out like that
+
+
+## Arguments that don't begin with a Dash '-'
+
+
+### Punctuated Arguments
+
+Besides things like
+
+    |g -eO -eU
+
+you can also write things like
+
+    |g 'O|U'
+
+    |g [OU]
+
+This works because,
+when you put punctuation into words,
+we figure that you gave us these words as arguments that don't begin with a Dash '-'
+
+Of course, we don't interfere with your Shell.
+Like if you have gone and created Files named ./O and ./U,
+then the 'echo g [OU]' you typed into the Shell will come to us as 'echo g O U'
+
+If you don't like that, then you have to type it out more explicitly as
+
+    |g '[OU]'
+
+
+### Regular Expressions Unions
+
+Classic Grep makes searching for more than one match in parallel weirdly difficult to spell out
+
+For example, to search for the letter O or the letter U, you can learn to write any one of
+
+    |grep -i -e O -e U
+
+    |grep -i -eO -eU
+
+    |grep -i -E 'O|U'
+
+    |grep -i [OU]
+
+It works, but it annoys me to type out the ' -e ' parts so often. So we also accept
+
+    |g O,U
+
+beyond the more direct abbreviations of only the classics
+
+    |g -e O -e U
+
+    |g -eO -eU
+
+    |g 'O|U'
+
+    |g [OU]
+
+Sadly, the classic '|grep -e=O -e=U' means something else, and our '|g -e=O -e=U' doesn't mean that
+
+
+## Bugs abandoned, not perpetuated
+
+### |awk -vOFS=$'\x00'
+
+Classic Awk takes this as if it meant -vOFS=''
+
+
+### |awk -vOFS=$'\x0A'
+
+Classic Awk chokes over this, crying out awk: newline in string
+
+
+### |awk -vOSEP=:
+
+Classic Awk doesn't check the spelling of -vOFS=
+
+Classic Awk doesn't spell -F=ISEP and -vOFS=OSEP more similarly than that
+
+
+### |grep -e=O -e=U
+
+Classic Grep takes this as a search for '=O' and '=U', not as a search for 'O' and 'U'
+
+### |grep hello
+
+Classic Grep takes this as a search for a pattern that fails to match if the reality differs only in case
 
 
 ## Future work
