@@ -45,6 +45,7 @@ examples:
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
 
 
+import collections.abc
 import dataclasses
 import hashlib
 import os
@@ -57,173 +58,14 @@ import textwrap
 import typing
 
 
-YYYY_MM_DD = "2025-05-18"  # date of last change to this Code, or an earlier date
+YYYY_MM_DD = "2025-05-23"  # date of last change to this Code, or an earlier date
 
 
-class ShellFunc(typing.Protocol):
-    def __call__(self, argv: list[str]) -> None: ...
-
-
-AWK_DOC = r"""
-
-    usage: awk [-h] [-V] [-F=ISEP] [-vOFS=OSEP] [NUMBER ...]
-
-    pick one or more columns of words, and drop the rest
-
-    positional args:
-      NUMBER  the 1-based index of a column to keep, while dropping the rest
-
-    options:
-      -F=ISEP, --isep=ISEP     input word separator, default is Blanks
-      -vOFS=OSEP, --osep=OSEP  output word separator, default is Single Space
-
-    quirks:
-      rounds down Float Numbers to Ints, same as classic Awk does
-      applies Python Str Split Rules to separate the Words
-      accepts arbitrary chars as Seps, unlike classic Awk quirks at $'\n' $'\x00' etc
-      accepts 0 as meaning 1..N, unlike Awk ignoring the Output Sep at $0
-      doesn't accept Gnu Awk --field-separator=ISEP nor --assign OFS=OSEP
-      doesn't write out trailing Blanks when trailing Columns missing, unlike classic Awk
-
-    examples:
-      awk  # implicitly drops all but the last Column
-      awk -1  # same deal, but more explicitly
-      awk 1  # similar deal, but keep only the first Column
-      awk 1 3 5  # keep only the 1st, 3rd, and 5th Columns
-      echo $PATH |awk -F:  # show the last Dir in the Sh Path
-      echo $PATH |awk -F: -vOFS=$'\n' 0  # show 1 Dir per Line
-
-"""
-
-
-assert __doc__, (__doc__,)
-DOCS: dict[str, str] = dict()
-
-DOCS["awk"] = AWK_DOC
-DOCS["python"] = __doc__
-
-for _K_ in DOCS.keys():
-    DOCS[_K_] = textwrap.dedent(DOCS[_K_]).strip()
-
-
-@dataclasses.dataclass(order=True)  # , frozen=True)
-class ShellVerb:
-    """A Shell Pipe Filter"""
-
-    nm: str  # 'p'
-    name: str  # 'python'
-    func: ShellFunc  # the .do_python of a ShellPipe
-    argv: list[str]  # ['p', '--version']
-
-    name_by_nm = {  # each of our .nm's is the .name itself, or an alias of the .name
-        "a": "awk",
-        "p": "python",
-        "xshverb": "python",
-        "xshverb.py": "python",
-    }
-
-    def __init__(self, hints: list[str], func_by_name: dict[str, ShellFunc]) -> None:
-        """Parse a Hint, else show Help and exit"""
-
-        assert hints, (hints,)
-
-        name_by_nm = self.name_by_nm
-
-        # Pop the Sh Verb, and zero or more Dashed Options
-
-        argv = list()
-        while hints:
-            arg = hints.pop(0)
-            argv.append(arg)  # may be '--', and may be '--' more than once
-
-            if hints:
-                peek = hints[0]
-                if peek.isidentifier():  # any '-' or '--' option, also 'a|b' etc etc
-                    break
-
-        # Require a Well-Known Alias of a Well-Known Verb, or the Well-Known Verb itself
-
-        nm = argv[0]
-
-        name = nm
-        if nm in name_by_nm.keys():
-            name = name_by_nm[nm]
-
-        if name not in func_by_name.keys():
-            text = f"xshverb: command not found: {nm}"
-            eprint(text)
-            sys.exit(2)  # exits 2 for bad Sh Verb
-
-        func = func_by_name[name]
-
-        # Succeed
-
-        self.nm = nm
-        self.name = name
-        self.func = func
-        self.argv = argv
-
-    def parse_shverb_args_else(self) -> None:
-        """Parse Args, else show Version or Help and exit zero"""
-
-        argv = self.argv
-
-        assert __doc__, (__doc__, __file__)
-        doc = __doc__.strip()
-        usage = doc.splitlines()[0]
-
-        shverb = argv[0]
-        double_dashed = False
-        for arg in argv[1:]:
-
-            if not double_dashed:
-
-                if arg == "--":
-                    double_dashed = True
-                    continue
-
-                if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
-                    self.do_show_help()
-                    sys.exit(0)
-
-                if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
-                    self.do_show_version()
-                    sys.exit(0)
-
-            if re.fullmatch(r"[-+]?[0-9]+", arg):  # FIXME: more thought!
-                continue
-
-            text = f"{shverb}: error: unrecognized arguments: {arg}"
-            eprint(usage)
-            eprint(text)
-            sys.exit(2)  # exits 2 for bad Sh Arg
-
-    def do_show_help(self) -> None:
-        """Show help and exit zero"""
-
-        nm = self.nm
-        name = self.name
-
-        full_doc = DOCS[name]
-
-        key = "usage: xshverb.py "
-        doc = textwrap.dedent(full_doc).strip()
-        if doc.startswith(key) and (nm != "xshverb.py"):
-            count_eq_1 = 1
-            doc = doc.replace(key, f"usage: {nm} ", count_eq_1)
-
-        print(doc)
-
-    def do_show_version(self) -> None:
-        """Show version and exit zero"""
-
-        version = pathname_read_version(__file__)
-
-        print(YYYY_MM_DD, version)
+ShellFunc = collections.abc.Callable[["ShellPipe", list[str]], None]
 
 
 class ShellFile:
-    """Pump Bytes in and out"""
+    """Pump Bytes in and out"""  # 'Store and forward'
 
     iobytes: bytes = b""
 
@@ -259,7 +101,7 @@ class ShellFile:
 
             self.iobytes = run.stdout  # replaces
 
-        # more tuned to fit purpose than the simpler:  iobytes = os.popen(shline).read().encode()
+        # .returncode .shell .stdin differs from:  iobytes = os.popen(shline).read().encode()
 
     def readlines(self) -> list[str]:
         """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
@@ -311,8 +153,124 @@ class ShellFile:
             subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
 
 
+@dataclasses.dataclass(order=True)  # , frozen=True)
+class ShellPump:
+    """Work to drain 1 ShellFile and fill the next ShellFile"""
+
+    nm: str  # 'p'
+    name: str  # 'python'
+    func: ShellFunc  # the .do_python of a ShellPipe
+    argv: list[str]  # ['p', '--version']
+
+    name_by_nm = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
+        "a": "awk",
+        "p": "python",
+        "xshverb": "python",
+        "xshverb.py": "python",
+    }
+
+    def __init__(self, hints: list[str], func_by_name: dict[str, ShellFunc]) -> None:
+        """Parse a Hint, else show Help and exit"""
+
+        assert hints, (hints,)
+
+        name_by_nm = self.name_by_nm
+
+        # Pop the Shell Verb, and zero or more Dashed Options
+
+        argv = list()
+        while hints:
+            arg = hints.pop(0)
+            argv.append(arg)  # may be '--', and may be '--' more than once
+
+            if hints:
+                peek = hints[0]
+                if peek.isidentifier():  # any '-' or '--' option, also 'a|b' etc etc
+                    break
+
+        # Require an Alias of a Shell Verb, or the Shell Verb itself
+
+        nm = argv[0]
+
+        name = nm
+        if nm in name_by_nm.keys():
+            name = name_by_nm[nm]  # Aliases are often shorter than their Shell Verbs
+
+        if name not in func_by_name.keys():
+            text = f"xshverb: command not found: {nm}"  # a la Bash & Zsh vs New Verbs
+            eprint(text)
+            sys.exit(2)  # exits 2 for bad Shell Verb
+
+        func = func_by_name[name]
+
+        # Succeed
+
+        self.nm = nm
+        self.name = name
+        self.func = func
+        self.argv = argv
+
+    def parse_shpump_args_else(self) -> None:
+        """Parse Args, else show Version or Help and exit zero"""
+
+        argv = self.argv
+
+        assert __doc__, (__doc__, __file__)
+        doc = __doc__.strip()
+        usage = doc.splitlines()[0]
+
+        nm = argv[0]
+        double_dashed = False
+        for arg in argv[1:]:
+
+            if not double_dashed:
+
+                if arg == "--":
+                    double_dashed = True
+                    continue
+
+                if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
+                    self.do_show_help()
+                    sys.exit(0)
+
+                if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
+                    self.do_show_version()
+                    sys.exit(0)
+
+            if re.fullmatch(r"[-+]?[0-9]+", arg):  # FIXME: more thought!
+                continue
+
+            text = f"{nm}: error: unrecognized arguments: {arg}"
+            eprint(usage)
+            eprint(text)
+            sys.exit(2)  # exits 2 for bad Shell Arg
+
+    def do_show_help(self) -> None:
+        """Show help and exit zero"""
+
+        nm = self.nm
+        name = self.name
+
+        full_doc = DOCS[name]
+
+        key = "usage: xshverb.py "
+        doc = textwrap.dedent(full_doc).strip()
+        if doc.startswith(key) and (nm != "xshverb.py"):
+            count_eq_1 = 1
+            doc = doc.replace(key, f"usage: {nm} ", count_eq_1)
+
+        print(doc)
+
+    def do_show_version(self) -> None:
+        """Show version and exit zero"""
+
+        version = pathname_read_version(__file__)
+
+        print(YYYY_MM_DD, version)
+
+
 class ShellPipe:
-    """Pump Bytes in, and on through Pipe Filters, and then out again"""
+    """Pump Bytes through a pipe of Shell Pumps"""
 
     stdin: ShellFile
     stdout: ShellFile
@@ -321,27 +279,27 @@ class ShellPipe:
 
     def __init__(self) -> None:
         self.func_by_name = dict(
-            awk=self.do_awk,
-            python=self.do_python,
+            awk=do_awk,
+            python=do_little,
         )
 
     def shpipe_main(self, argv: list[str]) -> None:
         """Run from the Sh Command Line"""
 
-        shverbs = self.parse_shpipe_args_else(argv)
-        # for shverb in shverbs:
-        #     eprint(shverb)
+        shpumps = self.parse_shpipe_args_else(argv)
 
         self.stdout = ShellFile()
-        for shverb in shverbs:
+        for shpump in shpumps:
             self.stdin = self.stdout
             self.stdout = ShellFile()
 
-            shverb.func(shverb.argv)
+            shpipe = self
+            argv = shpump.argv
+            shpump.func(shpipe, argv)  # two positional args, zero keyword args
 
         self.stdout.drain_if()
 
-    def parse_shpipe_args_else(self, argv: list[str]) -> list[ShellVerb]:
+    def parse_shpipe_args_else(self, argv: list[str]) -> list[ShellPump]:
         """Parse Args, else show Version or Help and exit"""
 
         hints = list(argv)
@@ -349,55 +307,111 @@ class ShellPipe:
 
         func_by_name = self.func_by_name
 
-        shverbs = list()
+        shpumps = list()
         while hints:
-            shverb = ShellVerb(hints, func_by_name=func_by_name)  # exits 2 for bad Hints
-            shverb.parse_shverb_args_else()
-            shverbs.append(shverb)
+            shpump = ShellPump(hints, func_by_name=func_by_name)  # exits 2 for bad Hints
+            shpump.parse_shpump_args_else()
+            shpumps.append(shpump)
 
-        return shverbs
+        return shpumps
 
-    def do_awk(self, argv: list[str]) -> None:
-        """Pick some columns of words, and drop the rest"""
 
-        isep = None
-        osep = " "
+def do_little(self: ShellPipe, argv: list[str]) -> None:
+    pass
 
-        numbers = list(int(_) for _ in argv[1:])  # traditional Awk accepts Float indices
-        if not numbers:
-            numbers = [-1]
 
-        olines = list()
-        ilines = self.stdin.readlines()
+#
+# Work like Awk
+#
 
-        for iline in ilines:
-            splits = iline.split() if (isep is None) else iline.split(isep)
 
-            max_number = len(splits)
-            min_number = -max_number
+AWK_DOC = r"""
 
-            owords = list()
-            for number in numbers:
-                if not number:
-                    owords.extend(splits)
-                elif number >= 1:
-                    oword = splits[number - 1] if (number <= max_number) else ""
-                    owords.append(oword)
-                else:
-                    oword = splits[number] if (number >= min_number) else ""
-                    owords.append(oword)
+    usage: awk [-h] [-V] [-F=ISEP] [-vOFS=OSEP] [NUMBER ...]
 
-            ojoin = osep.join(owords).rstrip()  # .writelines does .rstrip too
-            olines.append(ojoin)
+    pick one or more columns of words, and drop the rest
 
-        self.stdout.writelines(olines)
+    positional args:
+      NUMBER  the 1-based index of a column to keep, while dropping the rest
 
-        # todo: Input/Output Separators other than Blanks and Single Spaces
+    options:
+      -F=ISEP, --isep=ISEP     input word separator, default is Blanks
+      -vOFS=OSEP, --osep=OSEP  output word separator, default is Single Space
 
-    def do_python(self, argv: list[str]) -> None:
-        """Run Python"""
+    quirks:
+      rounds down Float Numbers to Ints, same as classic Awk does
+      applies Python Str Split Rules to separate the Words
+      accepts arbitrary chars as Seps, unlike classic Awk quirks at $'\n' $'\x00' etc
+      accepts 0 as meaning 1..N, unlike Awk ignoring the Output Sep at $0
+      doesn't accept Gnu Awk --field-separator=ISEP nor --assign OFS=OSEP
+      doesn't write out trailing Blanks when trailing Columns missing, unlike classic Awk
 
-        # todo: is there ever anything to do here, inside of .do_python ?
+    examples:
+      awk  # implicitly drops all but the last Column
+      awk -1  # same deal, but more explicitly
+      awk 1  # similar deal, but keep only the first Column
+      awk 1 3 5  # keep only the 1st, 3rd, and 5th Columns
+      echo $PATH |awk -F:  # show the last Dir in the Sh Path
+      echo $PATH |awk -F: -vOFS=$'\n' 0  # show 1 Dir per Line
+
+"""
+
+# FIXME: add -F= and -vOFS= options
+# FIXME: -F should mean -F='\t'
+# FIXME: -vOFS= should mean -vOFS='\t'
+
+
+def do_awk(self: ShellPipe, argv: list[str]) -> None:
+    """Pick some columns of words, and drop the rest"""
+
+    isep = None
+    osep = " "
+
+    numbers = list(int(_) for _ in argv[1:])  # traditional Awk accepts Float indices
+    if not numbers:
+        numbers = [-1]
+
+    olines = list()
+    ilines = self.stdin.readlines()
+
+    for iline in ilines:
+        iwords = iline.split() if (isep is None) else iline.split(isep)
+
+        max_number = len(iwords)
+        min_number = -max_number
+
+        owords = list()
+        for number in numbers:
+            if not number:
+                owords.extend(iwords)
+            elif number >= 1:
+                oword = iwords[number - 1] if (number <= max_number) else ""
+                owords.append(oword)
+            else:
+                oword = iwords[number] if (number >= min_number) else ""
+                owords.append(oword)
+
+        ojoin = osep.join(owords).rstrip()  # our .writelines does .rstrip too
+        olines.append(ojoin)
+
+    self.stdout.writelines(olines)
+
+    # todo: Input/Output Separators other than Blanks and Single Spaces
+
+
+#
+# Index the Main Doc's of each Shell Verb
+#
+
+
+assert __doc__, (__doc__,)
+DOCS: dict[str, str] = dict()
+
+DOCS["awk"] = AWK_DOC
+DOCS["python"] = __doc__
+
+for _K_ in DOCS.keys():
+    DOCS[_K_] = textwrap.dedent(DOCS[_K_]).strip()
 
 
 #
