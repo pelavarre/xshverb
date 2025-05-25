@@ -159,7 +159,7 @@ In case you need to adopt this tech more slowly,
 Adding '--help' as an option will also get us to say what work we'll do,
 before you remove that option to agree to have us to do the work.
 You can abbreviate '--help' down to '--h'.
-And if you go down farther to '-h' that can work too,
+And if you abbreviate down farther to '-h' that can work too,
 but not at 'cal -h' and 'df -h' and 'du -h' and 'ls -h' and so on
 
 My actual Shell sometimes quits on me, refusing to work with unusual bytes.

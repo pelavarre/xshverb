@@ -414,7 +414,7 @@ def do_awk(argv: list[str]) -> None:
                 oword = iwords[number] if (number >= min_number) else ""
                 owords.append(oword)
 
-        while not owords[-1]:
+        while owords and not owords[-1]:
             owords.pop()
 
         ojoin = osep.join(owords)
