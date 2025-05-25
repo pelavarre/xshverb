@@ -41,7 +41,7 @@ examples:
 """
 
 # todo: --py to show the Python chosen, --py=... to supply your own Python
-# todo: make a place for:  column -t, fmt --ruler, etc
+# todo: make a place for:  column -t, fmt --ruler, tee, tee -a, etc
 
 
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
@@ -76,29 +76,37 @@ class ShellFile:
 
     iobytes: bytes = b""
 
-    fillable: bool = True
-    drainable: bool = True
+    filled: bool = False
+    drained: bool = False
+
+    def readlines(self, hint: int = -1) -> list[str]:
+        """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
+
+        if hint != -1:  # .hint limits the count of Lines read in
+            raise NotImplementedError(str((hint,)))
+
+        self.fill_if()
+
+        iobytes = self.iobytes
+        decode = iobytes.decode()
+        splitlines = decode.splitlines()
+
+        return splitlines
 
     def fill_if(self) -> None:
-        """Read Bytes, if not filled already"""
+        """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
 
-        fillable = self.fillable
-        if fillable:
-            self.fillable = False
-            self.drainable = False
-
-            self.fill()
-
-    def fill(self) -> None:
-        """Read Bytes from Stdin else from Os Copy/Paste Buffer"""
+        filled = self.filled
+        if filled:
+            return
 
         if not sys.stdin.isatty():
-
-            path = pathlib.Path("/dev/stdin")  # todo: solve for Windows too
-            read_bytes = path.read_bytes()  # maybe not UTF-8 Encoded
-            self.iobytes = read_bytes
-
+            self.fill_from_stdin()
         else:
+
+            # eprint("fill_from_pbpaste")
+
+            self.filled = True
 
             shline = "pbpaste"  # macOS convention, often not distributed at Linuxes
             argv = shlex.split(shline)
@@ -110,22 +118,21 @@ class ShellFile:
 
         # .returncode .shell .stdin differs from:  iobytes = os.popen(shline).read().encode()
 
-    def readlines(self, hint: int = -1) -> list[str]:
-        """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
+    def fill_from_stdin(self) -> None:
+        """Read Bytes from Stdin"""
 
-        if hint != -1:
-            raise NotImplementedError(str((hint,)))
+        # eprint("fill_from_stdin")
 
-        self.fill_if()
+        self.filled = True
 
-        iobytes = self.iobytes
-        decode = iobytes.decode()
-        splitlines = decode.splitlines()
-
-        return splitlines
+        path = pathlib.Path("/dev/stdin")  # todo: solve for Windows too
+        read_bytes = path.read_bytes()  # maybe not UTF-8 Encoded
+        self.iobytes = read_bytes  # replaces
 
     def write(self, text: str) -> int:
         """Write Chars into Bytes, but don't drain yet"""
+
+        self.filled = True
 
         count = len(text)  # counts Decoded Chars, not Encoded Bytes
         encode = text.encode()
@@ -136,33 +143,41 @@ class ShellFile:
         # standard .writelines forces the Caller to choose each Line-Break
 
     def drain_if(self) -> None:
-        """Write Bytes, if not drained already"""
-
-        drainable = self.drainable
-        if drainable:
-            self.fillable = False
-            self.drainable = False
-
-            self.drain()
-
-    def drain(self) -> None:
-        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer"""
+        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer, at most once"""
 
         iobytes = self.iobytes
 
+        drained = self.drained
+        if drained:
+            return
+
         if not sys.stdout.isatty():
-
-            fd = sys.stdout.fileno()
-            data = iobytes  # maybe not UTF-8 Encoded
-            os.write(fd, data)
-
+            self.drain_to_stdout()
         else:
+
+            # eprint("drain_to_pbcopy")
+
+            self.drained = True
 
             shline = "pbcopy"  # macOS convention, often not distributed at Linuxes
             argv = shlex.split(shline)
             subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
 
+    def drain_to_stdout(self) -> None:
+        """Write Bytes to Sydout"""
 
+        # eprint("drain_to_stdout")
+
+        iobytes = self.iobytes
+        self.drained = True
+
+        fd = sys.stdout.fileno()
+        data = iobytes  # maybe not UTF-8 Encoded
+        os.write(fd, data)
+
+
+module_index = -1  # ShellPump's place in the Pipe, counting forward from the start
+module_rindex = 0  # ShellPump's place in the Pipe, counting back from the end
 module_stdin = ShellFile()  # ShellPump's read from .stdin
 module_stdout = ShellFile()  # ShellPump's write to .stdout
 
@@ -178,6 +193,7 @@ class ShellPump:  # much like a Linux Process
 
     name_by_nm = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
         "a": "awk",
+        "c": "cat",
         "p": "python",
         "xshverb": "python",
         "xshverb.py": "python",
@@ -199,7 +215,7 @@ class ShellPump:  # much like a Linux Process
 
             if hints:
                 peek = hints[0]
-                if peek.isidentifier():  # any '-' or '--' option, also 'a|b' etc etc
+                if peek.isidentifier():  # not any '-' or '--' option, nor 'a|b' etc etc
                     break
 
         # Require an Alias of a Shell Verb, or the Shell Verb itself
@@ -278,18 +294,22 @@ class ShellPipe:
     def __init__(self) -> None:
         self.func_by_name = dict(
             awk=do_awk,
+            cat=do_cat,
             python=do_little,
         )
 
     def shpipe_main(self, argv: list[str]) -> None:
         """Run from the Sh Command Line"""
 
-        global module_stdin, module_stdout
+        global module_index, module_rindex, module_stdin, module_stdout
 
         shpumps = self.parse_shpipe_args_if(argv)
 
         module_stdout = ShellFile()  # adds or replaces
-        for shpump in shpumps:
+        for index, shpump in enumerate(shpumps):
+            module_index = index
+            module_rindex = index - len(shpumps)
+
             module_stdin = module_stdout
             module_stdout = ShellFile()  # adds or replaces
 
@@ -420,8 +440,78 @@ def do_awk(argv: list[str]) -> None:
         ojoin = osep.join(owords)
         olines.append(ojoin)
 
-    ochars = line_break_join_rstrips_plus(olines)
-    module_stdout.write(ochars)
+    otext = line_break_join_rstrips_plus(olines)
+    module_stdout.write(otext)
+
+
+#
+# To cat is to explicitly substitute the Terminal for the Os Copy/Paste Buffer
+#
+
+
+CAT_DOC = r"""
+
+    usage: cat [-]
+
+    read with prompt from the Terminal, or write to the Terminal
+
+    positional arguments:
+      -  explicitly mention the Terminal, in place of a Pathname
+
+    unlike classic Cat and Tee:
+      doesn't take Pathnames as Positional Arguments, doesn't define many Options
+
+    examples:
+      bin/c a && pbpaste |cat -etv  # type your own Lines to chop down to their last Word
+      ls -l |bin/a c  # see what Awk would push into the Os Copy/Paste Buffer, without pushing it
+
+"""
+
+
+def do_cat(argv: list[str]) -> None:
+    """Read with prompt from the Terminal, or write to the Terminal"""
+
+    # Form Shell Args Parser
+
+    assert argparse.OPTIONAL == "?"
+
+    doc = CAT_DOC
+    ifile_help = "explicitly mention the Terminal, in place of a Pathname"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument("ifile", metavar="-", nargs="?", help=ifile_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    if ns.ifile is not None:
+        if ns.ifile != "-":
+            parser.parser.print_usage()
+            sys.exit(2)  # exits 2 for bad Arg
+
+    # Read from Stdin Tty at start of Pipe
+
+    if module_index == 0:
+        if sys.stdin.isatty():
+            eprint(
+                "Start typing"
+                + ". Press Return after each Line"
+                + ". Press ⌃D to continue, or ⌃C to quit"
+            )
+        module_stdin.fill_from_stdin()
+
+    # Strip trailing Blanks off each Line
+
+    ilines = module_stdin.readlines()
+    otext = line_break_join_rstrips_plus(ilines)
+    module_stdout.write(otext)
+
+    # Write to Stdout Tty at end of Pipe
+
+    if module_rindex == -1:
+        module_stdout.drain_to_stdout()
 
 
 #
@@ -433,6 +523,7 @@ assert __doc__, (__doc__,)
 DOCS: dict[str, str] = dict()
 
 DOCS["awk"] = AWK_DOC
+DOCS["cat"] = CAT_DOC
 DOCS["python"] = __doc__
 
 for _K_ in DOCS.keys():
@@ -646,7 +737,7 @@ class AmpedArgumentParser:
 
 
 def line_break_join_rstrips_plus(lines: list[str]) -> str:
-    """Convert Lines to Chars but strip trailing Blanks in each Line"""
+    """Convert Lines to Chars but strip trailing Blanks off each Line"""
 
     rstrips = list(_.rstrip() for _ in lines)
     join = "\n".join(rstrips)
