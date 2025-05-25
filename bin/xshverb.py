@@ -491,7 +491,7 @@ class AmpedArgumentParser:
     def scrape_description(self, lines: list[str]) -> str:
         """Take the first Line of the Graf after the Usage Graf as the Description"""
 
-        firstlines = list(_ for _ in lines if _ and (_ == _.lstrip()))
+        firstlines: list[str] = list(_ for _ in lines if _ and (_ == _.lstrip()))
         alt_description = firstlines[1]  # first Line of second Graf
 
         description = alt_description
