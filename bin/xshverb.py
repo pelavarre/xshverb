@@ -364,7 +364,7 @@ def do_awk(self: ShellPipe, argv: list[str]) -> None:
     assert argparse.ZERO_OR_MORE == "*"
 
     doc = AWK_DOC
-    number_help = "the 1-based index of a column to keep, while dropping the rest"
+    number_help = "the Number of a Column to copy out, or 0 to copy them all (default: -1)"
     isep_help = "input word separator (default: Blanks)"
     osep_help = "output word separator (default: Double Space)"
 
