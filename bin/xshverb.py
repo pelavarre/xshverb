@@ -13,9 +13,9 @@ positional args:
   HINT  enough of a hint to search out the correct Shell Pipe Filter
 
 quirks:
-  strips leading and trailing Blanks from each File, and ends with 1 Line-Break, by default
-  strips trailing Blanks from each Line, by default
-  docs the [-h] and [-V] options here, not again and again for every different Hint
+  defaults to strip trailing Blanks from each Line
+  defaults to end with 1 Line-Break
+  docs the [-h] and [-V] options only here, not again and again for every different Hint
   more doc at https://github.com/pelavarre/xshverb
 
 most common Python words:
@@ -24,7 +24,7 @@ most common Python words:
 python examples:
   p lower  # convert the Os/Copy Paste Buffer to lower case
   p lower c  # preview changes without saving changes
-  p str lower  # change Chars without first stripping off the Blanks
+  p str strip  # drop leading/ trailing Blank Lines but leave all Blanks inside unchanged
   p bytes lower  # change Bytes without first stripping off the Blanks
   p join --sep=.  # join Lines into a single Line, with a Dot between each Line
 
@@ -70,7 +70,6 @@ if not __debug__:
 ShellFunc = collections.abc.Callable[[list[str]], None]
 
 
-# class ShellFile(typing.TextIO):  # comment in to check overrides typed like original
 class ShellFile:
     """Pump Bytes in and out"""  # 'Store and forward'
 
@@ -92,6 +91,23 @@ class ShellFile:
         splitlines = decode.splitlines()
 
         return splitlines
+
+    def read_text(self) -> str:
+        """Read Chars from Stdin, else from Os Copy/Paste Buffer, at most once"""
+
+        self.fill_if()
+        iobytes = self.iobytes
+        decode = iobytes.decode()
+
+        return decode
+
+    def read_bytes(self) -> bytes:
+        """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
+
+        self.fill_if()
+        iobytes = self.iobytes
+
+        return iobytes
 
     def fill_if(self) -> None:
         """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
@@ -194,6 +210,7 @@ class ShellPump:  # much like a Linux Process
     name_by_nm = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
         "a": "awk",
         "c": "cat",
+        "i": "split",
         "p": "python",
         "xshverb": "python",
         "xshverb.py": "python",
@@ -296,6 +313,7 @@ class ShellPipe:
             awk=do_awk,
             cat=do_cat,
             python=do_little,
+            split=do_split,
         )
 
     def shpipe_main(self, argv: list[str]) -> None:
@@ -515,19 +533,49 @@ def do_cat(argv: list[str]) -> None:
 
 
 #
-# Index the Main Doc's of each Shell Verb
+# Break Lines apart into Words
 #
 
 
-assert __doc__, (__doc__,)
-DOCS: dict[str, str] = dict()
+SPLIT_DOC = r"""
 
-DOCS["awk"] = AWK_DOC
-DOCS["cat"] = CAT_DOC
-DOCS["python"] = __doc__
+    usage: split
 
-for _K_ in DOCS.keys():
-    DOCS[_K_] = textwrap.dedent(DOCS[_K_]).strip()
+    break Lines apart into Words
+
+    comparable to:
+      |tr ' \t' '\n' |grep .
+
+    examples:
+      ls -l |bin/i c
+
+"""
+
+# todo: split --sep=
+
+
+def do_split(argv: list[str]) -> None:
+    """Break Lines apart into Words"""
+
+    # Form Shell Args Parser
+
+    doc = SPLIT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Break Lines apart into Words
+
+    itext = module_stdin.read_text()
+    olines = itext.split()
+
+    otext = line_break_join_rstrips_plus(olines)
+    module_stdout.write(otext)
+
+    # todo: |split despite UnicodeDecodeError
 
 
 #
@@ -781,6 +829,23 @@ def pathname_read_version(pathname: str) -> str:
 
 def eprint(*args: object) -> None:
     print(*args, file=sys.stderr)
+
+
+#
+# Index the Main Doc's of each Shell Verb
+#
+
+
+assert __doc__, (__doc__,)
+DOCS: dict[str, str] = dict()
+
+DOCS["awk"] = AWK_DOC
+DOCS["cat"] = CAT_DOC
+DOCS["python"] = __doc__
+DOCS["split"] = SPLIT_DOC
+
+for _K_ in DOCS.keys():
+    DOCS[_K_] = textwrap.dedent(DOCS[_K_]).strip()
 
 
 #
