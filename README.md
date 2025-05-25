@@ -8,12 +8,16 @@ Contents
 - [Arguments that don't begin with a Dash '-'](#arguments-that-dont-begin-with-a-dash--)
   - [Punctuated Arguments](#punctuated-arguments)
   - [Regular Expressions Unions](#regular-expressions-unions)
-- [Bugs abandoned, not perpetuated](#bugs-abandoned-not-perpetuated)
-  - [|awk -vOFS=$'\\x00'](#awk--vofsx00)
+- [Run ahead despite unusual Bytes](#run-ahead-despite-unusual-bytes)
+- [Bugs dropped, not kept up](#bugs-dropped-not-kept-up)
   - [|awk -vOFS=$'\\x0A'](#awk--vofsx0a)
-  - [|awk -vOSEP=:](#awk--vosep)
+  - [|awk -vOF=:](#awk--vof)
   - [|grep -e=O -e=U](#grep--eo--eu)
   - [|grep hello](#grep-hello)
+  - [|sort](#sort)
+  - [|sort -n](#sort--n)
+  - [|uniq](#uniq)
+  - [|uniq -c](#uniq--c)
 - [Future work](#future-work)
 - [Past work](#past-work)
 - [Up online](#up-online)
@@ -26,13 +30,13 @@ Contents
 Let's make it easy for you to tell your Terminal Shell
 to show you the most common words in a Git Commit
 
-    git show |i  s  u  s -nr  h  c
+    git show |i  u  s -nr  h  c
 
 While you're still building your trust in us,
 type one Y and a Space in front of the other letters
 to have us say what we'll do, before you agree to have us to do it
 
-    $ git show |y  i  s  u  s -nr  h  c
+    $ git show |y  i  u  s -nr  h  c
 
     + |p split |p sort |p counter |p sort -nr |p head |cat -
 
@@ -42,15 +46,18 @@ Type a Y and a Space and another Y and another Space
 when you need to see the full details of how far behind the times
 the classic 1970s work of Terminal Shell designs has fallen
 
-    $ git show |y  y  i  s  u  s -nr  h  c
+    $ git show |y  y  i  u  s -nr  h  c
 
-    + |tr '\t' ' ' |sed 's,^  *,,' |sed 's,  *$,,' |tr ' ' '\n' |grep . |LC_ALL=C sort |uniq -c |expand |LC_ALL=C sort -nr |head -$((LINES / 3)) |cat -
+    + |tr ' \t' '\n' |grep . |LC_ALL=C sort |uniq -c |expand |LC_ALL=C sort -nr |head -$((LINES / 3)) |cat -
 
     >> Press ⌃D to run, or ⌃C to quit <<
 
 For sure you can spell out all this detail,
 to build out a purely classic Shell Pipe that does its work adequately well.
 But, uhh, odds on you mostly don't want to. I mean look at what it takes, nowadays
+
+And you can't even correctly expand |u as '|LC_ALL=C sort |uniq -c |expand'
+except when it is followed by a |sort such as our '|LC_ALL=C sort -nr' here
 
 Here we build better Sh Pipes for lots cheaper, out of single Letters.
 As often as you don't start with the "y " prefix,
@@ -92,7 +99,7 @@ and feel lucky enough to just try it
 
     export PATH="$PWD:$PATH:$PWD"
 
-    git show |i  s  u  s -nr  h  c
+    git show |i  u  s -nr  h  c
 
 You get how this works?
 
@@ -123,7 +130,7 @@ but with their defaults rethought and corrected to fit our new world of large me
 + |d is for **Diff**, but default to '|diff -brpu a b'
 + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
 + |f is for **Find**, but default to search $PWD spelled as ""
-+ |g is for **Grep**, but with Py RegEx, and default to '-i' and fill in the '-e' per Arg
++ |g is for **Grep**, but with Py RegEx, and default to '-i -F' and fill in the '-e' per Arg
 + |h is for **Head**, but fill a third of the Terminal, don't always stop at just 10 Lines
 + |i is for **Py Str Split**, the inverse of |x
 + |j is for **Json Query**, but don't force you to install Jq and turn off sorting the keys
@@ -199,11 +206,13 @@ If you don't like that, then you have to type it out more explicitly as
 
 Classic Grep makes searching for more than one match in parallel weirdly difficult to spell out
 
+TODO: Think more making -i -F -e into the default while keeping the rest near
+
 For example, to search for the letter O or the letter U, you can learn to write any one of
 
-    |grep -i -e O -e U
+    |grep -i -F -e O -e U
 
-    |grep -i -eO -eU
+    |grep -i -F -eO -eU
 
     |grep -i -E 'O|U'
 
@@ -226,32 +235,145 @@ beyond the more direct abbreviations of only the classics
 Sadly, the classic '|grep -e=O -e=U' means something else, and our '|g -e=O -e=U' doesn't mean that
 
 
-## Bugs abandoned, not perpetuated
+## Run ahead despite unusual Bytes
 
-### |awk -vOFS=$'\x00'
+Classic Terminal Shell Pipes choke over unusual Bytes, especially at macOS
 
-Classic Awk takes this as if it meant -vOFS=''
+Working in Python 3 errors="surrogateescape"
+lets us work well with most forms of UnicodeDecodeError
+
+Examples of Classic Shell gone wrong
+
+    % echo $'\xC0\x80' |awk /./
+    awk: towc: multibyte conversion failure on: '??'
+    input record number 1, file
+    source line number 1
+    %
+
+    % echo $'\xC0\x80' |grep .
+    %
+
+
+    % echo $'\xC0\x80' |sed 's,^  *,,'
+    sed: RE error: illegal byte sequence
+    %
+
+    % echo $'\xC0\x80' |sort
+    sort: Illegal byte sequence
+    %
+
+    % echo $'\xC0\x80' |tr ' \t' '\n'
+    tr: Illegal byte sequence
+    %
+
+Python also doesn't go wild at mentions of the U+0000 Null Character
+
+Example of Classic Shell gone wrong,
+silently wrongly calling Equal for all Characters beyond the first U+0000
+
+    % echo $'\x00Alfa' |grep -a $'\x00Bravo'
+    Alfa
+    %
+
+## Bugs dropped, not kept up
+
+Classic Terminal Shell Pipes can work just fine,
+after you perfectly memorize far too many workarounds,
+or if you distribute your own fresher versions of them
 
 
 ### |awk -vOFS=$'\x0A'
 
-Classic Awk chokes over this, crying out awk: newline in string
+Classic Awk refuses to take a Line-Break as its Output Separator
+
+    % echo a b c |awk -vOFS=$'\x0A' 1
+    awk: newline in string
+    ... at source line 1
+    %
 
 
-### |awk -vOSEP=:
+### |awk -vOF=:
 
-Classic Awk doesn't check the spelling of -vOFS=
+Classic Awk doesn't autocorrect nor check the spelling of -vOFS=,
+and spells the far more common -F=ISEP wildly differently from the rare -vOFS=
 
-Classic Awk doesn't spell -F=ISEP and -vOFS=OSEP more similarly than that
+    % echo a b c |awk -vOFS=: '{print $1, $2, $3}'
+    a:b:c
+    % echo a b c |awk -vOF=: '{print $1, $2, $3}'
+    a b c
+    %
 
 
 ### |grep -e=O -e=U
 
 Classic Grep takes this as a search for '=O' and '=U', not as a search for 'O' and 'U'
 
+    % echo 'O U =O =U' |tr ' ' '\n' |grep -e=O -e=U
+    =O
+    =U
+    %
+
+
 ### |grep hello
 
-Classic Grep takes this as a search for a pattern that fails to match if the reality differs only in case
+Classic Grep takes this as a search for a pattern
+that fails to match if the reality differs only in case
+
+    % echo HELLO Hello hello |tr ' ' '\n' |grep hello
+    hello
+    %
+
+
+### |sort
+
+Classic Sort takes this as a sort by the locale's collation order,
+unlike
+
+    |LC_ALL=C sort
+
+
+### |sort -n
+
+Classic Sort Numeric drops the Exponents of Float Literals,
+as if you needed speed more than accuracy,
+unlike
+
+    |sort -g
+
+Classic Sort Numeric sorts the Lines not prefixed by a Number as if prefixed by 0
+
+This comes as Nulls Last when sorting descending without negative numbers, and I like that.
+But coming out mixed with the zeroes in the middle of negative and positive numbers makes no sense?
+Like are they slapping you for forcing them to think through a corner case they dislike?
+
+Maybe our whole industry gets confused in this?
+They tell me Python Sorts do sort NaN indeterminately, as never meaningfully comparable.
+NumPy Sorts that sort NaN as always Nulls Last and never as Nulls First.
+Pandas Sorts that default to Nulls Last but can do .na_position='first'
+Maybe they don't much test with ordinary living people around?
+
+We sort Nulls Last
+
+To get there in classic Shell, you've got to go separate your Lines prefixed by a Number or not.
+Tactics such as
+
+    |expand |grep -v '^ *[-+.0-9]'
+
+
+### |uniq
+
+Classic Uniq requires a Sort before you drop the Duplicates,
+unlike
+
+    |awk '!d[$0]++'
+
+
+### |uniq -c
+
+Classic Uniq takes this as a request to inject quasi-binary \x09 Hard Tabs into the output,
+unlike
+
+    |uniq -c |expand
 
 
 ## Future work

@@ -34,7 +34,7 @@ most common Shell words:
 
 examples:
   bin/xshverb.py  # shows these examples and exit
-  git show |i  s  u  s -nr  h  c  # shows the most common words in the last Git Commit
+  git show |i  u  s -nr  h  c  # shows the most common words in the last Git Commit
   a --help  # shows the Help Doc for the Awk Shell Verb
   p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
   v  # fixes up the Os/Copy Paste Buffer and calls Vim to edit it
@@ -42,6 +42,8 @@ examples:
 
 # todo: --py to show the Python chosen, --py=... to supply your own Python
 # todo: make a place for:  column -t, fmt --ruler, tee, tee -a, etc
+
+# FIXME: drop all the 'p' out of the ShPump module_rindex/_index, unless Pipe of only P
 
 
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
@@ -52,6 +54,7 @@ import collections.abc
 import dataclasses
 import difflib
 import hashlib
+import math
 import os
 import pathlib
 import shlex
@@ -67,6 +70,11 @@ if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
 
 
+def main() -> None:
+    p = ShellPipe()
+    p.shpipe_main(sys.argv)
+
+
 ShellFunc = collections.abc.Callable[[list[str]], None]
 
 
@@ -78,6 +86,10 @@ class ShellFile:
     filled: bool = False
     drained: bool = False
 
+    #
+    # Pump Bytes in
+    #
+
     def readlines(self, hint: int = -1) -> list[str]:
         """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
 
@@ -87,7 +99,7 @@ class ShellFile:
         self.fill_if()
 
         iobytes = self.iobytes
-        decode = iobytes.decode()
+        decode = iobytes.decode(errors="surrogateescape")
         splitlines = decode.splitlines()
 
         return splitlines
@@ -97,7 +109,7 @@ class ShellFile:
 
         self.fill_if()
         iobytes = self.iobytes
-        decode = iobytes.decode()
+        decode = iobytes.decode(errors="surrogateescape")
 
         return decode
 
@@ -132,7 +144,7 @@ class ShellFile:
 
             self.iobytes = run.stdout  # replaces
 
-        # .returncode .shell .stdin differs from:  iobytes = os.popen(shline).read().encode()
+        # .errors .returncode .shell .stdin unlike:  iobytes = os.popen(shline).read().encode()
 
     def fill_from_stdin(self) -> None:
         """Read Bytes from Stdin"""
@@ -145,13 +157,17 @@ class ShellFile:
         read_bytes = path.read_bytes()  # maybe not UTF-8 Encoded
         self.iobytes = read_bytes  # replaces
 
+    #
+    # Pump Bytes out
+    #
+
     def write(self, text: str) -> int:
         """Write Chars into Bytes, but don't drain yet"""
 
         self.filled = True
 
         count = len(text)  # counts Decoded Chars, not Encoded Bytes
-        encode = text.encode()
+        encode = text.encode(errors="surrogateescape")
         self.iobytes = encode  # replaces
 
         return count
@@ -213,6 +229,7 @@ class ShellPump:  # much like a Linux Process
         "h": "head",
         "i": "split",
         "p": "python",
+        "s": "sort",
         "u": "counter",
         "xshverb": "python",
         "xshverb.py": "python",
@@ -320,6 +337,7 @@ class ShellPipe:
             counter=do_counter,
             head=do_head,
             python=do_little,
+            sort=do_sort,
             split=do_split,
         )
 
@@ -387,6 +405,9 @@ AWK_DOC = r"""
       -F, --isep ISEP     input word separator (default: Blanks)
       -vOFS, --osep OSEP  output word separator (default: Double Space)
 
+    comparable to:
+      |awk -vOFS='  ' '{ print $1, $5, $(NF+1-1) }'  # |a 1 5 -1
+
     like to classic Awk:
       rounds down Float Numbers to Ints, even 0.123 to 0
       applies Python Str Split Rules to separate the Words
@@ -411,6 +432,8 @@ AWK_DOC = r"""
       echo 'a1 a2\tb1 b2\tc1 c2' |a -F$'\t' -vOFS=$'\t' 3 1  # Tabs in and Tabs out
 
 """
+
+# todo: |awk --tsv to abbreviate |awk -F$'\t' -vOFS=$'\t'
 
 
 def do_awk(argv: list[str]) -> None:
@@ -488,6 +511,10 @@ CAT_DOC = """
     positional arguments:
       -  explicitly mention the Terminal, in place of a Pathname
 
+    comparable to:
+      echo Press ⌃D or ⌃C; cat - |...
+      ...|cat -
+
     unlike classic Cat and Tee:
       doesn't take Pathnames as Positional Arguments, doesn't define many Options
 
@@ -556,7 +583,7 @@ COUNTER_DOC = """
     count or drop duplicate Lines, no sort required
 
     options:
-      -k, --keys  print the Keys without the Values (default: False)
+      -k, --keys  print each distinct Line when it first arrives, without a count (default: False)
 
     comparable to:
       |awk '!d[$0]++'  # drop duplicates
@@ -568,6 +595,7 @@ COUNTER_DOC = """
 
 """
 
+# todo: |counter --tsv to write Tab as O Sep
 # todo: abbreviate as |i co -k, as |i cou -k, etc
 
 
@@ -579,8 +607,8 @@ def do_counter(argv: list[str]) -> None:
     doc = COUNTER_DOC
     parser = AmpedArgumentParser(doc, add_help=False)
 
-    keys_help = "print the Keys without the Values (default: False)"
-    parser.add_argument("-k", "--keys", action="store_true", help=keys_help)
+    keys_help = "print each distinct Line when it first arrives, without a count (default: False)"
+    parser.add_argument("-k", "--keys", action="count", help=keys_help)
 
     # Take up Shell Args
 
@@ -595,12 +623,12 @@ def do_counter(argv: list[str]) -> None:
     if ns.keys:
         olines = list(counter.keys())
     else:
-        olines = list(f"{v:6}\t{k}" for k, v in counter.items())  # classic '|cat -n' format
+        olines = list(f"{v:6}  {k}" for k, v in counter.items())
+
+        # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
 
     otext = line_break_join_rstrips_plus(olines)
     module_stdout.write(otext)
-
-    # todo: |counter despite UnicodeDecodeError
 
 
 #
@@ -647,7 +675,99 @@ def do_head(argv: list[str]) -> None:
     otext = line_break_join_rstrips_plus(olines)
     module_stdout.write(otext)
 
-    # todo: |head despite UnicodeDecodeError
+
+#
+# Count or drop duplicate Lines, no sort required
+#
+
+
+SORT_DOC = """
+
+    usage: sort [-n] [-r]
+
+    change the order of Lines
+
+    options:
+      -n  sort as numbers, from least to most positive, but nulls last (default: sort as text)
+      -r  reverse the sort (default: ascending)
+
+    comparable to:
+      |sort
+      |sort -nr
+
+    unlike classic Sort:
+      defaults to sort by Unicode Codepoint, much as if LC_ALL=C, not by Locale's Collation Order
+      sorts numerically on request without ignoring the exponents of Float Literals
+      sorts not-a-number as last, no matter if reversed, and not as zero
+      requires an odd count of -n to do -n work, requires an odd count of -r to do -r work
+      doesn't offer --sort= general-numeric, human-numeric, random-when-unequal, version, etc
+      doesn't offer --check, --merge, --dictionary-order, --ignore-case, --key, etc
+
+    examples:
+      ls -l |bin/i  u  # counts each Word, prints Lines of Count Tab Text
+      ls -l |bin/i  counter --keys  c  # prints each Word once
+
+"""
+
+# todo: --nulls=last, --nulls=first
+# todo: -V, --version-sort, --sort=version  # classic 'man sort' doesn't meantion '--sort=version'
+# todo: random.shuffle
+
+
+def do_sort(argv: list[str]) -> None:
+    """Change the order of Lines"""
+
+    # Form Shell Args Parser
+
+    doc = SORT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    n_help = "sort as numbers, from least to most positive, but nulls last (default: sort as text)"
+    r_help = "reverse the sort (default: ascending)"
+
+    parser.add_argument("-n", action="count", help=n_help)
+    parser.add_argument("-r", action="count", help=r_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    numeric = bool(ns.n % 2) if ns.n else False
+    descending = bool(ns.r % 2) if ns.r else False
+
+    # Define what ordered by Numeric means to us
+
+    def keyfunc(line: str) -> tuple[float, str]:
+
+        words = line.split()
+
+        float_ = -math.inf if descending else math.inf  # not-a-number comes last
+
+        if words:
+            try:
+                float_ = float(words[0])
+            except ValueError:
+                pass
+
+        return (float_, line)
+
+        # todo: stop losing '|sort -n' precision by converting large Int's to Float
+
+    # Change the order of Lines
+
+    ilines = module_stdin.readlines()
+
+    if not numeric:
+        olines = sorted(ilines)
+    else:
+        olines = sorted(ilines, key=keyfunc)
+
+    if descending:
+        olines.reverse()
+
+    otext = line_break_join_rstrips_plus(olines)
+    module_stdout.write(otext)
 
 
 #
@@ -692,8 +812,6 @@ def do_split(argv: list[str]) -> None:
 
     otext = line_break_join_rstrips_plus(olines)
     module_stdout.write(otext)
-
-    # todo: |split despite UnicodeDecodeError
 
 
 #
@@ -962,6 +1080,7 @@ DOCS_BY_VERB["cat"] = CAT_DOC
 DOCS_BY_VERB["counter"] = COUNTER_DOC
 DOCS_BY_VERB["head"] = HEAD_DOC
 DOCS_BY_VERB["python"] = __doc__
+DOCS_BY_VERB["sort"] = SORT_DOC
 DOCS_BY_VERB["split"] = SPLIT_DOC
 
 for _K_ in DOCS_BY_VERB.keys():
@@ -974,8 +1093,13 @@ for _K_ in DOCS_BY_VERB.keys():
 
 
 if __name__ == "__main__":
-    p = ShellPipe()
-    p.shpipe_main(sys.argv)
+    main()
+
+
+# todo: |p should default to errors="replace" and .replace("\ufffd", "?")
+
+
+# 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
 
 
 # posted as:  https://github.com/pelavarre/xshverb/blob/main/bin/xshverb.py
