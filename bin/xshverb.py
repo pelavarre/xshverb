@@ -202,14 +202,15 @@ module_stdout = ShellFile()  # ShellPump's write to .stdout
 class ShellPump:  # much like a Linux Process
     """Work to drain 1 ShellFile and fill the next ShellFile"""
 
-    nm: str  # 'p'
-    name: str  # 'python'
+    vb: str  # 'p'
+    verb: str  # 'python'
     func: ShellFunc  # do_awk  # do_python
     argv: list[str]  # ['p', '--version']
 
-    name_by_nm = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
+    verb_by_vb = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
         "a": "awk",
         "c": "cat",
+        "h": "head",
         "i": "split",
         "p": "python",
         "u": "counter",
@@ -217,12 +218,12 @@ class ShellPump:  # much like a Linux Process
         "xshverb.py": "python",
     }
 
-    def __init__(self, hints: list[str], func_by_name: dict[str, ShellFunc]) -> None:
+    def __init__(self, hints: list[str], func_by_verb: dict[str, ShellFunc]) -> None:
         """Parse a Hint, else show Help and exit"""
 
         assert hints, (hints,)
 
-        name_by_nm = self.name_by_nm
+        verb_by_vb = self.verb_by_vb
 
         # Pop the Shell Verb, and zero or more Dashed Options
 
@@ -238,23 +239,23 @@ class ShellPump:  # much like a Linux Process
 
         # Require an Alias of a Shell Verb, or the Shell Verb itself
 
-        nm = argv[0]
+        vb = argv[0]
 
-        name = nm
-        if nm in name_by_nm.keys():
-            name = name_by_nm[nm]  # Aliases are often shorter than their Shell Verbs
+        verb = vb
+        if vb in verb_by_vb.keys():
+            verb = verb_by_vb[vb]  # Aliases are often shorter than their Shell Verbs
 
-        if name not in func_by_name.keys():
-            text = f"xshverb: command not found: {nm}"  # a la Bash & Zsh vs New Verbs
+        if verb not in func_by_verb.keys():
+            text = f"xshverb: command not found: {vb}"  # a la Bash & Zsh vs New Verbs
             eprint(text)
             sys.exit(2)  # exits 2 for bad Shell Verb
 
-        func = func_by_name[name]
+        func = func_by_verb[verb]
 
         # Succeed
 
-        self.nm = nm
-        self.name = name
+        self.vb = vb
+        self.verb = verb
         self.func = func
         self.argv = argv
 
@@ -283,18 +284,18 @@ class ShellPump:  # much like a Linux Process
     def do_show_help(self) -> None:
         """Show help and exit zero"""
 
-        nm = self.nm
-        name = self.name
+        vb = self.vb
+        verb = self.verb
 
-        full_doc = DOCS[name]
+        verb_doc = DOCS_BY_VERB[verb]
 
         key = "usage: xshverb.py "
-        doc = textwrap.dedent(full_doc).strip()
-        if doc.startswith(key) and (nm != "xshverb.py"):
+        text = textwrap.dedent(verb_doc).strip()
+        if text.startswith(key) and (vb != "xshverb.py"):
             count_eq_1 = 1
-            doc = doc.replace(key, f"usage: {nm} ", count_eq_1)
+            text = text.replace(key, f"usage: {vb} ", count_eq_1)
 
-        print(doc)
+        print(text)
 
     def do_show_version(self) -> None:
         """Show version and exit zero"""
@@ -307,23 +308,24 @@ class ShellPump:  # much like a Linux Process
 class ShellPipe:
     """Pump Bytes through a pipe of Shell Pumps"""
 
-    func_by_name: dict[str, ShellFunc]
+    func_by_verb: dict[str, ShellFunc]
 
     def __init__(self) -> None:
 
-        names = list(DOCS.keys())
+        verbs = list(DOCS_BY_VERB.keys())
 
-        self.func_by_name = dict(
+        self.func_by_verb = dict(
             awk=do_awk,
             cat=do_cat,
             counter=do_counter,
+            head=do_head,
             python=do_little,
             split=do_split,
         )
 
-        names_ = list(self.func_by_name.keys())
+        verbs_ = list(self.func_by_verb.keys())
 
-        diffs = list(difflib.unified_diff(a=names, b=names_, lineterm=""))
+        diffs = list(difflib.unified_diff(a=verbs, b=verbs_, lineterm=""))
         assert not diffs, (diffs,)
 
     def shpipe_main(self, argv: list[str]) -> None:
@@ -352,11 +354,11 @@ class ShellPipe:
         hints = list(argv)
         hints[0] = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
 
-        func_by_name = self.func_by_name
+        func_by_verb = self.func_by_verb
 
         shpumps = list()
         while hints:
-            shpump = ShellPump(hints, func_by_name=func_by_name)  # exits 2 for bad Hints
+            shpump = ShellPump(hints, func_by_verb=func_by_verb)  # exits 2 for bad Hints
             shpump.exit_help_or_exit_version_if()
             shpumps.append(shpump)
 
@@ -599,6 +601,53 @@ def do_counter(argv: list[str]) -> None:
     module_stdout.write(otext)
 
     # todo: |counter despite UnicodeDecodeError
+
+
+#
+# Take only the first few Lines
+#
+
+
+HEAD_DOC = """
+
+    usage: head
+
+    take only the first few Lines
+
+    comparable to:
+      |head -$((LINES / 3))
+
+    examples:
+      ls -l |bin/i  u |sort -nr  |h  # prints some most common Words
+
+"""
+
+# todo: |h -123
+# todo: default to $((LINES / 3)) not down to 10
+
+
+def do_head(argv: list[str]) -> None:
+    """Take only the first few Lines"""
+
+    # Form Shell Args Parser
+
+    doc = HEAD_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Break Lines apart into Words
+
+    ilines = module_stdin.readlines()
+    olines = ilines[:10]
+
+    otext = line_break_join_rstrips_plus(olines)
+    module_stdout.write(otext)
+
+    # todo: |head despite UnicodeDecodeError
 
 
 #
@@ -906,16 +955,17 @@ def eprint(*args: object) -> None:
 
 
 assert __doc__, (__doc__,)
-DOCS: dict[str, str] = dict()
+DOCS_BY_VERB: dict[str, str] = dict()
 
-DOCS["awk"] = AWK_DOC
-DOCS["cat"] = CAT_DOC
-DOCS["counter"] = COUNTER_DOC
-DOCS["python"] = __doc__
-DOCS["split"] = SPLIT_DOC
+DOCS_BY_VERB["awk"] = AWK_DOC
+DOCS_BY_VERB["cat"] = CAT_DOC
+DOCS_BY_VERB["counter"] = COUNTER_DOC
+DOCS_BY_VERB["head"] = HEAD_DOC
+DOCS_BY_VERB["python"] = __doc__
+DOCS_BY_VERB["split"] = SPLIT_DOC
 
-for _K_ in DOCS.keys():
-    DOCS[_K_] = textwrap.dedent(DOCS[_K_]).strip()
+for _K_ in DOCS_BY_VERB.keys():
+    DOCS_BY_VERB[_K_] = textwrap.dedent(DOCS_BY_VERB[_K_]).strip()
 
 
 #
