@@ -212,6 +212,7 @@ class ShellPump:  # much like a Linux Process
         "c": "cat",
         "i": "split",
         "p": "python",
+        "u": "counter",
         "xshverb": "python",
         "xshverb.py": "python",
     }
@@ -309,12 +310,21 @@ class ShellPipe:
     func_by_name: dict[str, ShellFunc]
 
     def __init__(self) -> None:
+
+        names = list(DOCS.keys())
+
         self.func_by_name = dict(
             awk=do_awk,
             cat=do_cat,
+            counter=do_counter,
             python=do_little,
             split=do_split,
         )
+
+        names_ = list(self.func_by_name.keys())
+
+        diffs = list(difflib.unified_diff(a=names, b=names_, lineterm=""))
+        assert not diffs, (diffs,)
 
     def shpipe_main(self, argv: list[str]) -> None:
         """Run from the Sh Command Line"""
@@ -467,7 +477,7 @@ def do_awk(argv: list[str]) -> None:
 #
 
 
-CAT_DOC = r"""
+CAT_DOC = """
 
     usage: cat [-]
 
@@ -530,6 +540,65 @@ def do_cat(argv: list[str]) -> None:
 
     if module_rindex == -1:
         module_stdout.drain_to_stdout()
+
+
+#
+# Count or drop duplicate Lines, no sort required
+#
+
+
+COUNTER_DOC = """
+
+    usage: counter [-k]
+
+    count or drop duplicate Lines, no sort required
+
+    options:
+      -k, --keys  print the Keys without the Values (default: False)
+
+    comparable to:
+      |awk '!d[$0]++'  # drop duplicates
+      |awk '{d[$_]++}END{for(k in d){print d[k],k}}'  # count duplicates
+
+    examples:
+      ls -l |bin/i  u  # counts each Word, prints Lines of Count Tab Text
+      ls -l |bin/i  counter --keys  c  # prints each Word once
+
+"""
+
+# todo: abbreviate as |i co -k, as |i cou -k, etc
+
+
+def do_counter(argv: list[str]) -> None:
+    """Count or drop duplicate Lines, no sort required"""
+
+    # Form Shell Args Parser
+
+    doc = COUNTER_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    keys_help = "print the Keys without the Values (default: False)"
+    parser.add_argument("-k", "--keys", action="store_true", help=keys_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Break Lines apart into Words
+
+    ilines = module_stdin.readlines()
+    counter = collections.Counter(ilines)
+
+    if ns.keys:
+        olines = list(counter.keys())
+    else:
+        olines = list(f"{v:6}\t{k}" for k, v in counter.items())  # classic '|cat -n' format
+
+    otext = line_break_join_rstrips_plus(olines)
+    module_stdout.write(otext)
+
+    # todo: |counter despite UnicodeDecodeError
 
 
 #
@@ -841,6 +910,7 @@ DOCS: dict[str, str] = dict()
 
 DOCS["awk"] = AWK_DOC
 DOCS["cat"] = CAT_DOC
+DOCS["counter"] = COUNTER_DOC
 DOCS["python"] = __doc__
 DOCS["split"] = SPLIT_DOC
 
