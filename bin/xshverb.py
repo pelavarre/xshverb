@@ -60,16 +60,17 @@ import sys
 import textwrap
 
 
+YYYY_MM_DD = "2025-05-25"  # date of last change to this Code, or an earlier date
+
+
 if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
 
 
-YYYY_MM_DD = "2025-05-25"  # date of last change to this Code, or an earlier date
+ShellFunc = collections.abc.Callable[[list[str]], None]
 
 
-ShellFunc = collections.abc.Callable[["ShellPipe", list[str]], None]
-
-
+# class ShellFile(typing.TextIO):  # comment in to check overrides typed like original
 class ShellFile:
     """Pump Bytes in and out"""  # 'Store and forward'
 
@@ -94,7 +95,7 @@ class ShellFile:
         if not sys.stdin.isatty():
 
             path = pathlib.Path("/dev/stdin")  # todo: solve for Windows too
-            read_bytes = path.read_bytes()
+            read_bytes = path.read_bytes()  # maybe not UTF-8 Encoded
             self.iobytes = read_bytes
 
         else:
@@ -109,8 +110,11 @@ class ShellFile:
 
         # .returncode .shell .stdin differs from:  iobytes = os.popen(shline).read().encode()
 
-    def readlines(self) -> list[str]:
+    def readlines(self, hint: int = -1) -> list[str]:
         """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
+
+        if hint != -1:
+            raise NotImplementedError(str((hint,)))
 
         self.fill_if()
 
@@ -120,16 +124,16 @@ class ShellFile:
 
         return splitlines
 
-    def writelines(self, olines: list[str]) -> None:
-        """Write Lines to Bytes"""
+    def write(self, text: str) -> int:
+        """Write Chars into Bytes, but don't drain yet"""
 
-        rstrips = list(_.rstrip() for _ in olines)
-        join = "\n".join(rstrips)
-        strip = join.strip("\n")
-        iochars = strip + "\n"
-        encode = iochars.encode()
-
+        count = len(text)  # counts Decoded Chars, not Encoded Bytes
+        encode = text.encode()
         self.iobytes = encode  # replaces
+
+        return count
+
+        # standard .writelines forces the Caller to choose each Line-Break
 
     def drain_if(self) -> None:
         """Write Bytes, if not drained already"""
@@ -149,7 +153,7 @@ class ShellFile:
         if not sys.stdout.isatty():
 
             fd = sys.stdout.fileno()
-            data = iobytes
+            data = iobytes  # maybe not UTF-8 Encoded
             os.write(fd, data)
 
         else:
@@ -159,13 +163,17 @@ class ShellFile:
             subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
 
 
-@dataclasses.dataclass(order=True)  # , frozen=True)
-class ShellPump:
+module_stdin = ShellFile()  # ShellPump's read from .stdin
+module_stdout = ShellFile()  # ShellPump's write to .stdout
+
+
+@dataclasses.dataclass  # (order=False, frozen=False)
+class ShellPump:  # much like a Linux Process
     """Work to drain 1 ShellFile and fill the next ShellFile"""
 
     nm: str  # 'p'
     name: str  # 'python'
-    func: ShellFunc  # the .do_python of a ShellPipe
+    func: ShellFunc  # do_awk  # do_python
     argv: list[str]  # ['p', '--version']
 
     name_by_nm = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
@@ -265,9 +273,6 @@ class ShellPump:
 class ShellPipe:
     """Pump Bytes through a pipe of Shell Pumps"""
 
-    stdin: ShellFile
-    stdout: ShellFile
-
     func_by_name: dict[str, ShellFunc]
 
     def __init__(self) -> None:
@@ -279,18 +284,19 @@ class ShellPipe:
     def shpipe_main(self, argv: list[str]) -> None:
         """Run from the Sh Command Line"""
 
+        global module_stdin, module_stdout
+
         shpumps = self.parse_shpipe_args_if(argv)
 
-        self.stdout = ShellFile()
+        module_stdout = ShellFile()  # adds or replaces
         for shpump in shpumps:
-            self.stdin = self.stdout
-            self.stdout = ShellFile()
+            module_stdin = module_stdout
+            module_stdout = ShellFile()  # adds or replaces
 
-            shpipe = self
             argv = shpump.argv
-            shpump.func(shpipe, argv)  # two positional args, zero keyword args
+            shpump.func(argv)  # two positional args, zero keyword args
 
-        self.stdout.drain_if()
+        module_stdout.drain_if()
 
     def parse_shpipe_args_if(self, argv: list[str]) -> list[ShellPump]:
         """Parse Args, else show Version or Help and exit"""
@@ -309,12 +315,12 @@ class ShellPipe:
         return shpumps
 
 
-def do_little(self: ShellPipe, argv: list[str]) -> None:
+def do_little(argv: list[str]) -> None:
     pass
 
 
 #
-# Work like Awk
+# Do work like much of Awk's work, but with more flair
 #
 
 
@@ -336,7 +342,8 @@ AWK_DOC = r"""
       applies Python Str Split Rules to separate the Words
 
     unlike classic Awk:
-      takes negative Numbers as counting back from the right, not ahead from the left
+      takes negative Numbers as counting back from the end, not ahead from the start
+      default to Double Space, not Single Space, as its Output Sep
       takes 0 as meaning all the Words joined by Output Sep, not a copy of the Input Line
       accepts arbitrary Chars as Seps, even $'\n' $'\x00' etc
       rejects misspellings of -vOFS=, after autocorrecting -vO= or -vOF=
@@ -356,7 +363,7 @@ AWK_DOC = r"""
 """
 
 
-def do_awk(self: ShellPipe, argv: list[str]) -> None:
+def do_awk(argv: list[str]) -> None:
     """Pick some columns of words, and drop the rest"""
 
     # Form Shell Args Parser
@@ -388,7 +395,7 @@ def do_awk(self: ShellPipe, argv: list[str]) -> None:
     # Pick one or more Columns of Words, and drop the rest
 
     olines = list()
-    ilines = self.stdin.readlines()
+    ilines = module_stdin.readlines()
 
     for iline in ilines:
         iwords = iline.split() if (isep is None) else iline.split(isep)
@@ -413,7 +420,8 @@ def do_awk(self: ShellPipe, argv: list[str]) -> None:
         ojoin = osep.join(owords)
         olines.append(ojoin)
 
-    self.stdout.writelines(olines)
+    ochars = line_break_join_rstrips_plus(olines)
+    module_stdout.write(ochars)
 
 
 #
@@ -440,7 +448,7 @@ class AmpedArgumentParser:
     """Pick out Prog & Description & Epilog well enough to form an Argument Parser"""
 
     text: str  # something like the __main__.__doc__, but dedented and stripped
-    parser: argparse.ArgumentParser  # the inner merely standard Parser
+    parser: argparse.ArgumentParser  # the inner standard ArgumentParser
     closing: str  # the last Graf of the Epilog, minus its Top Line
 
     #
@@ -630,6 +638,21 @@ class AmpedArgumentParser:
         # Succeed
 
         return diffs
+
+
+#
+# Amp up Import BuiltsIns Str
+#
+
+
+def line_break_join_rstrips_plus(lines: list[str]) -> str:
+    """Convert Lines to Chars but strip trailing Blanks in each Line"""
+
+    rstrips = list(_.rstrip() for _ in lines)
+    join = "\n".join(rstrips)
+    plus = join + "\n"
+
+    return plus  # maybe starts with or ends with Empty Lines
 
 
 #
