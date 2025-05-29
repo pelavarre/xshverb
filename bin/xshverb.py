@@ -658,7 +658,7 @@ HEAD_DOC = """
       -N  how many leading Lines to take (default: 10)
 
     comparable to:
-      |head -LINES
+      |head -N
 
     future work:
       we could make meaning out of |head - - |tail +++
@@ -842,6 +842,75 @@ def do_split(argv: list[str]) -> None:
 
     itext = alt_sys.stdin.read_text()
     olines = itext.split()
+
+    otext = line_break_join_rstrips_plus(olines)
+    alt_sys.stdout.write(otext)
+
+
+#
+# Take only the last few Lines, or drop only the first few Lines
+#
+
+
+TAIL_DOC = """
+
+    usage: tail [-N|+N]
+
+    take only the last few Lines, or drop only the first few Lines
+
+    positional arguments:
+      -N|+N  how many trailing Lines to take, or which first Line to not drop (default: -10)
+
+    comparable to:
+      |tail -N
+      |tail +N
+
+    future work:
+      we could co-evolve with |head
+
+    examples:
+      ls -l |bin/i  u  s -nr  t  c  # prints some least common Words
+      ls -hlAF -rt bin/ |cat -n |expand |t -3  c  # prints the last 3 Lines
+      ls -hlAF -rt bin/ |cat -n |expand |t +7  c  # prints the 7th Line and following
+
+"""
+
+
+def do_tail(argv: list[str]) -> None:
+    """Take only the last few Lines, or drop only the first few Lines"""
+
+    assert argparse.OPTIONAL == "?"
+
+    # Form Shell Args Parser
+
+    doc = TAIL_DOC
+    n_help = "how many trailing Lines to take, or which first Line to not drop (default: -10)"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="n", metavar="-N|+N", nargs="?", help=n_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    n = -10
+    if ns.n is not None:
+        try:
+            n = int(ns.n, base=0)
+            if (not n) or (ns.n[:1] not in ["-", "+"]):
+                raise ValueError(f"invalid literal for int() with base 0: {ns.n!r}")
+        except ValueError:
+            parser.parser.print_usage()
+            eprint(f"|head: {ns.n!r}: could be -10 or -3 or -12345, but isn't")
+            sys.exit(2)  # exits 2 for bad Arg
+
+    # Break Lines apart into Words
+
+    assert n != 0, (n,)
+
+    ilines = alt_sys.stdin.readlines()
+    olines = ilines[n:] if (n < 0) else ilines[(n - 1):]
 
     otext = line_break_join_rstrips_plus(olines)
     alt_sys.stdout.write(otext)
@@ -1131,6 +1200,7 @@ DOC_BY_VERB = dict(
     python=__doc__,
     sort=SORT_DOC,
     split=SPLIT_DOC,
+    tail=TAIL_DOC,
 )
 
 for _K_ in DOC_BY_VERB.keys():
@@ -1145,6 +1215,7 @@ FUNC_BY_VERB = dict(
     python=do_pass,
     sort=do_sort,
     split=do_split,
+    tail=do_tail,
 )
 
 
@@ -1155,6 +1226,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "i": "split",
     "p": "python",
     "s": "sort",
+    "t": "tail",
     "u": "counter",
     "xshverb": "python",
     "xshverb.py": "python",
