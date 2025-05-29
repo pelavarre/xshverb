@@ -5,12 +5,12 @@ usage: xshverb.py [-h] [-V] [HINT ...]
 
 make it quick and easy to build and run a good Shell Pipe
 
-options:
-  -h, --help     show this message and exit
-  -V, --version  show version and exit
+positional arguments:
+  HINT           hint of which Shell Pipe Filter you mean
 
-positional args:
-  HINT  enough of a hint to search out the correct Shell Pipe Filter
+options:
+  -h, --help     show this help message and exit
+  -V, --version  show version and exit
 
 quirks:
   defaults to strip trailing Blanks from each Line
@@ -37,18 +37,17 @@ examples:
   git show |i  u  s -nr  h  c  # shows the most common words in the last Git Commit
   a --help  # shows the Help Doc for the Awk Shell Verb
   p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
-  v  # fixes up the Os/Copy Paste Buffer and calls Vim to edit it
+  v  # fixes up the Os/Copy Paste Buffer and then calls Vim to edit it
 """
 
 # todo: --py to show the Python chosen, --py=... to supply your own Python
 # todo: make a place for:  column -t, fmt --ruler, tee, tee -a, etc
 
-# FIXME: drop all the 'p' out of the ShPump module_rindex/_index, unless Pipe of only P
-
 
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
 
 
+import __main__
 import argparse
 import collections.abc
 import dataclasses
@@ -71,13 +70,51 @@ if not __debug__:
 
 
 def main() -> None:
-    p = ShellPipe()
-    p.shpipe_main(sys.argv)
+    """Run from the Sh Command Line"""
+
+    argv = sys.argv
+
+    # Form Shell Args Parser
+
+    assert argparse.ZERO_OR_MORE == "*"
+    assert __main__.__doc__, __main__.__doc__
+
+    doc = __main__.__doc__
+    hint_help = "hint of which Shell Pipe Filter you mean"
+    version_help = "show version and exit"
+
+    parser = AmpedArgumentParser(doc, add_help=True)
+    parser.add_argument(dest="hints", metavar="HINT", nargs="*", help=hint_help)
+    parser.add_argument("-V", "--version", action="store_true", help=version_help)
+
+    # Take up Shell Args
+
+    basename = os.path.basename(argv[0])
+
+    args = ["--"] + [basename] + argv[1:]
+    if basename == "xshverb.py":
+        if not argv[1:]:
+            args = list()  # asks to print Closing
+
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    shpumps = argv_to_shell_pumps(argv=ns.hints)  # often prints help & exits zero
+
+    alt_sys.stdout = ShellFile()  # adds or replaces
+    for index, shpump in enumerate(shpumps):
+        alt_sys.index = index
+        alt_sys.rindex = index - len(shpumps)
+
+        alt_sys.stdin = alt_sys.stdout
+        alt_sys.stdout = ShellFile()  # adds or replaces
+
+        argv = shpump.argv
+        shpump.func(argv)  # two positional args, zero keyword args
+
+    alt_sys.stdout.drain_if()
 
 
-ShellFunc = collections.abc.Callable[[list[str]], None]
-
-
+@dataclasses.dataclass  # (order=False, frozen=False)
 class ShellFile:
     """Pump Bytes in and out"""  # 'Store and forward'
 
@@ -208,14 +245,11 @@ class ShellFile:
         os.write(fd, data)
 
 
-module_index = -1  # ShellPump's place in the Pipe, counting forward from the start
-module_rindex = 0  # ShellPump's place in the Pipe, counting back from the end
-module_stdin = ShellFile()  # ShellPump's read from .stdin
-module_stdout = ShellFile()  # ShellPump's write to .stdout
+ShellFunc = collections.abc.Callable[[list[str]], None]
 
 
 @dataclasses.dataclass  # (order=False, frozen=False)
-class ShellPump:  # much like a Linux Process
+class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     """Work to drain 1 ShellFile and fill the next ShellFile"""
 
     vb: str  # 'p'
@@ -223,24 +257,13 @@ class ShellPump:  # much like a Linux Process
     func: ShellFunc  # do_awk  # do_python
     argv: list[str]  # ['p', '--version']
 
-    verb_by_vb = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
-        "a": "awk",
-        "c": "cat",
-        "h": "head",
-        "i": "split",
-        "p": "python",
-        "s": "sort",
-        "u": "counter",
-        "xshverb": "python",
-        "xshverb.py": "python",
-    }
-
-    def __init__(self, hints: list[str], func_by_verb: dict[str, ShellFunc]) -> None:
+    def __init__(self, hints: list[str]) -> None:
         """Parse a Hint, else show Help and exit"""
 
         assert hints, (hints,)
 
-        verb_by_vb = self.verb_by_vb
+        func_by_verb = FUNC_BY_VERB
+        verb_by_vb = VERB_BY_VB
 
         # Pop the Shell Verb, and zero or more Dashed Options
 
@@ -304,7 +327,7 @@ class ShellPump:  # much like a Linux Process
         vb = self.vb
         verb = self.verb
 
-        verb_doc = DOCS_BY_VERB[verb]
+        verb_doc = DOC_BY_VERB[verb]
 
         key = "usage: xshverb.py "
         text = textwrap.dedent(verb_doc).strip()
@@ -322,68 +345,42 @@ class ShellPump:  # much like a Linux Process
         print(YYYY_MM_DD, version)
 
 
+def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
+    """Parse Args, else show Version or Help and exit"""
+
+    hints = list(argv)
+    hints[0] = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
+
+    shpumps = list()
+    while hints:
+        shpump = ShellPump(hints)  # exits 2 for bad Hints
+        shpump.exit_help_or_exit_version_if()
+        shpumps.append(shpump)
+
+    return shpumps
+
+    # often prints help & exits zero
+
+
+@dataclasses.dataclass  # (order=False, frozen=False)
 class ShellPipe:
     """Pump Bytes through a pipe of Shell Pumps"""
 
-    func_by_verb: dict[str, ShellFunc]
-
     def __init__(self) -> None:
 
-        verbs = list(DOCS_BY_VERB.keys())
+        self.stdin = ShellFile()  # what we're reading
+        self.stdout = ShellFile()  # what we're writing
 
-        self.func_by_verb = dict(
-            awk=do_awk,
-            cat=do_cat,
-            counter=do_counter,
-            head=do_head,
-            python=do_little,
-            sort=do_sort,
-            split=do_split,
-        )
-
-        verbs_ = list(self.func_by_verb.keys())
-
-        diffs = list(difflib.unified_diff(a=verbs, b=verbs_, lineterm=""))
-        assert not diffs, (diffs,)
-
-    def shpipe_main(self, argv: list[str]) -> None:
-        """Run from the Sh Command Line"""
-
-        global module_index, module_rindex, module_stdin, module_stdout
-
-        shpumps = self.parse_shpipe_args_if(argv)
-
-        module_stdout = ShellFile()  # adds or replaces
-        for index, shpump in enumerate(shpumps):
-            module_index = index
-            module_rindex = index - len(shpumps)
-
-            module_stdin = module_stdout
-            module_stdout = ShellFile()  # adds or replaces
-
-            argv = shpump.argv
-            shpump.func(argv)  # two positional args, zero keyword args
-
-        module_stdout.drain_if()
-
-    def parse_shpipe_args_if(self, argv: list[str]) -> list[ShellPump]:
-        """Parse Args, else show Version or Help and exit"""
-
-        hints = list(argv)
-        hints[0] = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
-
-        func_by_verb = self.func_by_verb
-
-        shpumps = list()
-        while hints:
-            shpump = ShellPump(hints, func_by_verb=func_by_verb)  # exits 2 for bad Hints
-            shpump.exit_help_or_exit_version_if()
-            shpumps.append(shpump)
-
-        return shpumps
+        self.index = -1  # how far from the left the present ShellPump is:  0, 1, 2, etc
+        self.rindex = 0  # how far from the right the present ShellPump is:  -1, -2, -3, etc
 
 
-def do_little(argv: list[str]) -> None:
+#
+# Do all the implied things, and nothing more
+#
+
+
+def do_pass(argv: list[str]) -> None:
     pass
 
 
@@ -455,8 +452,7 @@ def do_awk(argv: list[str]) -> None:
 
     # Take up Shell Args
 
-    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    ns = parser.parse_args_if(args)  # often prints help & exits zero
+    ns = argv_parse_if(parser, argv=argv)  # often prints help & exits zero
 
     isep = None if (ns.isep is None) else ns.isep
     osep = "  " if (ns.osep is None) else ns.osep
@@ -468,7 +464,7 @@ def do_awk(argv: list[str]) -> None:
     # Pick one or more Columns of Words, and drop the rest
 
     olines = list()
-    ilines = module_stdin.readlines()
+    ilines = alt_sys.stdin.readlines()
 
     for iline in ilines:
         iwords = iline.split() if (isep is None) else iline.split(isep)
@@ -494,7 +490,7 @@ def do_awk(argv: list[str]) -> None:
         olines.append(ojoin)
 
     otext = line_break_join_rstrips_plus(olines)
-    module_stdout.write(otext)
+    alt_sys.stdout.write(otext)
 
 
 #
@@ -550,25 +546,25 @@ def do_cat(argv: list[str]) -> None:
 
     # Read from Stdin Tty at start of Pipe
 
-    if module_index == 0:
+    if alt_sys.index == 0:
         if sys.stdin.isatty():
             eprint(
                 "Start typing"
                 + ". Press Return after each Line"
                 + ". Press ⌃D to continue, or ⌃C to quit"
             )
-        module_stdin.fill_from_stdin()
+        alt_sys.stdin.fill_from_stdin()
 
     # Strip trailing Blanks off each Line
 
-    ilines = module_stdin.readlines()
+    ilines = alt_sys.stdin.readlines()
     otext = line_break_join_rstrips_plus(ilines)
-    module_stdout.write(otext)
+    alt_sys.stdout.write(otext)
 
     # Write to Stdout Tty at end of Pipe
 
-    if module_rindex == -1:
-        module_stdout.drain_to_stdout()
+    if alt_sys.rindex == -1:
+        alt_sys.stdout.drain_to_stdout()
 
 
 #
@@ -617,7 +613,7 @@ def do_counter(argv: list[str]) -> None:
 
     # Break Lines apart into Words
 
-    ilines = module_stdin.readlines()
+    ilines = alt_sys.stdin.readlines()
     counter = collections.Counter(ilines)
 
     if ns.keys:
@@ -628,7 +624,7 @@ def do_counter(argv: list[str]) -> None:
         # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
 
     otext = line_break_join_rstrips_plus(olines)
-    module_stdout.write(otext)
+    alt_sys.stdout.write(otext)
 
 
 #
@@ -669,11 +665,11 @@ def do_head(argv: list[str]) -> None:
 
     # Break Lines apart into Words
 
-    ilines = module_stdin.readlines()
+    ilines = alt_sys.stdin.readlines()
     olines = ilines[:10]
 
     otext = line_break_join_rstrips_plus(olines)
-    module_stdout.write(otext)
+    alt_sys.stdout.write(otext)
 
 
 #
@@ -756,7 +752,7 @@ def do_sort(argv: list[str]) -> None:
 
     # Change the order of Lines
 
-    ilines = module_stdin.readlines()
+    ilines = alt_sys.stdin.readlines()
 
     if not numeric:
         olines = sorted(ilines)
@@ -767,7 +763,7 @@ def do_sort(argv: list[str]) -> None:
         olines.reverse()
 
     otext = line_break_join_rstrips_plus(olines)
-    module_stdout.write(otext)
+    alt_sys.stdout.write(otext)
 
 
 #
@@ -807,11 +803,11 @@ def do_split(argv: list[str]) -> None:
 
     # Break Lines apart into Words
 
-    itext = module_stdin.read_text()
+    itext = alt_sys.stdin.read_text()
     olines = itext.split()
 
     otext = line_break_join_rstrips_plus(olines)
-    module_stdout.write(otext)
+    alt_sys.stdout.write(otext)
 
 
 #
@@ -1015,6 +1011,22 @@ class AmpedArgumentParser:
         return diffs
 
 
+def argv_parse_if(parser: AmpedArgumentParser, argv: list[str]) -> argparse.Namespace:
+    """Parse the Shell Args, else print Help and exit zero or nonzero"""
+
+    args = ["--"]  # for when I'm feeling lucky
+    if argv[1:]:
+        args = list()  # for when I need examples
+        if argv[1:] != ["--"]:
+            args = argv[1:]  # for when I've got specifics
+
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    return ns
+
+    # often prints help & exits zero
+
+
 #
 # Amp up Import BuiltsIns Str
 #
@@ -1068,23 +1080,62 @@ def eprint(*args: object) -> None:
 
 
 #
-# Index the Main Doc's of each Shell Verb
+# Index the Doc and Func of each main Shell Verb
 #
 
 
 assert __doc__, (__doc__,)
-DOCS_BY_VERB: dict[str, str] = dict()
 
-DOCS_BY_VERB["awk"] = AWK_DOC
-DOCS_BY_VERB["cat"] = CAT_DOC
-DOCS_BY_VERB["counter"] = COUNTER_DOC
-DOCS_BY_VERB["head"] = HEAD_DOC
-DOCS_BY_VERB["python"] = __doc__
-DOCS_BY_VERB["sort"] = SORT_DOC
-DOCS_BY_VERB["split"] = SPLIT_DOC
+DOC_BY_VERB = dict(
+    awk=AWK_DOC,
+    cat=CAT_DOC,
+    counter=COUNTER_DOC,
+    head=HEAD_DOC,
+    python=__doc__,
+    sort=SORT_DOC,
+    split=SPLIT_DOC,
+)
 
-for _K_ in DOCS_BY_VERB.keys():
-    DOCS_BY_VERB[_K_] = textwrap.dedent(DOCS_BY_VERB[_K_]).strip()
+for _K_ in DOC_BY_VERB.keys():
+    DOC_BY_VERB[_K_] = textwrap.dedent(DOC_BY_VERB[_K_]).strip()
+
+
+FUNC_BY_VERB = dict(
+    awk=do_awk,
+    cat=do_cat,
+    counter=do_counter,
+    head=do_head,
+    python=do_pass,
+    sort=do_sort,
+    split=do_split,
+)
+
+
+VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
+    "a": "awk",
+    "c": "cat",
+    "h": "head",
+    "i": "split",
+    "p": "python",
+    "s": "sort",
+    "u": "counter",
+    "xshverb": "python",
+    "xshverb.py": "python",
+}
+
+
+_DOC_VERBS_ = list(DOC_BY_VERB.keys())
+_FUNC_VERBS_ = list(FUNC_BY_VERB.keys())
+
+_DIFF_VERBS_ = list(difflib.unified_diff(a=_DOC_VERBS_, b=_FUNC_VERBS_, lineterm=""))
+assert not _DIFF_VERBS_, (_DIFF_VERBS_,)
+
+for _VB_, _VERB_ in VERB_BY_VB.items():
+    assert _VB_ not in _FUNC_VERBS_, (_VB_,)
+    assert _VERB_ in _FUNC_VERBS_, (_VERB_,)
+
+
+alt_sys = ShellPipe()
 
 
 #
@@ -1096,8 +1147,8 @@ if __name__ == "__main__":
     main()
 
 
-# todo: |p should default to errors="replace" and .replace("\ufffd", "?")
-
+# todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
+# todo: def shpipe_main into def main, and AmpedArgumentParser into def main
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
 
