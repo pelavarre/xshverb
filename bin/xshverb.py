@@ -35,7 +35,9 @@ most common Shell words:
 examples:
   bin/xshverb.py  # shows these examples and exit
   git show |i  u  s -nr  h  c  # shows the most common words in the last Git Commit
-  a --help  # shows the Help Doc for the Awk Shell Verb
+  a --  # shows the Closing Paragraph of the Help Doc for the Awk Shell Verb
+  a --help  # shows the whole Help Doc for the Awk Shell Verb
+  a --version  # shows the Version of the Code here
   p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
   v  # fixes up the Os/Copy Paste Buffer and then calls Vim to edit it
 """
@@ -112,6 +114,8 @@ def main() -> None:
         shpump.func(argv)  # two positional args, zero keyword args
 
     alt_sys.stdout.drain_if()
+
+    # todo: add code to make how truthy ns.version works more simple
 
 
 @dataclasses.dataclass  # (order=False, frozen=False)
@@ -252,16 +256,18 @@ ShellFunc = collections.abc.Callable[[list[str]], None]
 class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     """Work to drain 1 ShellFile and fill the next ShellFile"""
 
-    vb: str  # 'p'
-    verb: str  # 'python'
+    vb: str  # 'a'  # 'p'
+    verb: str  # 'awk'  # 'python'
+    doc: str  # AWK_DOC  # PYTHON_DOC
     func: ShellFunc  # do_awk  # do_python
-    argv: list[str]  # ['p', '--version']
+    argv: list[str]  # ['a']  # ['awk']
 
     def __init__(self, hints: list[str]) -> None:
-        """Parse a Hint, else show Help and exit"""
+        """Pop some Hints, else show Help and exit"""
 
         assert hints, (hints,)
 
+        doc_by_verb = DOC_BY_VERB
         func_by_verb = FUNC_BY_VERB
         verb_by_vb = VERB_BY_VB
 
@@ -290,19 +296,32 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
             eprint(text)
             sys.exit(2)  # exits 2 for bad Shell Verb
 
+        doc = doc_by_verb[verb]
         func = func_by_verb[verb]
 
         # Succeed
 
         self.vb = vb
         self.verb = verb
+
+        self.doc = doc
         self.func = func
         self.argv = argv
 
-    def exit_help_or_exit_version_if(self) -> None:
-        """Show Version or Help and exit zero"""
+        self.exit_doc_if()
 
+        # often prints help & exits zero  # exits 2 for bad Shell Verb
+
+    def exit_doc_if(self) -> None:
+        """Show Help or Closing or Version and exit zero, else return"""
+
+        doc = self.doc
         argv = self.argv
+
+        parser = AmpedArgumentParser(doc, add_help=False)  # enough to print Closing
+        if argv[1:] == ["--"]:
+            self.do_show_closing(closing=parser.closing)
+            sys.exit(0)
 
         double_dashed = False
         for arg in argv[1:]:
@@ -321,27 +340,25 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
                     self.do_show_version()
                     sys.exit(0)
 
+        # often prints help & exits zero
+
     def do_show_help(self) -> None:
-        """Show help and exit zero"""
+        """Show the Help and exit zero"""
 
-        vb = self.vb
-        verb = self.verb
+        doc = self.doc
+        print(doc)
 
-        verb_doc = DOC_BY_VERB[verb]
+    def do_show_closing(self, closing: str) -> None:
+        """Show the Closing and exit zero"""
 
-        key = "usage: xshverb.py "
-        text = textwrap.dedent(verb_doc).strip()
-        if text.startswith(key) and (vb != "xshverb.py"):
-            count_eq_1 = 1
-            text = text.replace(key, f"usage: {vb} ", count_eq_1)
-
-        print(text)
+        print()
+        print(closing)
+        print()
 
     def do_show_version(self) -> None:
         """Show version and exit zero"""
 
         version = pathname_read_version(__file__)
-
         print(YYYY_MM_DD, version)
 
 
@@ -353,8 +370,7 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
 
     shpumps = list()
     while hints:
-        shpump = ShellPump(hints)  # exits 2 for bad Hints
-        shpump.exit_help_or_exit_version_if()
+        shpump = ShellPump(hints)  # pops Hints  # exits 0 for Doc, exits 2 for bad Hints
         shpumps.append(shpump)
 
     return shpumps
@@ -452,7 +468,8 @@ def do_awk(argv: list[str]) -> None:
 
     # Take up Shell Args
 
-    ns = argv_parse_if(parser, argv=argv)  # often prints help & exits zero
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
 
     isep = None if (ns.isep is None) else ns.isep
     osep = "  " if (ns.osep is None) else ns.osep
@@ -952,7 +969,7 @@ class AmpedArgumentParser:
             print(closing)
             print()
 
-            sys.exit(0)  # exits 0 after printing examples
+            sys.exit(0)  # exits 0 after printing Closing
 
         # Print help lines & exit zero, else return Parsed Args
 
@@ -1149,6 +1166,8 @@ if __name__ == "__main__":
 
 # todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
 # todo: def shpipe_main into def main, and AmpedArgumentParser into def main
+# todo: take the -- request for examples before running any Shell Pumps
+
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
 
