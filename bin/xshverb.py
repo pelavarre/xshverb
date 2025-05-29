@@ -910,7 +910,7 @@ def do_tail(argv: list[str]) -> None:
     assert n != 0, (n,)
 
     ilines = alt_sys.stdin.readlines()
-    olines = ilines[n:] if (n < 0) else ilines[(n - 1):]
+    olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
     otext = line_break_join_rstrips_plus(olines)
     alt_sys.stdout.write(otext)
