@@ -14,8 +14,10 @@ Contents
 - [Bugs dropped, not kept up](#bugs-dropped-not-kept-up)
   - [|awk -vOFS=$'\\x0A'](#awk--vofsx0a)
   - [|awk -vOF=:](#awk--vof)
+  - [|awk '{print 0x123}'](#awk-print-0x123)
   - [|grep -e=O -e=U](#grep--eo--eu)
   - [|grep hello](#grep-hello)
+  - [|head -0x10](#head--0x10)
   - [|sort](#sort)
   - [|sort -n](#sort--n)
   - [|uniq](#uniq)
@@ -326,6 +328,34 @@ and spells the far more common -F=ISEP wildly differently from the rare -vOFS=
     %
 
 
+### |awk '{print 0x123}'
+
+Classic Awk understands Decimal Int Literals, and shrugs off leading Zeroes,
+but Binary/ Hexadecimal/ Octal Int Literals can silently suddenly mean 0 or octal or hex
+
+Linux
+
+    $ echo |awk '{print 0b1}'
+    0
+    $
+    $ echo |awk '{print 010}'
+    8
+    $
+    $ echo |awk '{print 0x10}'
+    16
+    $
+
+macOS
+
+    % echo |awk '{print 0b1}'
+    0
+    % echo |awk '{print 010}'
+    10
+    % echo |awk '{print 0x10}'
+    0
+    %
+
+
 ### |grep -e=O -e=U
 
 Classic Grep takes this as a search for '=O' and '=U', not as a search for 'O' and 'U'
@@ -344,6 +374,17 @@ that fails to match if the reality differs only in case
     % echo HELLO Hello hello |tr ' ' '\n' |grep hello
     hello
     %
+
+
+### |head -0x10
+
+Classic Head accepts decimal, and decimal with leading zeroes, but not hex
+
+    % seq 99 |head -0x10
+    head: illegal line count -- 0x10
+    %
+
+Classic Tail does the same
 
 
 ### |sort

@@ -292,8 +292,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
             verb = verb_by_vb[vb]  # Aliases are often shorter than their Shell Verbs
 
         if verb not in func_by_verb.keys():
-            text = f"xshverb: command not found: {vb}"  # a la Bash & Zsh vs New Verbs
-            eprint(text)
+            eprint(f"xshverb: command not found: |{vb}")  # a la Bash & Zsh vs New Verbs
             sys.exit(2)  # exits 2 for bad Shell Verb
 
         doc = doc_by_verb[verb]
@@ -422,14 +421,14 @@ AWK_DOC = r"""
       |awk -vOFS='  ' '{ print $1, $5, $(NF+1-1) }'  # |a 1 5 -1
 
     like to classic Awk:
-      rounds down Float Numbers to Ints, even 0.123 to 0
       applies Python Str Split Rules to separate the Words
 
     unlike classic Awk:
-      takes negative Numbers as counting back from the end, not ahead from the start
       default to Double Space, not Single Space, as its Output Sep
+      takes negative Numbers as counting back from the end, not ahead from the start
       takes 0 as meaning all the Words joined by Output Sep, not a copy of the Input Line
       accepts arbitrary Chars as Seps, even $'\n' $'\x00' etc
+      rejects Float Literals, doesn't round to Int, not even 0.123 to 0
       rejects misspellings of -vOFS=, after autocorrecting -vO= or -vOF=
       doesn't accept Gnu Awk --field-separator=ISEP nor --assign OFS=OSEP
       doesn't write out trailing Output Seps when trailing Columns missing or empty
@@ -474,7 +473,7 @@ def do_awk(argv: list[str]) -> None:
     isep = None if (ns.isep is None) else ns.isep
     osep = "  " if (ns.osep is None) else ns.osep
 
-    numbers = list(int(_) for _ in ns.numbers)  # rounds down Floats, even to 0, as Awk does
+    numbers = list(int(_, base=0) for _ in ns.numbers)  # rejects Floats
     if not numbers:
         numbers = [-1]
 
@@ -651,39 +650,60 @@ def do_counter(argv: list[str]) -> None:
 
 HEAD_DOC = """
 
-    usage: head
+    usage: head [-N]
 
     take only the first few Lines
 
+    positional arguments:
+      -N  how many leading Lines to take (default: 10)
+
     comparable to:
-      |head -$((LINES / 3))
+      |head -LINES
+
+    future work:
+      we could make meaning out of |head - - |tail +++
+      we could take the $LINES of the Terminal Window Tab Pane into account
 
     examples:
-      ls -l |bin/i  u |sort -nr  |h  # prints some most common Words
+      ls -l |bin/i  u  s -nr  h  c  # prints some most common Words
+      ls -hlAF -rt |h -3  c  # prints the first 3 Lines
 
 """
-
-# todo: |h -123
-# todo: default to $((LINES / 3)) not down to 10
 
 
 def do_head(argv: list[str]) -> None:
     """Take only the first few Lines"""
 
+    assert argparse.OPTIONAL == "?"
+
     # Form Shell Args Parser
 
     doc = HEAD_DOC
+    n_help = "how many leading Lines to take (default: 10)"
+
     parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="n", metavar="-N", nargs="?", help=n_help)
 
     # Take up Shell Args
 
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    parser.parse_args_if(args)  # often prints help & exits zero
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    n = -10
+    if ns.n is not None:
+        try:
+            n = int(ns.n, base=0)
+            if n >= 0:
+                raise ValueError(f"invalid literal for int() with base 0: {ns.n!r}")
+        except ValueError:
+            parser.parser.print_usage()
+            eprint(f"|head: {ns.n!r}: could be -10 or -3 or -12345, but isn't")
+            sys.exit(2)  # exits 2 for bad Arg
 
     # Break Lines apart into Words
 
     ilines = alt_sys.stdin.readlines()
-    olines = ilines[:10]
+    olines = ilines[:-n]
 
     otext = line_break_join_rstrips_plus(olines)
     alt_sys.stdout.write(otext)
@@ -1078,8 +1098,8 @@ def pathname_read_version(pathname: str) -> str:
     str_hash = str_hash.upper()  # such as 32 nybbles 'C24931F77721476EF76D85F3451118DB'
 
     major = 0
-    minor = int(str_hash[0], 0x10)  # 0..15
-    micro = int(str_hash[1:][:2], 0x10)  # 0..255
+    minor = int(str_hash[0], base=0x10)  # 0..15
+    micro = int(str_hash[1:][:2], base=0x10)  # 0..255
 
     version = f"{major}.{minor}.{micro}"
     return version
@@ -1165,8 +1185,6 @@ if __name__ == "__main__":
 
 
 # todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
-# todo: def shpipe_main into def main, and AmpedArgumentParser into def main
-# todo: take the -- request for examples before running any Shell Pumps
 
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
