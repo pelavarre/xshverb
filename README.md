@@ -3,7 +3,9 @@
 
 Contents
 
+- [First Look](#first-look)
 - [Welcome](#welcome)
+- [Quick Install](#quick-install)
 - [23 is just barely enough](#23-is-just-barely-enough)
 - [Arguments that don't begin with a Dash '-'](#arguments-that-dont-begin-with-a-dash--)
   - [Punctuated Arguments](#punctuated-arguments)
@@ -18,14 +20,14 @@ Contents
   - [|sort -n](#sort--n)
   - [|uniq](#uniq)
   - [|uniq -c](#uniq--c)
-- [Future work](#future-work)
 - [Past work](#past-work)
+- [Future work](#future-work)
 - [Up online](#up-online)
 
-<!-- I'd fear people need the headings numbered, if it were just me -->
-<!-- VsCode autogenerates this unnumbered Table-of-Contents. Maybe people will cope -->
+<!-- I fear people need the Headings numbered -->
+<!-- but VsCode autogenerates this unnumbered Table-of-Contents. Maybe people will cope -->
 
-## Welcome
+## First Look
 
 Let's make it easy for you to tell your Terminal Shell
 to show you the most common words in a Git Commit
@@ -42,9 +44,8 @@ to have us say what we'll do, before you agree to have us to do it
 
     >> Press ⌃D to run, or ⌃C to quit <<
 
-Type a Y and a Space and another Y and another Space
-when you need to see the full details of how far behind the times
-the classic 1970s work of Terminal Shell designs has fallen
+Type a Y and a Space and another Y and Space
+to have us speak less concisely, more conventionally, in terms of classic Shell Pipes
 
     $ git show |y  y  i  u  s -nr  h  c
 
@@ -52,34 +53,52 @@ the classic 1970s work of Terminal Shell designs has fallen
 
     >> Press ⌃D to run, or ⌃C to quit <<
 
-For sure you can spell out all this detail,
-to build out a purely classic Shell Pipe that does its work adequately well.
+For sure you can spell out all this classic detail yourself,
+to build out a merely classic Shell Pipe that does its work adequately well.
 But, uhh, odds on you mostly don't want to. I mean look at what it takes, nowadays
 
-And you can't even correctly expand |u as '|LC_ALL=C sort |uniq -c |expand'
-except when it is followed by a |sort such as our '|LC_ALL=C sort -nr' here
+And |u only means the '|LC_ALL=C sort |uniq -c |expand' that destroys the initial order of Lines
+when it's followed by something else that more explicitly mutates order of Lines,
+such as our trailing '|LC_ALL=C sort -nr' here
 
-Here we build better Sh Pipes for lots cheaper, out of single Letters.
+## Welcome
+
+We're here to invite you to give attention to reading well the blanks between words, in the Command Lines of the Terminal Shell
+
+Lisp people feel the blank between words should mean form a List.
+Awk people feel the blank should mean append to a String.
+Rexx people feel the blank should mean append to a String after appending a single Space as a Separator
+
+We're showing the blank should change what it means by context.
+Our kind of Shell Pipe has it mean send output into the next Process.
+Our kind of Awk has it mean append a double Space as a stronger Separator
+
+Download & run our work here to build better Sh Pipes for lots cheaper, out of single Letters.
 As often as you don't start with the "y " prefix,
 then we figure you're feeling plenty lucky,
 absolutely bold enough to just try it and see what happens
 
 We like making quick strong good Terminal Shell moves this way,
 nudging us to make mistakes often enough,
-frequently giving us great practice in how skillfully we recover from mistakes.
-We don't like people
-telling us it must be us who adds in the many ⇧| Shell Pipe Filter marks ourselves.
-We don't like people
-telling us to type more than one letter per Shell Verb.
-They talk as if our now was their now of fifty years ago.
-And, hello, it isn't
+frequently giving us great practice in how skillfully we recover from mistakes
+
+I don't like people telling me it must be me who adds in the many ⇧| Shell Pipe Filter marks myself.
+I'm not much a fan of typing out intricately placed and balanced combinations of ⇧" Double Quote and ' Single Quote marks.
+I don't like people telling me to type more than one letter per Shell Verb.
+i feel they're talking as if our now was their now of fifty years ago.
+As if we want to live burdened by how things were first partly understood.
+And, hello, it isn't & we don't
 
 Have we got this idea across to you?
 
 Now you do feel you can speak the most ordinary Shell Pipes briefly, clearly, and natively?
 Want to try it out?
 
-Quick Install can look like this =>
+## Quick Install
+
+Quick Install can look like this,
+while you want closing your Terminal Tab Pane to mean Complete Uninstall
+
 Pick a Folder to work inside of. Grab the Code.
 Add as many Letters into your Sh Path as you please, at the back or at the front.
 We recommend adding single Letters only at the back,
@@ -90,6 +109,8 @@ and feel lucky enough to just try it
     rm -fr dir/ && mkdir -p dir/ && cd dir/ && pwd
 
     curl -k -LSs https'://'raw'.'githubusercontent'.'com''/pelavarre/xshverb/refs/heads/main/bin/xshverb'.'py >xshverb'.'py
+
+    wc -l 'xshverb'.'py  # smaller than 1000 is a download problem
 
     chmod +x xshverb'.'py
 
@@ -103,16 +124,16 @@ and feel lucky enough to just try it
 
 You get how this works?
 
-Our same web address of the Code, formatted as a simpler hotlink, is
+Our same web address of the Code, formatted as a hotlink without the Shell's Single Quote marks is
 https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/bin/xshverb.py
 
-You definitely can drop out all our mess of single quote ' marks out of our install,
-so long as you actually don't have aggressive social media
-remaking your every other word into an irrelevant unsecured hotlink
+You definitely can drop out all our mess of Single Quote ' marks out of our install procedure,
+so long as you actually don't have aggressive social media interfering here,
+remaking your every other word into an irrelevant hotlink
 
 Shell Error Messages like "zsh: command not found: 404"
 or "bash: 404: command not found"
-mean the download went wrong.
+can come at you to say the download went wrong.
 We've found some corporate firewalls at work disrupt the download like that
 You can find your Internet outside, if need be
 
@@ -122,7 +143,7 @@ You can find your Internet outside, if need be
 Myself,
 I find our 23 basic Shell Verbs memorable
 Just the greatest, most classic, Shell Pipe Filters,
-but with their defaults rethought and corrected to fit our new world of large memories
+but with their defaults and options rethought and corrected to fit our new century of large memories
 
 + |a is for **Awk**, but default to drop all but the last Column
 + |b
@@ -130,10 +151,10 @@ but with their defaults rethought and corrected to fit our new world of large me
 + |d is for **Diff**, but default to '|diff -brpu a b'
 + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
 + |f is for **Find**, but default to search $PWD spelled as ""
-+ |g is for **Grep**, but with Py RegEx, and default to '-i -F' and fill in the '-e' per Arg
++ |g is for **Grep**, but default to '-i -F', and fill in the '-e' per Arg, and Python RegEx
 + |h is for **Head**, but fill a third of the Terminal, don't always stop at just 10 Lines
-+ |i is for **Py Str Split**, the inverse of |x
-+ |j is for **Json Query**, but don't force you to install Jq and turn off sorting the keys
++ |i is for **Py Str Split**, the inverse of the |x of XArgs meaing Py Space List Join
++ |j is for **Json Query**, but don't force you to install Jq and do turn off sorting the keys
 + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
 + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 + |m is for **Make**, but timestamp the work and never print the same Line twice
@@ -141,6 +162,7 @@ but with their defaults rethought and corrected to fit our new world of large me
 + |o is for **Py Line Strip**
 + |p is for **Python**, but stop making you spell out the Imports
 + |p dedent is for Py Str TextWrap DeDent
++ |p dent is to insert 4 Spaces at the left of each Line
 + |q is for **Git**, because G was taken
 + |r is for **Py Lines Reversed**, a la Linux Tac and Mac '|tail -r'
 + |s is for **Sort**, but default to classic LC_ALL=C, same as last century
@@ -376,19 +398,21 @@ unlike
     |uniq -c |expand
 
 
-## Future work
-
-Next we dream up what uppercase A..Z should mean? Or the 0..9 Digits? Or the Sh Verb 404?
-
-Building out Shell Pipes as if people matter now, this is a good thing?
-
-
 ## Past work
 
 This XShVerb Repo is presently my one Repo,
 where I put all my work that isn't my work for hire.
 GitHub will show you a dozen other Git Repos, where I've put work before now.
 ByoVerbs was the my one Repo before this Repo became my one Repo, in May/2025
+
+I figure the big variable in this effort is whether I show up or not.
+It's hard for me to show up while no one else is talking,
+but the chatbots do reply when I tell them to reply
+
+I've stopped scattering my effort across multiple Repos.
+Lately I'm pushing to reduce my own Sh Path down to just this one Repo
+
+I'll solve just the defaults and the scrolling, nothing more, next time I work on 'watch'
 
 I write the Doc, before the Tests, before the Code,
 as my habit designed to produce the most correct Code most quickly,
@@ -398,6 +422,19 @@ So if you're keeping up closely, you'll see my Tests and yours fail before they 
 Let's talk?
 
 Tell me how it's going for you?
+
+
+## Future work
+
+Next we dream up what uppercase A..Z should mean? Or the 0..9 Digits? Or the Sh Verb 404?
+
+1 and 2 and 3 could be Ssh Servers for work, home, and collaboration
+
+A and B could mean ./a and ./b
+
+E could mean ~/emojis.txt
+
+Building out Shell Pipes as if people matter now, this is a good thing?
 
 
 ## Up online
