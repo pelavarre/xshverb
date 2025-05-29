@@ -1,8 +1,40 @@
 # xshverb/Makefile
 
 
+define __DOC__
+usage: make TARGET
+
+help download, run, and push back changes
+
+positional arguments:
+  TARGET  which help to give (one of help, pips, smoke)
+
+examples:
+  make  # shows a few examples and exits zero
+  make help  # shows many help lines and exits zero
+  make pips  # installs/ replaces Python add-on's from PyPi·Org
+  make smoke  # calls for Code Review from Black, Flake8, and MyPy Strict
+endef
+
+
+define __EPILOG__
+
+make  # shows a few examples and exits zero
+make help  # shows many help lines and exits zero
+make pips  # installs/ replaces Python add-on's from PyPi·Org
+make smoke  # calls for Code Review from Black, Flake8, and MyPy Strict
+
+endef
+
+
 default:
-	@echo usage: make pips
+	@$(info $(__EPILOG__))
+	@true
+
+
+help:
+	@$(info $(__DOC__))
+	@true
 
 
 pips:
@@ -17,7 +49,7 @@ pips:
 	source ~/.pyvenvs/pips/bin/activate && pip install --upgrade mypy
 
 
-smoke: black flake8
+smoke: black flake8 mypy
 	:
 
 
@@ -39,6 +71,12 @@ flake8:
 # --ignore=E203  # Black '[ : ]' rules over E203 whitespace before ':'
 # --ignore=E704  # Black of typing.Protocol rules over E704 multiple statements on one line (def)
 # --ignore=W503  # 2017 Pep 8 and Black over W503 line break before bin op
+
+
+mypy:
+	~/.pyvenvs/mypy/bin/mypy \
+		--strict \
+			bin/
 
 
 # posted as:  https://github.com/pelavarre/xshverb/blob/main/Makefile
