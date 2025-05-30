@@ -154,7 +154,7 @@ and feel lucky enough to just try it
 
     export PATH="$PWD:$PATH:$PWD"
 
-    git show |i  u  s -nr  h  c
+    ls -l |i  u  s -nr  h  c
 
 You get how this works?
 

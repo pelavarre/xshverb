@@ -10,4 +10,4 @@ for F in a c h i n o p pq r s t u x; do ln -s $PWD/xshverb'.'py $F; done
 
 export PATH="$PWD:$PATH:$PWD"
 
-git show |i  u  s -nr  h  c
+ls -l |i  u  s -nr  h  c
