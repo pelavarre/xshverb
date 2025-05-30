@@ -165,11 +165,10 @@ You definitely can drop out all our mess of Single Quote ' marks out of our inst
 so long as you actually don't have aggressive social media interfering here,
 remaking your every other word into an irrelevant hotlink
 
-Shell Error Messages like "zsh: command not found: 404"
-or "bash: 404: command not found"
-can come at you to say the download went wrong.
-We've found some corporate firewalls at work disrupt the download like that
-You can find your Internet outside, if need be
+Shell Error Messages can come at you to say the download went wrong.
+We've found some corporate firewalls at work disrupt the download.
+Often it works if you just try again a couple more times.
+You can find your Internet outside, of course, if need be
 
 
 ## 23 is just barely enough
