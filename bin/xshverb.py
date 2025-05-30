@@ -55,6 +55,7 @@ import collections.abc
 import dataclasses
 import difflib
 import hashlib
+import json
 import math
 import os
 import pathlib
@@ -706,6 +707,57 @@ def do_head(argv: list[str]) -> None:
     olines = ilines[:-n]
 
     otext = line_break_join_rstrips_plus(olines)
+    alt_sys.stdout.write(otext)
+
+
+#
+# Drop the Style out of Json Data
+#
+
+
+JQ_DOC = r"""
+
+    usage: jq
+
+    drop the Style out of Json Data
+
+    comparable to:
+      |jq .  # available by default in macOS nowadays
+      |python3 -m json.tool --indent=2 --no-ensure-ascii
+
+    quirks:
+      promotes the --indent=2 of Json, not the --indent=4 of Python
+
+    examples:
+      python3 -c 'import json; print(json.dumps(dict(e=101, é=233)))' >j.json
+      cat j.json |j  c
+
+"""
+
+
+def do_jq(argv: list[str]) -> None:
+    """Drop the Style out of Json Data"""
+
+    # Form Shell Args Parser
+
+    doc = JQ_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Drop the Style out of Json Data
+
+    itext = alt_sys.stdin.read_text()
+    j = json.loads(itext)
+    otext = json.dumps(j, indent=2, ensure_ascii=False) + "\n"
+
+    olines = otext.splitlines()
+    otext_ = line_break_join_rstrips_plus(olines)
+    assert otext == otext_, (otext, otext_)
+
     alt_sys.stdout.write(otext)
 
 
@@ -1419,6 +1471,7 @@ DOC_BY_VERB = dict(
     cat=CAT_DOC,
     counter=COUNTER_DOC,
     head=HEAD_DOC,
+    jq=JQ_DOC,
     nl=NL_DOC,
     python=__doc__,
     reverse=REVERSE_DOC,
@@ -1438,6 +1491,7 @@ FUNC_BY_VERB = dict(
     cat=do_cat,
     counter=do_counter,
     head=do_head,
+    jq=do_jq,
     nl=do_nl,
     python=do_pass,
     reverse=do_reverse,
@@ -1454,6 +1508,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "c": "cat",
     "h": "head",
     "i": "split",
+    "j": "jq",
     "n": "nl",
     "o": "strip",
     "p": "python",
@@ -1501,10 +1556,24 @@ if __name__ == "__main__":
     main()
 
 
+# todo: |p could dedent & str.strip the leading blank columns & leading/ trailing blank lines
 # todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
 
-# todo: + |j is for **Json Query**
+
+# todo: + |y is to show what's up and halt till you say move on
+
+# todo: + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
 # todo: + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
+# todo: + |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
+
+# todo: + |m is for **Make**, but timestamp the work and never print the same Line twice
+
+# todo: + |g is for **Grep**, but default to '-i -F', and fill in the '-e' per Arg, and Python RegEx
+# todo: + |q is for **Git**, because G was taken
+
+# todo: + |d is for **Diff**, but default to '|diff -brpu a b'
+# todo: + |f is for **Find**, but default to search $PWD spelled as ""
+# todo: + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
