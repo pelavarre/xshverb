@@ -155,13 +155,13 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |f is for **Find**, but default to search $PWD spelled as ""
 + |g is for **Grep**, but default to '-i -F', and fill in the '-e' per Arg, and Python RegEx
 + |h is for **Head**, but fill a third of the Terminal, don't always stop at just 10 Lines
-+ |i is for **Py Str Split**, the inverse of the |x of XArgs meaing Py Space List Join
++ |i is for **Py Str Split**, the approximate inverse of the |x of XArgs meaing Py Lines Join
 + |j is for **Json Query**, but don't force you to install Jq and do turn off sorting the keys
 + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
 + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 + |m is for **Make**, but timestamp the work and never print the same Line twice
 + |n is for **NL** with '|cat -n' of '|nl' or '|nl -v1', and |n +0 is '|nl -v0', but do '|expand'
-+ |o is for **Py Line Strip**, to remove leading and trailing Blanks from each Line
++ |o is for **Py Lines Strip Each**, to remove leading and trailing Blanks from each Line
 + |p is for **Python**, but stop making you spell out the Imports
 + |p dedent is for Py Str TextWrap DeDent
 + |p dent is to insert 4 Spaces at the left of each Line
@@ -172,7 +172,7 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |u is for **Uniq** Counter of the '|uniq -c |expand' kind, except don't force you to sort Lines
 + |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
 + |w
-+ |x is for **XArgs**, which defaults to mean Py Space List Join, the inverse of |i
++ |x is for **XArgs**, which defaults to mean Py Lines Join, the approximate inverse of |i
 + |y is to show what's up and halt till you say move on
 + |z
 

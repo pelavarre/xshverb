@@ -1044,6 +1044,57 @@ def do_tail(argv: list[str]) -> None:
 
 
 #
+# Join the Lines into a single Line
+#
+
+
+XARGS_DOC = r"""
+
+    usage: xargs [--sep SEP]
+
+    join the Lines into a single Line
+
+    options:
+      --sep SEP  the Char or Chars to place between each two Lines
+
+    comparable to:
+      |xargs
+
+    examples:
+      ls -l |bin/i  x  c
+
+"""
+
+
+def do_xargs(argv: list[str]) -> None:
+    """Join the Lines into a single Line"""
+
+    # Form Shell Args Parser
+
+    doc = XARGS_DOC
+    sep_help = "the Char or Chars to place between each two Lines"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument("--sep", metavar="SEP", help=sep_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    sep = " " if (ns.sep is None) else ns.sep  # maybe empty
+
+    # Join the Lines into a single Line
+
+    ilines = alt_sys.stdin.readlines()
+    otext = sep.join(ilines) + "\n"  # deletes Line-Break's when Sep is empty
+
+    alt_sys.stdout.write(otext)
+
+    # can end Lines with Blanks when given Blanks in Sep
+
+
+#
 # Amp up Import ArgParse
 #
 
@@ -1330,6 +1381,7 @@ DOC_BY_VERB = dict(
     split=SPLIT_DOC,
     strip=STRIP_DOC,
     tail=TAIL_DOC,
+    xargs=XARGS_DOC,
 )
 
 for _K_ in DOC_BY_VERB.keys():
@@ -1347,6 +1399,7 @@ FUNC_BY_VERB = dict(
     split=do_split,
     strip=do_strip,
     tail=do_tail,
+    xargs=do_xargs,
 )
 
 
@@ -1361,6 +1414,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "s": "sort",
     "t": "tail",
     "u": "counter",
+    "x": "xargs",
     "xshverb": "python",
     "xshverb.py": "python",
 }
@@ -1390,6 +1444,11 @@ if __name__ == "__main__":
 
 
 # todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
+
+# todo: + |j is for **Json Query**
+# todo: + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
+
+# todo: + |r is for **Py Lines Reversed**
 
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
