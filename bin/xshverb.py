@@ -30,7 +30,7 @@ python examples:
 
 most common Shell words:
   awk b cat diff emacs find grep head str.split jq less ls make
-  nl for.str.strip python git reversed sorted tail unique vi w xargs yes z
+  nl for.str.strip python git reverse sort tail unique vi w xargs yes z
 
 examples:
   bin/xshverb.py  # shows these examples and exit
@@ -617,9 +617,9 @@ def do_counter(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = COUNTER_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
-
     keys_help = "print each distinct Line when it first arrives, without a count (default: False)"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
     parser.add_argument("-k", "--keys", action="count", help=keys_help)
 
     # Take up Shell Args
@@ -781,6 +781,51 @@ def do_nl(argv: list[str]) -> None:
 #
 
 
+REVERSE_DOC = """
+
+    usage: reverse
+
+    reverse the order of Lines
+
+    comparable to:
+      |tac  # at Linux
+      |tail -r  # at macOS
+
+    examples:
+      ls -1 |bin/r  c  # reverses the Sort-by-Name chosen by Ls
+
+"""
+
+
+def do_reverse(argv: list[str]) -> None:
+    """Reverse the order of Lines"""
+
+    # Form Shell Args Parser
+
+    doc = REVERSE_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Change the order of Lines
+
+    ilines = alt_sys.stdin.readlines()
+
+    olines = list(ilines)  # todo: aka:  olines = list(reversed(ilines))
+    olines.reverse()
+
+    otext = line_break_join_rstrips_plus(olines)
+    alt_sys.stdout.write(otext)
+
+
+#
+# Count or drop duplicate Lines, no sort required
+#
+
+
 SORT_DOC = """
 
     usage: sort [-n] [-r]
@@ -820,11 +865,10 @@ def do_sort(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = SORT_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
-
     n_help = "sort as numbers, from least to most positive, but nulls last (default: sort as text)"
     r_help = "reverse the sort (default: ascending)"
 
+    parser = AmpedArgumentParser(doc, add_help=False)
     parser.add_argument("-n", action="count", help=n_help)
     parser.add_argument("-r", action="count", help=r_help)
 
@@ -1377,6 +1421,7 @@ DOC_BY_VERB = dict(
     head=HEAD_DOC,
     nl=NL_DOC,
     python=__doc__,
+    reverse=REVERSE_DOC,
     sort=SORT_DOC,
     split=SPLIT_DOC,
     strip=STRIP_DOC,
@@ -1395,6 +1440,7 @@ FUNC_BY_VERB = dict(
     head=do_head,
     nl=do_nl,
     python=do_pass,
+    reverse=do_reverse,
     sort=do_sort,
     split=do_split,
     strip=do_strip,
@@ -1411,6 +1457,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "n": "nl",
     "o": "strip",
     "p": "python",
+    "r": "reverse",
     "s": "sort",
     "t": "tail",
     "u": "counter",
@@ -1447,8 +1494,6 @@ if __name__ == "__main__":
 
 # todo: + |j is for **Json Query**
 # todo: + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
-
-# todo: + |r is for **Py Lines Reversed**
 
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
