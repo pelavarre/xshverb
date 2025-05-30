@@ -160,7 +160,7 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
 + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 + |m is for **Make**, but timestamp the work and never print the same Line twice
-+ |n is for **NL** with the '|cat -n |expand' index, whereas |n -0 is '|nl -v0 |expand'
++ |n is for **NL** with '|cat -n' of '|nl' or '|nl -v1', and |n +0 is '|nl -v0', but do '|expand'
 + |o is for **Py Line Strip**
 + |p is for **Python**, but stop making you spell out the Imports
 + |p dedent is for Py Str TextWrap DeDent
@@ -169,7 +169,7 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |r is for **Py Lines Reversed**, a la Linux Tac and Mac '|tail -r'
 + |s is for **Sort**, but default to classic LC_ALL=C, same as last century
 + |t is for **Tail**, but update the classic -10 default just like |h does
-+ |u is for **Uniq** of the '|uniq -c |expand' kind, except don't force you to sort Lines
++ |u is for **Uniq** Counter of the '|uniq -c |expand' kind, except don't force you to sort Lines
 + |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
 + |w
 + |x is for **XArgs**, which defaults to mean Py Space List Join, the inverse of |i

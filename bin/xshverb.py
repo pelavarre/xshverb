@@ -627,7 +627,7 @@ def do_counter(argv: list[str]) -> None:
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     ns = parser.parse_args_if(args)  # often prints help & exits zero
 
-    # Break Lines apart into Words
+    # Count or drop duplicate Lines, no sort required
 
     ilines = alt_sys.stdin.readlines()
     counter = collections.Counter(ilines)
@@ -694,16 +694,83 @@ def do_head(argv: list[str]) -> None:
         try:
             n = int(ns.n, base=0)
             if n >= 0:
-                raise ValueError(f"invalid literal for int() with base 0: {ns.n!r}")
+                raise ValueError(ns.n)
         except ValueError:
             parser.parser.print_usage()
             eprint(f"|head: {ns.n!r}: could be -10 or -3 or -12345, but isn't")
             sys.exit(2)  # exits 2 for bad Arg
 
-    # Break Lines apart into Words
+    # Take only the first few Lines
 
     ilines = alt_sys.stdin.readlines()
     olines = ilines[:-n]
+
+    otext = line_break_join_rstrips_plus(olines)
+    alt_sys.stdout.write(otext)
+
+
+#
+# Number the Lines
+#
+
+
+NL_DOC = """
+
+    usage: nl [+N]
+
+    number the Lines, up from one, or up from zero
+
+    positional arguments:
+      +N  up from what (default: +1)
+
+    comparable to:
+      |nl -v0
+      |nl -v1
+
+    examples:
+      ls -l |bin/n  c  # number as if by |cat -n |expand
+      ls -l |bin/n +0  c  # number as if by |nl -v0 |expand
+
+"""
+
+
+def do_nl(argv: list[str]) -> None:
+    """Number the Lines, up from one, or up from zero"""
+
+    assert argparse.OPTIONAL == "?"
+
+    # Form Shell Args Parser
+
+    doc = NL_DOC
+    n_help = "up from what (default: +1)"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="n", metavar="+N", nargs="?", help=n_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    n = 1
+    if ns.n is not None:
+        try:
+            n = int(ns.n, base=0)
+            if (n not in [0, 1]) or (ns.n[:1] not in ["-", "+"]):
+                raise ValueError(ns.n)
+        except ValueError:
+            parser.parser.print_usage()
+            eprint(f"|nl: {ns.n!r}: could be +0 or +1, but isn't")
+            sys.exit(2)  # exits 2 for bad Arg
+
+    # Number the Lines
+
+    ilines = alt_sys.stdin.readlines()
+
+    olines = list()
+    for n_plus_index, iline in enumerate(ilines, start=n):
+        oline = f"{n_plus_index:6}  {iline}"
+        olines.append(oline)
 
     otext = line_break_join_rstrips_plus(olines)
     alt_sys.stdout.write(otext)
@@ -848,7 +915,7 @@ def do_split(argv: list[str]) -> None:
 
 
 #
-# Take only the last few Lines, or drop only the first few Lines
+# Take only the last few Lines, or take only a chosen Line and what follows
 #
 
 
@@ -856,10 +923,10 @@ TAIL_DOC = """
 
     usage: tail [-N|+N]
 
-    take only the last few Lines, or drop only the first few Lines
+    take only the last few Lines, or take only a chosen Line and what follows
 
     positional arguments:
-      -N|+N  how many trailing Lines to take, or which first Line to not drop (default: -10)
+      -N|+N  how many trailing Lines to take, or which Line to take before the rest (default: -10)
 
     comparable to:
       |tail -N
@@ -877,14 +944,14 @@ TAIL_DOC = """
 
 
 def do_tail(argv: list[str]) -> None:
-    """Take only the last few Lines, or drop only the first few Lines"""
+    """Take only the last few Lines, or take only a chosen Line and what follows"""
 
     assert argparse.OPTIONAL == "?"
 
     # Form Shell Args Parser
 
     doc = TAIL_DOC
-    n_help = "how many trailing Lines to take, or which first Line to not drop (default: -10)"
+    n_help = "how many trailing Lines to take, or which Line to take before the rest (default: -10)"
 
     parser = AmpedArgumentParser(doc, add_help=False)
     parser.add_argument(dest="n", metavar="-N|+N", nargs="?", help=n_help)
@@ -899,13 +966,13 @@ def do_tail(argv: list[str]) -> None:
         try:
             n = int(ns.n, base=0)
             if (not n) or (ns.n[:1] not in ["-", "+"]):
-                raise ValueError(f"invalid literal for int() with base 0: {ns.n!r}")
+                raise ValueError(ns.n)
         except ValueError:
             parser.parser.print_usage()
-            eprint(f"|head: {ns.n!r}: could be -10 or -3 or -12345, but isn't")
+            eprint(f"|tail: {ns.n!r}: could be -10 or +3 or -12345, but isn't")
             sys.exit(2)  # exits 2 for bad Arg
 
-    # Break Lines apart into Words
+    # Take only the last few Lines, or take only a chosen Line and what follows
 
     assert n != 0, (n,)
 
@@ -1197,6 +1264,7 @@ DOC_BY_VERB = dict(
     cat=CAT_DOC,
     counter=COUNTER_DOC,
     head=HEAD_DOC,
+    nl=NL_DOC,
     python=__doc__,
     sort=SORT_DOC,
     split=SPLIT_DOC,
@@ -1212,6 +1280,7 @@ FUNC_BY_VERB = dict(
     cat=do_cat,
     counter=do_counter,
     head=do_head,
+    nl=do_nl,
     python=do_pass,
     sort=do_sort,
     split=do_split,
@@ -1224,6 +1293,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "c": "cat",
     "h": "head",
     "i": "split",
+    "n": "nl",
     "p": "python",
     "s": "sort",
     "t": "tail",
