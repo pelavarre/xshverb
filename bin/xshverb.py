@@ -254,9 +254,6 @@ class ShellFile:
         os.write(fd, data)
 
 
-ShellFunc = collections.abc.Callable[[list[str]], None]
-
-
 @dataclasses.dataclass  # (order=False, frozen=False)
 class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     """Work to drain 1 ShellFile and fill the next ShellFile"""
@@ -264,7 +261,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     vb: str  # 'a'  # 'p'
     verb: str  # 'awk'  # 'python'
     doc: str  # AWK_DOC  # PYTHON_DOC
-    func: ShellFunc  # do_awk  # do_python
+    func: collections.abc.Callable[[list[str]], None]  # do_awk  # do_python
     argv: list[str]  # ['a']  # ['awk']
 
     def __init__(self, hints: list[str]) -> None:
@@ -1380,7 +1377,11 @@ class AmpedArgumentParser:
             finally:
                 os.environ["COLUMNS"] = with_columns  # restores
 
-        b_text = b_doc.replace("optional arguments:", "options:")
+        b_text = b_doc
+        b_text = b_text.replace("optional arguments:", "options:")
+        b_text = b_text.replace("[HINT [HINT ...]]", "[HINT ...]")  # todo: solve more generally
+        b_text = b_text.replace("[NUMBER [NUMBER ...]]", "[NUMBER ...]")
+
         b = b_text.splitlines()
 
         tofile = "ArgumentParser(...)"
