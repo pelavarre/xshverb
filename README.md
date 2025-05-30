@@ -3,6 +3,8 @@
 
 Contents
 
+- [Highlights](#highlights)
+- [Installation](#installation)
 - [First Look](#first-look)
 - [Welcome](#welcome)
 - [Quick Install](#quick-install)
@@ -20,6 +22,7 @@ Contents
   - [|head -0x10](#head--0x10)
   - [|sort](#sort)
   - [|sort -n](#sort--n)
+  - [|tail -0x10](#tail--0x10)
   - [|uniq](#uniq)
   - [|uniq -c](#uniq--c)
 - [Past work](#past-work)
@@ -28,6 +31,28 @@ Contents
 
 <!-- I fear people need the Headings numbered -->
 <!-- but VsCode autogenerates this unnumbered Table-of-Contents. Maybe people will cope -->
+
+
+## Highlights
+
+For when typing out and running Shell Pipes inside your Terminal Window Tab Pane
+
+Run better in 2025 by forgetting more of 1975
+
+Say for yourself what the blanks between your words imply
+
+Say for yourself what the blanks at the end of your every line imply
+
+
+## Installation
+
+Install XShVerb to run once
+
+    curl -LSsf https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/install.sh | sh
+
+This kind of installation destroys without backup whatever you had before at ./dir/.
+But you know that already because you read the Install·Sh Script here, before running it, right?
+
 
 ## First Look
 
@@ -110,13 +135,11 @@ and feel lucky enough to just try it
 
     rm -fr dir/ && mkdir -p dir/ && cd dir/ && pwd
 
-    curl -k -LSs https'://'raw'.'githubusercontent'.'com''/pelavarre/xshverb/refs/heads/main/bin/xshverb'.'py >xshverb'.'py
+    curl -LSsf https'://'raw'.'githubusercontent'.'com''/pelavarre/xshverb/refs/heads/main/bin/xshverb'.'py >xshverb'.'py
 
-    wc -l 'xshverb'.'py  # smaller than 1000 is a download problem
+    wc -l xshverb'.'py  # smaller than 1000 is a download problem
 
     chmod +x xshverb'.'py
-
-    head xshverb'.'py
 
     for F in c h i p s u y; do ln -s $PWD/xshverb'.'py $F; done
 
@@ -184,7 +207,8 @@ Even so, our '| p w' or '|p len' will give you the '|wc -l' count of Lines
 In case you need to adopt this tech more slowly,
 
 + bin/p is for while you've not put all of a..z into your Sh Path
-+ bin/\\| is a 2X longer way of spelling out bin/p
++ bin/pq is a 2X longer way of spelling out bin/p, but more similar to classic jq
++ bin/\\| is another 2X longer way of spelling out bin/p
 + bin/xshverb.py is a 7X longer way of spelling out bin/p
 
 Adding '--help' as an option will also get us to say what work we'll do,
@@ -302,8 +326,8 @@ silently wrongly calling Equal for all Characters beyond the first U+0000
 ## Bugs dropped, not kept up
 
 Classic Terminal Shell Pipes can work just fine,
-after you perfectly memorize far too many workarounds,
-or if you distribute your own fresher versions of them
+if you do perfectly memorize far too many workarounds.
+Or if you distribute your own fresher versions of them
 
 
 ### |awk -vOFS=$'\x0A'
@@ -341,7 +365,7 @@ and splits differently for ' ' Spaces than for other Separators
 Classic Awk understands Decimal Int Literals, and shrugs off leading Zeroes,
 but Binary/ Hexadecimal/ Octal Int Literals can silently suddenly mean 0 or octal or hex
 
-Linux
+Linux says 0, 8, and 16
 
     $ echo |awk '{print 0b1}'
     0
@@ -353,7 +377,7 @@ Linux
     16
     $
 
-macOS
+macOS says 0, 10, and 0
 
     % echo |awk '{print 0b1}'
     0
@@ -366,7 +390,7 @@ macOS
 
 ### |grep -e=O -e=U
 
-Classic Grep takes this as a search for '=O' and '=U', not as a search for 'O' and 'U'
+Classic Grep takes '-e=' as a search for '=O' or '=U', not as a search for 'O' or 'U'
 
     % echo 'O U =O =U' |tr ' ' '\n' |grep -e=O -e=U
     =O
@@ -376,8 +400,8 @@ Classic Grep takes this as a search for '=O' and '=U', not as a search for 'O' a
 
 ### |grep hello
 
-Classic Grep takes this as a search for a pattern
-that fails to match if the reality differs only in case
+Classic Grep searches for your pattern,
+but secretly fails to match when your reality differs only in case
 
     % echo HELLO Hello hello |tr ' ' '\n' |grep hello
     hello
@@ -386,19 +410,34 @@ that fails to match if the reality differs only in case
 
 ### |head -0x10
 
-Classic Head accepts decimal, and decimal with leading zeroes, but not hex
+Classic Head accepts decimal, and decimal with leading zeroes, but not hex. Classic Linux Tail does the same
+
+    % seq 99 |head -0010
+    ...
+    10
+    %
 
     % seq 99 |head -0x10
     head: illegal line count -- 0x10
     %
 
-Classic Tail does the same
-
 
 ### |sort
 
-Classic Sort takes this as a sort by the locale's collation order,
-unlike
+Classic Sort takes goes by your Locale's Collation Order
+
+    % echo A a Z z |tr ' ' '\n' |sort
+    a
+    A
+    z
+    Z
+    %
+
+    % locale |grep ^LC_COLLATE=
+    LC_COLLATE="en_US.UTF-8"
+    %
+
+Unlike our much preferred default
 
     |LC_ALL=C sort
 
@@ -415,20 +454,43 @@ Classic Sort Numeric sorts the Lines not prefixed by a Number as if prefixed by 
 
 This comes as Nulls Last when sorting descending without negative numbers, and I like that.
 But coming out mixed with the zeroes in the middle of negative and positive numbers makes no sense?
-Like are they slapping you for forcing them to think through a corner case they dislike?
+Do they mean to be slapping you for forcing them to think through a corner case they dislike?
 
-Maybe our whole industry gets confused in this?
-They tell me Python Sorts do sort NaN indeterminately, as never meaningfully comparable.
+Does our whole industry gets confused in this?
+People tell me Python Sorts do sort NaN indeterminately, as never meaningfully comparable.
 NumPy Sorts that sort NaN as always Nulls Last and never as Nulls First.
 Pandas Sorts that default to Nulls Last but can do .na_position='first'
-Maybe they don't much test with ordinary living people around?
+Maybe we're not much testing operations with ordinary people involved?
 
-We sort Nulls Last
+We sort Nulls Last, unless you ask us to sort Nulls First
+
+    |p sort --nulls=first
 
 To get there in classic Shell, you've got to go separate your Lines prefixed by a Number or not.
 Tactics such as
 
     |expand |grep -v '^ *[-+.0-9]'
+
+
+### |tail -0x10
+
+Classic Tail takes Int Literals of different bases as 0 or octal or hex
+
+    % seq 99 -1 0 |tail -010
+    ...
+    7
+    %
+
+Linux Tail presently takes these differently, as decimal, or as decimal with leading zeroes, but not hex
+
+    $ seq 99 -1 0 |tail -0010
+    9
+    ...
+    $
+
+    $ seq 99 -1 0 |tail -0x10
+    tail: option used in invalid context -- 0
+    $
 
 
 ### |uniq
@@ -449,22 +511,24 @@ unlike
 
 ## Past work
 
+I figure the big variable in this effort is whether I show up on the regular, or not
+
+It's hard for me to show up while no one else is talking,
+but the chatbots do reply when I tell them to reply
+
+I have stopped scattering my effort across multiple Repos.
 This XShVerb Repo is presently my one Repo,
 where I put all my work that isn't my work for hire.
 GitHub will show you a dozen other Git Repos, where I've put work before now.
 ByoVerbs was the my one Repo before this Repo became my one Repo, in May/2025
 
-I figure the big variable in this effort is whether I show up or not.
-It's hard for me to show up while no one else is talking,
-but the chatbots do reply when I tell them to reply
+Next now, I'm pushing to reduce my own Sh Path down to just this one Repo
 
-I've stopped scattering my effort across multiple Repos.
-Lately I'm pushing to reduce my own Sh Path down to just this one Repo
+For the next time I work on Shell 'watch',
+I've promised me that I'll solve just the defaults and the scrolling, nothing more for now
 
-I'll solve just the defaults and the scrolling, nothing more, next time I work on 'watch'
-
+When I'm going for producing the most correct Code most quickly,
 I write the Doc, before the Tests, before the Code,
-as my habit designed to produce the most correct Code most quickly,
 in the way of Test Driven Design (TDD).
 So if you're keeping up closely, you'll see my Tests and yours fail before they pass
 
@@ -489,6 +553,9 @@ Building out Shell Pipes as if people matter now, this is a good thing?
 ## Up online
 
 Posted as:  https://github.com/pelavarre/xshverb/blob/main/README.md<br>
+
 Questioned by:  https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb<br>
+
 Built by:  VsCode ⇧⌘V Markdown: Open Preview<br>
+
 Copied from:  git clone https://github.com/pelavarre/xshverb.git<br>

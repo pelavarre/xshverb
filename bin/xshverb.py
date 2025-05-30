@@ -1457,6 +1457,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "n": "nl",
     "o": "strip",
     "p": "python",
+    "pq": "python",
     "r": "reverse",
     "s": "sort",
     "t": "tail",
@@ -1464,6 +1465,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "x": "xargs",
     "xshverb": "python",
     "xshverb.py": "python",
+    "|": "python",
 }
 
 
@@ -1473,9 +1475,18 @@ _FUNC_VERBS_ = list(FUNC_BY_VERB.keys())
 _DIFF_VERBS_ = list(difflib.unified_diff(a=_DOC_VERBS_, b=_FUNC_VERBS_, lineterm=""))
 assert not _DIFF_VERBS_, (_DIFF_VERBS_,)
 
+_SORTED_VERBS_ = sorted(_DOC_VERBS_)
+_DIFF_SORTED_VERBS_ = list(difflib.unified_diff(a=_DOC_VERBS_, b=_SORTED_VERBS_, lineterm=""))
+assert not _DIFF_SORTED_VERBS_, (_DIFF_SORTED_VERBS_,)
+
 for _VB_, _VERB_ in VERB_BY_VB.items():
     assert _VB_ not in _FUNC_VERBS_, (_VB_,)
     assert _VERB_ in _FUNC_VERBS_, (_VERB_,)
+
+_VBS_ = list(VERB_BY_VB.keys())
+_SORTED_VBS_ = sorted(VERB_BY_VB.keys())
+_DIFF_VBS_ = list(difflib.unified_diff(a=_VBS_, b=_SORTED_VBS_, lineterm=""))
+assert not _DIFF_VBS_, (_DIFF_VBS_,)
 
 
 alt_sys = ShellPipe()
