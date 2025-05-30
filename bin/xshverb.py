@@ -65,8 +65,10 @@ import sys
 import textwrap
 
 
-YYYY_MM_DD = "2025-05-25"  # date of last change to this Code, or an earlier date
+YYYY_MM_DD = "2025-05-30"  # date of last change to this Code, or an earlier date
 
+
+_ = dict[str, int] | None  # new since Oct/2021 Python 3.10
 
 if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"

@@ -46,12 +46,21 @@ Say for yourself what the blanks at the end of your every line imply
 
 ## Installation
 
+Find a Terminal to work inside of,
+with a Python from this decade in it, such as the Oct/2021 Python 3.10 of Ubuntu 2022
+
 Install XShVerb to run once
 
     curl -LSsf https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/install.sh | sh
 
-This kind of installation destroys without backup whatever you had before at ./dir/.
-But you know that already because you read the Install·Sh Script here, before running it, right?
+Or tap through to look at this Install·Sh Script first to know what it does
+> https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/install.sh
+
+It destroys without backup whatever you had before at ./dir/. Just so that it can run there
+
+You can drop all the ' Single Quote marks out of it.
+Those are only needed when your Social Media remakes every web address into a hotlink,
+like LinkedIn and Twitter do
 
 
 ## First Look
