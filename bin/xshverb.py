@@ -886,6 +886,7 @@ SPLIT_DOC = r"""
 
     comparable to:
       |tr ' \t' '\n' |grep .
+      |tr + '\n'
 
     examples:
       ls -l |bin/i  c
@@ -917,6 +918,57 @@ def do_split(argv: list[str]) -> None:
 
     itext = alt_sys.stdin.read_text()
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
+
+    otext = line_break_join_rstrips_plus(olines)
+    alt_sys.stdout.write(otext)
+
+
+#
+# Drop leading and trailing Blanks, or the Chars of some other Set
+#
+
+
+STRIP_DOC = r"""
+
+    usage: strip [--charset CHARSET]
+
+    drop leading and trailing Blanks, or the Chars of some other Set
+
+    options:
+      --charset CHARSET  list the Chars to drop if found, preferably in sorted order
+
+    comparable to:
+      |sed 's,^  *,,g' |sed 's,  *$,,g'
+
+    examples:
+      echo '  a  b  ' |bin/o |cat -etv
+      echo '++a++b++' |bin/o --chars='+' |cat -etv
+
+"""
+
+
+def do_strip(argv: list[str]) -> None:
+    """Drop leading and trailing Blanks, or the Chars of some other Set"""
+
+    # Form Shell Args Parser
+
+    doc = STRIP_DOC
+    charset_help = "list the Chars to drop if found, preferably in sorted order"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument("--charset", metavar="CHARSET", help=charset_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    charset = None if (ns.charset is None) else ns.charset  # maybe empty
+
+    # Break Lines apart into Words
+
+    ilines = alt_sys.stdin.readlines()
+    olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
 
     otext = line_break_join_rstrips_plus(olines)
     alt_sys.stdout.write(otext)
@@ -1276,6 +1328,7 @@ DOC_BY_VERB = dict(
     python=__doc__,
     sort=SORT_DOC,
     split=SPLIT_DOC,
+    strip=STRIP_DOC,
     tail=TAIL_DOC,
 )
 
@@ -1292,6 +1345,7 @@ FUNC_BY_VERB = dict(
     python=do_pass,
     sort=do_sort,
     split=do_split,
+    strip=do_strip,
     tail=do_tail,
 )
 
@@ -1302,6 +1356,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "h": "head",
     "i": "split",
     "n": "nl",
+    "o": "strip",
     "p": "python",
     "s": "sort",
     "t": "tail",
