@@ -161,7 +161,7 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 + |m is for **Make**, but timestamp the work and never print the same Line twice
 + |n is for **NL** with '|cat -n' of '|nl' or '|nl -v1', and |n +0 is '|nl -v0', but do '|expand'
-+ |o is for **Py Line Strip**
++ |o is for **Py Line Strip**, to remove leading and trailing Blanks from each Line
 + |p is for **Python**, but stop making you spell out the Imports
 + |p dedent is for Py Str TextWrap DeDent
 + |p dent is to insert 4 Spaces at the left of each Line
@@ -319,13 +319,21 @@ Classic Awk refuses to take a Line-Break as its Output Separator
 ### |awk -vOF=:
 
 Classic Awk doesn't autocorrect nor check the spelling of -vOFS=,
-and spells the far more common -F=ISEP wildly differently from the rare -vOFS=
+and spells the far more common -F=ISEP wildly differently from the rare -vOFS=,
+and splits differently for ' ' Spaces than for other Separators
 
     % echo a b c |awk -vOFS=: '{print $1, $2, $3}'
     a:b:c
     % echo a b c |awk -vOF=: '{print $1, $2, $3}'
     a b c
     %
+
+    % echo a::c:d:e |awk -F: '{print $1, $3}'
+    a c
+    % echo 'a  c d e' |awk -F' ' '{print $1, $3}'
+    a d
+    % echo 'a  c d e' |awk -F'  ' '{print $1, $3}'
+    a
 
 
 ### |awk '{print 0x123}'

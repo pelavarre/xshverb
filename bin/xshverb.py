@@ -877,19 +877,22 @@ def do_sort(argv: list[str]) -> None:
 
 SPLIT_DOC = r"""
 
-    usage: split
+    usage: split [--sep SEP]
 
     break Lines apart into Words
+
+    options:
+      --sep SEP  split at each SEP, no matter if empty (default: split by Blanks & drop empty Words)
 
     comparable to:
       |tr ' \t' '\n' |grep .
 
     examples:
-      ls -l |bin/i c
+      ls -l |bin/i  c
+      ls -l |bin/i --sep=' '  c
+      echo a+b++d |bin/i --sep=+  c
 
 """
-
-# todo: split --sep=
 
 
 def do_split(argv: list[str]) -> None:
@@ -898,17 +901,22 @@ def do_split(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = SPLIT_DOC
+    sep_help = "split at each SEP, no matter if empty (default: split by Blanks & drop empty Words)"
+
     parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument("--sep", metavar="SEP", help=sep_help)
 
     # Take up Shell Args
 
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    parser.parse_args_if(args)  # often prints help & exits zero
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    sep = None if (ns.sep is None) else ns.sep  # maybe empty
 
     # Break Lines apart into Words
 
     itext = alt_sys.stdin.read_text()
-    olines = itext.split()
+    olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
 
     otext = line_break_join_rstrips_plus(olines)
     alt_sys.stdout.write(otext)
