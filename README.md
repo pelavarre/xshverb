@@ -25,6 +25,7 @@ Contents
   - [|tail -0x10](#tail--0x10)
   - [|uniq](#uniq)
   - [|uniq -c](#uniq--c)
+- [Ancient Python](#ancient-python)
 - [Past work](#past-work)
 - [Future work](#future-work)
 - [Up online](#up-online)
@@ -515,6 +516,35 @@ Classic Uniq takes this as a request to inject quasi-binary \x09 Hard Tabs into 
 unlike
 
     |uniq -c |expand
+
+
+## Ancient Python
+
+We do make an effort to run well in the far past, even back before this decade
+
+Can you find bugs in how we run the Jun/2018 Python 3.7?
+
+we know we fail simply when we run the Dec/2016 Python 3.6 of Ubuntu 2018
+
+    $ python3.6 -c 'from __future__ import annotations'
+    File "<string>", line 1
+    SyntaxError: future feature annotations is not defined
+    $
+
+Our emulation of running a Jun/2018 Python 3.7 is
+
+    cp -ip ~/.bashrc ~/.bashrc~
+
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    bash Miniconda3-latest-Linux-x86_64.sh
+
+    eval "$(/home/pelavarre/miniconda3/bin/conda shell.bash hook)"
+    conda init
+    logout
+
+    eval "$(/home/pelavarre/miniconda3/bin/conda shell.bash hook)"
+    conda create -n py370 python=3.7.0
+    conda activate py370
 
 
 ## Past work

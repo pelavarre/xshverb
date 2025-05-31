@@ -107,18 +107,18 @@ def main() -> None:
 
     shpumps = argv_to_shell_pumps(argv=ns.hints)  # often prints help & exits zero
 
-    alt_sys.stdout = ShellFile()  # adds or replaces
+    alt.stdout = ShellFile()  # adds or replaces
     for index, shpump in enumerate(shpumps):
-        alt_sys.index = index
-        alt_sys.rindex = index - len(shpumps)
+        alt.index = index
+        alt.rindex = index - len(shpumps)
 
-        alt_sys.stdin = alt_sys.stdout
-        alt_sys.stdout = ShellFile()  # adds or replaces
+        alt.stdin = alt.stdout
+        alt.stdout = ShellFile()  # adds or replaces
 
         argv = shpump.argv
         shpump.func(argv)  # two positional args, zero keyword args
 
-    alt_sys.stdout.drain_if()
+    alt.stdout.drain_if()
 
     # todo: add code to make how truthy ns.version works more simple
 
@@ -366,13 +366,34 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
     """Parse Args, else show Version or Help and exit"""
 
+    # Take the Name of this Process as the first Hint
+
     hints = list(argv)
     hints[0] = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
 
+    # Take >= 1 Hints to build each Shell Pump
+
     shpumps = list()
     while hints:
+        before = list(hints)
         shpump = ShellPump(hints)  # pops Hints  # exits 0 for Doc, exits 2 for bad Hints
+        assert len(hints) < len(before), (hints, before)
+
         shpumps.append(shpump)
+
+    # Drop a Python if begun by it, as the door into this Name Space, not a substantial Hint
+
+    if shpumps and (shpumps[0].verb == "python"):
+        shpumps.pop(0)
+
+    # Give meaning to the absence of Hints
+
+    if not shpumps:
+        shpumps.append(ShellPump(["python"]))
+        if alt.sys_stdin_isatty and alt.sys_stdout_isatty:
+            shpumps.append(ShellPump(["cat"]))
+
+            # FIXME: Guess |less is meant by the absence of Hints
 
     return shpumps
 
@@ -391,14 +412,8 @@ class ShellPipe:
         self.index = -1  # how far from the left the present ShellPump is:  0, 1, 2, etc
         self.rindex = 0  # how far from the right the present ShellPump is:  -1, -2, -3, etc
 
-
-#
-# Do all the implied things, and nothing more
-#
-
-
-def do_pass(argv: list[str]) -> None:
-    pass
+        self.sys_stdin_isatty = sys.stdin.isatty()  # was Stdin left undirected
+        self.sys_stdout_isatty = sys.stdout.isatty()  # was Stdout left undirected
 
 
 #
@@ -482,7 +497,7 @@ def do_awk(argv: list[str]) -> None:
     # Pick one or more Columns of Words, and drop the rest
 
     olines = list()
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
 
     for iline in ilines:
         iwords = iline.split() if (isep is None) else iline.split(isep)
@@ -508,7 +523,7 @@ def do_awk(argv: list[str]) -> None:
         olines.append(ojoin)
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -564,25 +579,31 @@ def do_cat(argv: list[str]) -> None:
 
     # Read from Stdin Tty at start of Pipe
 
-    if alt_sys.index == 0:
-        if sys.stdin.isatty():
+    sys_stdin_isatty = sys.stdin.isatty()
+
+    if alt.index == 0:
+        if not sys_stdin_isatty:
+            alt.stdin.fill_from_stdin()
+        else:
             eprint(
                 "Start typing"
                 + ". Press Return after each Line"
                 + ". Press ⌃D to continue, or ⌃C to quit"
             )
-        alt_sys.stdin.fill_from_stdin()
+            alt.stdin.fill_from_stdin()
+            eprint("")
 
     # Strip trailing Blanks off each Line
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
     otext = line_break_join_rstrips_plus(ilines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
     # Write to Stdout Tty at end of Pipe
 
-    if alt_sys.rindex == -1:
-        alt_sys.stdout.drain_to_stdout()
+    if alt.index != 0:
+        if alt.rindex == -1:
+            alt.stdout.drain_to_stdout()
 
 
 #
@@ -631,7 +652,7 @@ def do_counter(argv: list[str]) -> None:
 
     # Count or drop duplicate Lines, no sort required
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
     counter = collections.Counter(ilines)
 
     if ns.keys:
@@ -642,7 +663,7 @@ def do_counter(argv: list[str]) -> None:
         # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -704,11 +725,11 @@ def do_head(argv: list[str]) -> None:
 
     # Take only the first few Lines
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
     olines = ilines[:-n]
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -751,7 +772,7 @@ def do_jq(argv: list[str]) -> None:
 
     # Drop the Style out of Json Data
 
-    itext = alt_sys.stdin.read_text()
+    itext = alt.stdin.read_text()
     j = json.loads(itext)
     otext = json.dumps(j, indent=2, ensure_ascii=False) + "\n"
 
@@ -759,7 +780,7 @@ def do_jq(argv: list[str]) -> None:
     otext_ = line_break_join_rstrips_plus(olines)
     assert otext == otext_, (otext, otext_)
 
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -818,7 +839,7 @@ def do_nl(argv: list[str]) -> None:
 
     # Number the Lines
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
 
     olines = list()
     for n_plus_index, iline in enumerate(ilines, start=n):
@@ -826,7 +847,23 @@ def do_nl(argv: list[str]) -> None:
         olines.append(oline)
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
+
+
+#
+# Do all the implied things, and nothing more
+#
+
+
+def do_python(argv: list[str]) -> None:
+
+    ilines = alt.stdin.readlines()
+    olines = list(ilines)
+
+    otext = line_break_join_rstrips_plus(olines)
+    alt.stdout.write(otext)
+
+    # FIXME: lots more .do_python work
 
 
 #
@@ -865,13 +902,13 @@ def do_reverse(argv: list[str]) -> None:
 
     # Change the order of Lines
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
 
     olines = list(ilines)  # todo: aka:  olines = list(reversed(ilines))
     olines.reverse()
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -953,7 +990,7 @@ def do_sort(argv: list[str]) -> None:
 
     # Change the order of Lines
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
 
     if not numeric:
         olines = sorted(ilines)
@@ -964,7 +1001,7 @@ def do_sort(argv: list[str]) -> None:
         olines.reverse()
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -1013,11 +1050,11 @@ def do_split(argv: list[str]) -> None:
 
     # Break Lines apart into Words
 
-    itext = alt_sys.stdin.read_text()
+    itext = alt.stdin.read_text()
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -1064,11 +1101,11 @@ def do_strip(argv: list[str]) -> None:
 
     # Break Lines apart into Words
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
     olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -1133,11 +1170,11 @@ def do_tail(argv: list[str]) -> None:
 
     assert n != 0, (n,)
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
     olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
     otext = line_break_join_rstrips_plus(olines)
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
 
 #
@@ -1183,10 +1220,10 @@ def do_xargs(argv: list[str]) -> None:
 
     # Join the Lines into a single Line
 
-    ilines = alt_sys.stdin.readlines()
+    ilines = alt.stdin.readlines()
     otext = sep.join(ilines) + "\n"  # deletes Line-Break's when Sep is empty
 
-    alt_sys.stdout.write(otext)
+    alt.stdout.write(otext)
 
     # can end Lines with Blanks when given Blanks in Sep
 
@@ -1322,9 +1359,14 @@ class AmpedArgumentParser:
 
         diffs = self.diff_doc_vs_format_help()
         if diffs:
-            print("\n".join(diffs))
+            if sys.version_info >= (3, 10):  # Oct/2021 Python 3.10 of Ubuntu 2022
+                print("\n".join(diffs))
 
-            sys.exit(2)  # exits 2 for wrong Args in Help Doc
+                sys.exit(2)  # exits 2 for wrong Args in Help Doc
+
+            # takes 'usage: ... [HINT ...]', rejects 'usage: ... HINT [HINT ...]'
+            # takes 'options:', rejects 'optional arguments:'
+            # takes '-F, --isep ISEP', rejects '-F ISEP, --isep ISEP'
 
         # Print Closing & exit zero, if no Shell Args
 
@@ -1364,7 +1406,7 @@ class AmpedArgumentParser:
 
             os.environ["COLUMNS"] = str(89)  # adds
             try:
-                b_doc = parser.format_help()
+                b_text = parser.format_help()
             finally:
                 del os.environ["COLUMNS"]  # removes
 
@@ -1373,14 +1415,9 @@ class AmpedArgumentParser:
             with_columns = os.environ["COLUMNS"]  # backs up
             os.environ["COLUMNS"] = str(89)  # replaces
             try:
-                b_doc = parser.format_help()
+                b_text = parser.format_help()
             finally:
                 os.environ["COLUMNS"] = with_columns  # restores
-
-        b_text = b_doc
-        b_text = b_text.replace("optional arguments:", "options:")
-        b_text = b_text.replace("[HINT [HINT ...]]", "[HINT ...]")  # todo: solve more generally
-        b_text = b_text.replace("[NUMBER [NUMBER ...]]", "[NUMBER ...]")
 
         b = b_text.splitlines()
 
@@ -1498,7 +1535,7 @@ FUNC_BY_VERB = dict(
     head=do_head,
     jq=do_jq,
     nl=do_nl,
-    python=do_pass,
+    python=do_python,
     reverse=do_reverse,
     sort=do_sort,
     split=do_split,
@@ -1549,7 +1586,7 @@ _DIFF_VBS_ = list(difflib.unified_diff(a=_VBS_, b=_SORTED_VBS_, lineterm=""))
 assert not _DIFF_VBS_, (_DIFF_VBS_,)
 
 
-alt_sys = ShellPipe()
+alt = ShellPipe()
 
 
 #
