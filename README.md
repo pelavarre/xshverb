@@ -9,6 +9,7 @@ Contents
 - [Welcome](#welcome)
 - [Quick Install](#quick-install)
 - [23 is just barely enough](#23-is-just-barely-enough)
+- [75 is more](#75-is-more)
 - [Arguments that don't begin with a Dash '-'](#arguments-that-dont-begin-with-a-dash--)
   - [Punctuated Arguments](#punctuated-arguments)
   - [Regular Expressions Unions](#regular-expressions-unions)
@@ -195,8 +196,6 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |n is for **NL** with '|cat -n' of '|nl' or '|nl -v1', and |n +0 is '|nl -v0', but do '|expand'
 + |o is for **Py Lines Strip Each**, to remove leading and trailing Blanks from each Line
 + |p is for **Python**, but stop making you spell out the Imports
-+ |p dedent is for Py Str TextWrap DeDent
-+ |p dent is to insert 4 Spaces at the left of each Line
 + |q is for **Git**, because G was taken
 + |r is for **Py Lines Reversed**, a la Linux Tac and Mac '|tail -r'
 + |s is for **Sort**, but default to classic LC_ALL=C, same as last century
@@ -213,14 +212,15 @@ but we leave '|b' and '|w' and '|z' unoccupied by us.
 We leave '|w' unoccupied, because Linux & Mac so often define '|w' to mean a form of 'who'.
 Even so, our '| p w' or '|p len' will give you the '|wc -l' count of Lines
 
-In case you need to adopt this tech more slowly,
+If you don't want to define 26 a..z Letters,
+you can settle for making yourself type out a word before them
 
 + bin/p is for while you've not put all of a..z into your Sh Path
 + bin/pq is a 2X longer way of spelling out bin/p, but more similar to classic jq
 + bin/\\| is another 2X longer way of spelling out bin/p
 + bin/xshverb.py is a 7X longer way of spelling out bin/p
 
-Adding '--help' as an option will also get us to say what work we'll do,
+Adding '--help' or '--version' as an option will also get us to say what work we'll do,
 before you remove that option to agree to have us to do the work.
 You can abbreviate '--help' down to '--h'.
 And if you abbreviate down farther to '-h' that can work too,
@@ -229,6 +229,23 @@ but not at 'cal -h' and 'df -h' and 'du -h' and 'ls -h' and so on
 My actual Shell sometimes quits on me, refusing to work with unusual bytes.
 Our kind of Python runs well in place of my actual Shell,
 practically never slapping me out like that
+
+## 75 is more
+
+The Python BuiltsIns namespace defines another 70+ Functions,
+even as you look away from the 70+ Exceptions it defines and the half-a-dozen quasi-reserved words it defines
+
+The Python Str and Bytes namespaces define another 40+ Functions
+
+To get us to call on these Functions, you mention them
+
++ |pq dedent is for Py Str TextWrap DeDent
++ |pq dent is to insert 4 Spaces at the left of each Line
++ |pq lower is for Py Str Lower of each Line
++ |pq title is for Py Str Title of each Line
++ |pq upper is for Py Str Upper of each Line
++ |pq lstrip is for Py Str LStrip of each Line
++ |pq str.lstrip is for Py Str LStrip of the File
 
 
 ## Arguments that don't begin with a Dash '-'

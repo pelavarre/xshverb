@@ -22,11 +22,11 @@ most common Python words:
   bytes decode dedent encode join list lower replace str title upper
 
 python examples:
-  p lower  # convert the Os/Copy Paste Buffer to lower case
-  p lower c  # preview changes without saving changes
-  p str strip  # drop leading/ trailing Blank Lines but leave all Blanks inside unchanged
-  p bytes lower  # change Bytes without first stripping off the Blanks
-  p join --sep=.  # join Lines into a single Line, with a Dot between each Line
+  pq lower  # convert the Os/Copy Paste Buffer to lower case
+  pq lower c  # preview changes without saving changes
+  pq str strip  # drop leading/ trailing Blank Lines but leave all Blanks inside unchanged
+  pq bytes lower  # change Bytes without first stripping off the Blanks
+  pq join --sep=.  # join Lines into a single Line, with a Dot between each Line
 
 most common Shell words:
   awk b cat diff emacs find grep head str.split jq less ls make
@@ -39,6 +39,8 @@ examples:
   a --help  # shows the whole Help Doc for the Awk Shell Verb
   a --version  # shows the Version of the Code here
   p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
+  pq  # dedents & strips the Os/Copy Paste Buffer, then shows it via:  pq less
+  pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
   v  # fixes up the Os/Copy Paste Buffer and then calls Vim to edit it
 """
 
@@ -67,7 +69,9 @@ import sys
 import textwrap
 
 
-YYYY_MM_DD = "2025-05-30"  # date of last change to this Code, or an earlier date
+YYYY_MM_DD = "2025-05-31"  # date of last change to this Code, or an earlier date
+
+_3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
 
 _: dict[str, int] | None  # new since Oct/2021 Python 3.10
@@ -261,7 +265,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     vb: str  # 'a'  # 'p'
     verb: str  # 'awk'  # 'python'
     doc: str  # AWK_DOC  # PYTHON_DOC
-    func: collections.abc.Callable[[list[str]], None]  # do_awk  # do_python
+    func: collections.abc.Callable[[list[str]], None]  # do_awk  # do_xshverb
     argv: list[str]  # ['a']  # ['awk']
 
     def __init__(self, hints: list[str]) -> None:
@@ -383,13 +387,13 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
 
     # Drop a Python if begun by it, as the door into this Name Space, not a substantial Hint
 
-    if shpumps and (shpumps[0].verb == "python"):
+    if shpumps and (shpumps[0].verb == "xshverb"):
         shpumps.pop(0)
 
     # Give meaning to the absence of Hints
 
     if not shpumps:
-        shpumps.append(ShellPump(["python"]))
+        shpumps.append(ShellPump(["xshverb"]))
         if alt.sys_stdin_isatty and alt.sys_stdout_isatty:
             shpumps.append(ShellPump(["cat"]))
 
@@ -851,22 +855,6 @@ def do_nl(argv: list[str]) -> None:
 
 
 #
-# Do all the implied things, and nothing more
-#
-
-
-def do_python(argv: list[str]) -> None:
-
-    ilines = alt.stdin.readlines()
-    olines = list(ilines)
-
-    otext = line_break_join_rstrips_plus(olines)
-    alt.stdout.write(otext)
-
-    # FIXME: lots more .do_python work
-
-
-#
 # Count or drop duplicate Lines, no sort required
 #
 
@@ -1229,6 +1217,31 @@ def do_xargs(argv: list[str]) -> None:
 
 
 #
+# Do all the implied things, and nothing more
+#
+
+
+XSHVERB_DOC = __main__.__doc__
+assert XSHVERB_DOC, (XSHVERB_DOC,)
+
+
+def do_xshverb(argv: list[str]) -> None:
+
+    # eprint(sys.argv)
+
+    itext = alt.stdin.read_text()
+
+    dedent = textwrap.dedent(itext)
+    strip = dedent.strip()
+    olines = dedent.splitlines()
+
+    otext = line_break_join_rstrips_plus(olines)
+    alt.stdout.write(otext)
+
+    # FIXME: lots more .do_xshverb work
+
+
+#
 # Amp up Import ArgParse
 #
 
@@ -1359,7 +1372,7 @@ class AmpedArgumentParser:
 
         diffs = self.diff_doc_vs_format_help()
         if diffs:
-            if sys.version_info >= (3, 10):  # Oct/2021 Python 3.10 of Ubuntu 2022
+            if sys.version_info >= _3_10_ARGPARSE:  # Oct/2021 Python 3.10 of Ubuntu 2022
                 print("\n".join(diffs))
 
                 sys.exit(2)  # exits 2 for wrong Args in Help Doc
@@ -1515,13 +1528,13 @@ DOC_BY_VERB = dict(
     head=HEAD_DOC,
     jq=JQ_DOC,
     nl=NL_DOC,
-    python=__doc__,
     reverse=REVERSE_DOC,
     sort=SORT_DOC,
     split=SPLIT_DOC,
     strip=STRIP_DOC,
     tail=TAIL_DOC,
     xargs=XARGS_DOC,
+    xshverb=XSHVERB_DOC,
 )
 
 for _K_ in DOC_BY_VERB.keys():
@@ -1535,13 +1548,13 @@ FUNC_BY_VERB = dict(
     head=do_head,
     jq=do_jq,
     nl=do_nl,
-    python=do_python,
     reverse=do_reverse,
     sort=do_sort,
     split=do_split,
     strip=do_strip,
     tail=do_tail,
     xargs=do_xargs,
+    xshverb=do_xshverb,
 )
 
 
@@ -1553,16 +1566,15 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "j": "jq",
     "n": "nl",
     "o": "strip",
-    "p": "python",
-    "pq": "python",
+    "p": "xshverb",
+    "pq": "xshverb",  # |pq in homage of |jq, not |py and not |python
     "r": "reverse",
     "s": "sort",
     "t": "tail",
     "u": "counter",
     "x": "xargs",
-    "xshverb": "python",
-    "xshverb.py": "python",
-    "|": "python",
+    "xshverb.py": "xshverb",
+    "|": "xshverb",
 }
 
 
