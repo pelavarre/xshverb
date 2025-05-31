@@ -1,0 +1,13 @@
+#!/bin/bash
+
+D=$(dirname "$0")/..
+
+cd "$D"/ || exit 1
+dirs -p |head -1
+
+git log --oneline --no-decorate -3
+
+git fetch --prune --prune-tags --force
+git rebase
+
+git log --oneline --no-decorate -3
