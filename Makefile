@@ -1,6 +1,16 @@
 # xshverb/Makefile
 
 
+define __EPILOG__
+
+make  # shows a few examples and exits zero
+make help  # shows many help lines and exits zero
+make pips  # installs/ replaces Python add-on's from PyPi·Org
+make smoke  # calls for Code Review from Black, Flake8, and MyPy Strict
+
+endef
+
+
 define __DOC__
 usage: make TARGET
 
@@ -17,16 +27,6 @@ examples:
 endef
 
 
-define __EPILOG__
-
-make  # shows a few examples and exits zero
-make help  # shows many help lines and exits zero
-make pips  # installs/ replaces Python add-on's from PyPi·Org
-make smoke  # calls for Code Review from Black, Flake8, and MyPy Strict
-
-endef
-
-
 default:
 	@$(info $(__EPILOG__))
 	@true
@@ -37,10 +37,16 @@ help:
 	@true
 
 
-pips:
+.PHONY: pips requirements.txt
+
+pips requirements.txt:
+	: 'remake our ~/.pyvenvs/pips/ in less than 10s'
+	:
 	mkdir -p ~/.pyvenvs/  # or ~/.venvs/ or ~/.envs/
 	:
-	cd ~/.pyvenvs/ && rm -fr pips
+	cd ~/.pyvenvs/ && rm -fr pips~
+	cd ~/.pyvenvs/ && if [ -e pips ]; then mv -i pips pips~; fi
+	:
 	cd ~/.pyvenvs/ && python3 -m venv pips
 	source ~/.pyvenvs/pips/bin/activate && python3 -m pip install --upgrade pip
 	:
@@ -48,6 +54,8 @@ pips:
 	source ~/.pyvenvs/pips/bin/activate && python3 -m pip install --upgrade flake8
 	source ~/.pyvenvs/pips/bin/activate && python3 -m pip install --upgrade flake8-import-order
 	source ~/.pyvenvs/pips/bin/activate && python3 -m pip install --upgrade mypy
+	:
+	git diff --color-moved requirements.txt
 	:
 
 

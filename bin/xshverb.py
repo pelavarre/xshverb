@@ -1233,7 +1233,7 @@ def do_xshverb(argv: list[str]) -> None:
 
     dedent = textwrap.dedent(itext)
     strip = dedent.strip()
-    olines = dedent.splitlines()
+    olines = strip.splitlines()
 
     otext = line_break_join_rstrips_plus(olines)
     alt.stdout.write(otext)
@@ -1608,6 +1608,10 @@ alt = ShellPipe()
 
 if __name__ == "__main__":
     main()
+
+
+# todo: ht
+# todo: dt
 
 
 # todo: |p could dedent & str.strip the leading blank columns & leading/ trailing blank lines
