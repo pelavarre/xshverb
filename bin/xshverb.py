@@ -1327,16 +1327,17 @@ WCL_DOC = r"""
     count the Lines
 
     comparable to:
-      |wc -l
-      |cat -n |expand |tail -3
+      |wc -l  # doesn't count last Line without a closing Line-Break
+      |cat -n |expand |tail -3  # does count last Line without a closing Line-Break
 
     quirks:
-      counts the last Line, even if not coded to end with a Line-Break, unlike classic WC
+      counts the last Line, even without a closing Line-Break, like class Cat N, unlike classic WC L
       not pushed by us as '|w' because many macOS & Linux define |w to mean a thing like |who
       not pushed by us as '|wcl' because less is more
 
     examples:
       ls -l |pq  w  c
+      ls -l |pq  wcl  c
 
 """
 
@@ -1352,7 +1353,7 @@ def do_wcl(argv: list[str]) -> None:
     # Take up Shell Args
 
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    ns = parser.parse_args_if(args)  # often prints help & exits zero
+    parser.parse_args_if(args)  # often prints help & exits zero
 
     # Count the Lines
 
