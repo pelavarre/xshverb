@@ -26,6 +26,7 @@ Contents
   - [|tail -0x10](#tail--0x10)
   - [|uniq](#uniq)
   - [|uniq -c](#uniq--c)
+  - [|wc -l](#wc--l)
 - [Ancient Python](#ancient-python)
 - [Past work](#past-work)
 - [Future work](#future-work)
@@ -533,6 +534,13 @@ Classic Uniq takes this as a request to inject quasi-binary \x09 Hard Tabs into 
 unlike
 
     |uniq -c |expand
+
+
+### |wc -l
+
+Classic WC doesn't count the last Line when it's coded without a trailing Line-Break
+
+    printf 'alfa\n''bravo\n''charlie'  |wc -l  # we say 3, but they say 2
 
 
 ## Ancient Python

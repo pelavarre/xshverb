@@ -1316,6 +1316,54 @@ def do_tail(argv: list[str]) -> None:
 
 
 #
+# Count the Lines
+#
+
+
+WCL_DOC = r"""
+
+    usage: wcl
+
+    count the Lines
+
+    comparable to:
+      |wc -l
+      |cat -n |expand |tail -3
+
+    quirks:
+      counts the last Line, even if not coded to end with a Line-Break, unlike classic WC
+      not pushed by us as '|w' because many macOS & Linux define |w to mean a thing like |who
+      not pushed by us as '|wcl' because less is more
+
+    examples:
+      ls -l |pq  w  c
+
+"""
+
+
+def do_wcl(argv: list[str]) -> None:
+    """Count the Lines"""
+
+    # Form Shell Args Parser
+
+    doc = WCL_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Count the Lines
+
+    ilines = alt.stdin.readlines()
+    oint = len(ilines)
+    otext = str(oint)
+
+    alt.stdout.write(otext)
+
+
+#
 # Join the Lines into a single Line
 #
 
@@ -1733,6 +1781,7 @@ DOC_BY_VERB = dict(
     split=SPLIT_DOC,
     strip=STRIP_DOC,
     tail=TAIL_DOC,
+    wcl=WCL_DOC,
     xargs=XARGS_DOC,
     xshverb=XSHVERB_DOC,
 )
@@ -1755,6 +1804,7 @@ FUNC_BY_VERB = dict(
     split=do_split,
     strip=do_strip,
     tail=do_tail,
+    wcl=do_wcl,
     xargs=do_xargs,
     xshverb=do_xshverb,
 )
@@ -1774,6 +1824,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "s": "sort",
     "t": "tail",
     "u": "counter",
+    "w": "wcl",
     "x": "xargs",
     "xshverb.py": "xshverb",
     "|": "xshverb",
