@@ -539,7 +539,7 @@ def do_awk(argv: list[str]) -> None:
         ojoin = osep.join(owords)
         olines.append(ojoin)
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -598,10 +598,13 @@ def do_cat(argv: list[str]) -> None:
 
     sys_stdin_isatty = sys.stdin.isatty()
 
+    filled_from_tty = False
     if alt.index == 0:
         if not sys_stdin_isatty:
             alt.stdin.fill_from_stdin()
         else:
+            filled_from_tty = True
+
             eprint(
                 "Start typing"
                 + ". Press Return after each Line"
@@ -613,12 +616,12 @@ def do_cat(argv: list[str]) -> None:
     # Strip trailing Blanks off each Line
 
     ilines = alt.stdin.readlines()
-    otext = line_break_join_rstrips_plus(ilines)
+    otext = line_break_join_rstrips_plus_if(ilines)
     alt.stdout.write(otext)
 
     # Write to Stdout Tty at end of Pipe
 
-    if alt.index != 0:
+    if not filled_from_tty:
         if alt.rindex == -1:
             alt.stdout.drain_to_stdout()
 
@@ -679,7 +682,7 @@ def do_counter(argv: list[str]) -> None:
 
         # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -822,7 +825,7 @@ def do_head(argv: list[str]) -> None:
     ilines = alt.stdin.readlines()
     olines = ilines[:-n]
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -871,7 +874,7 @@ def do_jq(argv: list[str]) -> None:
     otext = json.dumps(j, indent=2, ensure_ascii=False) + "\n"
 
     olines = otext.splitlines()
-    otext_ = line_break_join_rstrips_plus(olines)
+    otext_ = line_break_join_rstrips_plus_if(olines)
     assert otext == otext_, (otext, otext_)
 
     alt.stdout.write(otext)
@@ -940,7 +943,7 @@ def do_nl(argv: list[str]) -> None:
         oline = f"{n_plus_index:6}  {iline}"
         olines.append(oline)
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -985,7 +988,7 @@ def do_reverse(argv: list[str]) -> None:
     olines = list(ilines)  # todo: aka:  olines = list(reversed(ilines))
     olines.reverse()
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -1078,7 +1081,7 @@ def do_sort(argv: list[str]) -> None:
     if descending:
         olines.reverse()
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -1131,7 +1134,7 @@ def do_split(argv: list[str]) -> None:
     itext = alt.stdin.read_text()
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -1182,7 +1185,7 @@ def do_strip(argv: list[str]) -> None:
     ilines = alt.stdin.readlines()
     olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -1251,7 +1254,7 @@ def do_tail(argv: list[str]) -> None:
     ilines = alt.stdin.readlines()
     olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
 
@@ -1325,7 +1328,7 @@ def do_xshverb(argv: list[str]) -> None:
     strip = dedent.strip()
     olines = strip.splitlines()
 
-    otext = line_break_join_rstrips_plus(olines)
+    otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
     # FIXME: lots more .do_xshverb work
@@ -1557,14 +1560,14 @@ def argv_parse_if(parser: AmpedArgumentParser, argv: list[str]) -> argparse.Name
 #
 
 
-def line_break_join_rstrips_plus(lines: list[str]) -> str:
+def line_break_join_rstrips_plus_if(lines: list[str]) -> str:
     """Convert Lines to Chars but strip trailing Blanks off each Line"""
 
     rstrips = list(_.rstrip() for _ in lines)
     join = "\n".join(rstrips)
-    plus = join + "\n"
+    plus_if = (join + "\n") if join else ""
 
-    return plus  # maybe starts with or ends with Empty Lines
+    return plus_if  # maybe empty  # maybe starts with or ends with Empty Lines
 
 
 #
