@@ -13,8 +13,7 @@ options:
   -V, --version  show version and exit
 
 quirks:
-  defaults to strip trailing Blanks from each Line
-  defaults to end with 1 Line-Break
+  defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
   docs the [-h] and [-V] options only here, not again and again for every different Hint
   more doc at https://github.com/pelavarre/xshverb
 
@@ -39,9 +38,9 @@ examples:
   a --help  # shows the whole Help Doc for the Awk Shell Verb
   a --version  # shows the Version of the Code here
   p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
-  pq  # dedents & strips the Os/Copy Paste Buffer, then shows it via:  pq less
+  pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
   pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
-  v  # fixes up the Os/Copy Paste Buffer and then calls Vim to edit it
+  v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vim to edit it
 """
 
 # todo: --py to show the Python chosen, --py=... to supply your own Python
@@ -68,6 +67,7 @@ import shlex
 import subprocess
 import sys
 import textwrap
+import unicodedata
 import zoneinfo  # new since Oct/2020 Python 3.9
 
 
@@ -310,7 +310,16 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
             eprint(f"xshverb: command not found: |{vb}")  # a la Bash & Zsh vs New Verbs
             sys.exit(2)  # exits 2 for bad Shell Verb
 
+        # Find the Doc
+
+        assert __main__.__doc__, (__main__.__doc__,)
+
         doc = doc_by_verb[verb]
+        if vb == "xshverb.py":
+            doc = __main__.__doc__
+
+        # Find the Func
+
         func = func_by_verb[verb]
 
         # Succeed
@@ -389,6 +398,7 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
     shpumps: list[ShellPump]
     shpumps = list()
 
+    dropped_one_xshverb_shpump = False
     while hints:
         index = len(shpumps)
         with_hints = list(hints)
@@ -399,7 +409,9 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
         # Drop a Python if begun by it, as the door into this Name Space, not a substantial Hint
 
         if (not shpumps) and (shpump.verb == "xshverb"):
-            continue
+            if not dropped_one_xshverb_shpump:
+                dropped_one_xshverb_shpump = True
+                continue
 
         shpumps.append(shpump)
 
@@ -407,10 +419,6 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
 
     if not shpumps:
         shpumps.append(ShellPump(["xshverb"], index=0))
-        if alt.sys_stdin_isatty and alt.sys_stdout_isatty:
-            shpumps.append(ShellPump(["cat"], index=1))
-
-            # FIXME: Guess |less is meant by the absence of Hints
 
     return shpumps
 
@@ -1416,19 +1424,63 @@ def do_xargs(argv: list[str]) -> None:
 
 
 #
-# Do all the implied things, and nothing more
+# Mess about inside the Os/Copy Paste Buffer
 #
 
 
-XSHVERB_DOC = __main__.__doc__
-assert XSHVERB_DOC, (XSHVERB_DOC,)
+PQ_DOC = r"""
+usage: pq [HINT ...]
+
+mess about inside the Os/Copy Paste Buffer
+
+positional arguments:
+  HINT  hint of which Shell Pipe Filter you mean
+
+quirks:
+  defaults to decode the Bytes as UTF-8, replacing decoding errors with U+003F '?' Question-Mark's
+  defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
+  more help at:  xshverb.py --help
+
+examples:
+  pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
+  pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
+  pq v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vim to edit it
+  echo $'\xC0\x80' |pq |sort  # doesn't deny service to shout up "illegal byte sequence"
+"""
+
+XSHVERB_DOC = PQ_DOC
+
+# "There is nothing -- absolutely nothing -- half so much worth doing as simply messing about in ..." ~ Kenneth Grahame
 
 
-def do_xshverb(argv: list[str]) -> None:  # def do_p  # def do_pq
+def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
+    """Mess about inside the Os/Copy Paste Buffer"""
 
-    # eprint(sys.argv)
+    # Form Shell Args Parser
 
-    itext = alt.stdin.read_text()
+    doc = XSHVERB_DOC
+    hint_help = "hint of which Shell Pipe Filter you mean"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="hints", metavar="HINT", nargs="*", help=hint_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    if ns.hints:
+        parser.parser.print_usage()
+        eprint(f"|pq: {ns.hints!r}: no such Shell Pipe Filters yet")
+        sys.exit(2)  # exits 2 for bad Args
+
+    # Dedents and strip the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
+
+    assert unicodedata.lookup("Replacement Character") == "\ufffd"
+
+    ibytes = alt.stdin.read_bytes()
+    decode = ibytes.decode(errors="replace")  # not errors="surrogateescape"
+    itext = decode.replace("\ufffd", "?")
 
     dedent = textwrap.dedent(itext)
     strip = dedent.strip()
@@ -1437,7 +1489,14 @@ def do_xshverb(argv: list[str]) -> None:  # def do_p  # def do_pq
     otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
 
-    # FIXME: lots more .do_xshverb work
+    # Say what the most plain Undirected Pq without Args means
+
+    if (alt.index == 0) and (alt.rindex == -1):
+        if alt.sys_stdin_isatty and alt.sys_stdout_isatty:
+
+            # Dedent & strip & replace, first to Tty, and then to Pipe
+
+            sys.stdout.write(otext)
 
 
 #
@@ -1864,12 +1923,6 @@ if __name__ == "__main__":
     main()
 
 
-# todo: our '| pq w' will give you the '|wc -l' count of Lines
-
-
-# todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
-
-
 # todo: + |y is to show what's up and halt till you say move on
 
 # todo: + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
@@ -1884,6 +1937,9 @@ if __name__ == "__main__":
 # todo: + |d is for **Diff**, but default to '|diff -brpu a b'
 # todo: + |f is for **Find**, but default to search $PWD spelled as ""
 # todo: + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
+
+
+# todo: |p ascii and |p repr without so many quotes in the output
 
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
