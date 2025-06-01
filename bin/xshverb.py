@@ -57,6 +57,7 @@ import __main__
 import argparse
 import collections.abc
 import dataclasses
+import datetime as dt
 import difflib
 import hashlib
 import json
@@ -67,11 +68,15 @@ import shlex
 import subprocess
 import sys
 import textwrap
+import zoneinfo  # new since Oct/2020 Python 3.9
 
 
 YYYY_MM_DD = "2025-05-31"  # date of last change to this Code, or an earlier date
 
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
+
+Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")  # todo: also welcome logins from the periphery
+UTC = zoneinfo.ZoneInfo("UTC")
 
 
 _: dict[str, int] | None  # new since Oct/2021 Python 3.10
@@ -268,7 +273,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     func: collections.abc.Callable[[list[str]], None]  # do_awk  # do_xshverb
     argv: list[str]  # ['a']  # ['awk']
 
-    def __init__(self, hints: list[str]) -> None:
+    def __init__(self, hints: list[str], index: int) -> None:
         """Pop some Hints, else show Help and exit"""
 
         assert hints, (hints,)
@@ -283,6 +288,10 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
         while hints:
             arg = hints.pop(0)
             argv.append(arg)  # may be '--', and may be '--' more than once
+
+            if index == 0:  # todo: how to mark who bypasses the .isidentifier rules?
+                if argv[0] == "dt":
+                    continue
 
             if hints:
                 peek = hints[0]
@@ -363,7 +372,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
     def do_show_version(self) -> None:
         """Show version and exit zero"""
 
-        version = pathname_read_version(__file__)
+        version = pathlib_path_read_version(__file__)
         print(YYYY_MM_DD, version)
 
 
@@ -377,25 +386,29 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
 
     # Take >= 1 Hints to build each Shell Pump
 
+    shpumps: list[ShellPump]
     shpumps = list()
+
     while hints:
-        before = list(hints)
-        shpump = ShellPump(hints)  # pops Hints  # exits 0 for Doc, exits 2 for bad Hints
-        assert len(hints) < len(before), (hints, before)
+        index = len(shpumps)
+        with_hints = list(hints)
+
+        shpump = ShellPump(hints, index=index)  # exits 0 for Doc, exits 2 for bad Hints
+        assert len(hints) < len(with_hints), (hints, with_hints)
+
+        # Drop a Python if begun by it, as the door into this Name Space, not a substantial Hint
+
+        if (not shpumps) and (shpump.verb == "xshverb"):
+            continue
 
         shpumps.append(shpump)
-
-    # Drop a Python if begun by it, as the door into this Name Space, not a substantial Hint
-
-    if shpumps and (shpumps[0].verb == "xshverb"):
-        shpumps.pop(0)
 
     # Give meaning to the absence of Hints
 
     if not shpumps:
-        shpumps.append(ShellPump(["xshverb"]))
+        shpumps.append(ShellPump(["xshverb"], index=0))
         if alt.sys_stdin_isatty and alt.sys_stdout_isatty:
-            shpumps.append(ShellPump(["cat"]))
+            shpumps.append(ShellPump(["cat"], index=1))
 
             # FIXME: Guess |less is meant by the absence of Hints
 
@@ -668,6 +681,83 @@ def do_counter(argv: list[str]) -> None:
 
     otext = line_break_join_rstrips_plus(olines)
     alt.stdout.write(otext)
+
+
+#
+# Drop the Style out of Json Data
+#
+
+
+DT_DOC = r"""
+
+    usage: dt [WORD ...]
+
+    do the thing, but show its date/time and pass/fail details
+
+    positional arguments:
+      WORD  the words of command: the Shell verb and its options and args to run
+
+    comparable to:
+      date && time ...; echo + exit $?
+
+    quirks:
+      shows absolute date/time, elapsed date/time, and process exit status returncode
+      shows the whole second in the California Pacific Time Zone, and the microsecond in UTC
+      exits nonzero when the Shell Command exits nonzero
+
+    examples:
+      dt  # shows when now is, and says nothing more
+      dt sleep 0.123  # show how much slower observed time can be
+      dt make requirements.txt  # show how fast a particular thing runs
+
+"""
+
+
+def do_dt(argv: list[str]) -> None:
+    """Do the thing, but show its date/time and pass/fail details"""
+
+    # Form Shell Args Parser
+
+    doc = DT_DOC
+    word_help = "the words of command: the Shell verb and its options and args to run"
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
+
+    # Take up Shell Args
+
+    args = argv[1:]
+    if not argv[1:]:
+        args = ["--", "true"]  # not as precise as '/usr/bin/true'
+    else:
+        if not argv[1].startswith("-"):
+            args = ["--"] + argv[1:]
+
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Do the thing, but show its date/time and pass/fail details
+
+    t0 = dt.datetime.now(UTC)  # 2025-06-01 10:26:51 -0700  (2025-06-01 17:26:51.743258)
+    s0a = t0.astimezone(Pacific).strftime("%Y-%m-%d %H:%M:%S %z")
+    s0b = t0.strftime("%Y-%m-%d %H:%M:%S.%f")
+    eprint(f"{s0a}  ({s0b})")
+
+    if not argv[1:]:
+        assert ns.words == ["true"], (ns.words,)
+        sys.exit(0)
+
+    shargv = ns.words
+    shline = " ".join(shlex.quote(_) for _ in shargv)
+    eprint("+", shline)
+
+    run = subprocess.run(shargv, stdin=None)
+    returncode = run.returncode
+    eprint(f"+ exit {returncode}")  # printed even when zero
+
+    t1 = dt.datetime.now(UTC)
+    t1t0 = t1 - t0
+    eprint(dt_timedelta_strftime(t1t0))  # such as '346ms' to mean 0.346 <= t <= 0.347
+
+    sys.exit(returncode)
 
 
 #
@@ -1478,11 +1568,59 @@ def line_break_join_rstrips_plus(lines: list[str]) -> str:
 
 
 #
+# Amp up Import DateTime as DT
+#
+
+
+def dt_timedelta_strftime(td: dt.timedelta, depth: int = 1, str_zero: str = "0s") -> str:
+    """Give 'w d h m s ms us ms' to mean 'weeks=', 'days=', etc"""
+
+    # Pick Weeks out of Days, Minutes out of Seconds, and Millis out of Micros
+
+    w = td.days // 7
+    d = td.days % 7
+
+    h = td.seconds // 3600
+    h_s = td.seconds % 3600
+    m = h_s // 60
+    s = h_s % 60
+
+    ms = td.microseconds // 1000
+    us = td.microseconds % 1000
+
+    # Catenate Value-Key Pairs in order, but strip leading and trailing Zeroes,
+    # and choose one unit arbitrarily when speaking of any zeroed TimeDelta
+
+    keys = "w d h m s ms us".split()
+    values = (w, d, h, m, s, ms, us)
+    pairs = list(zip(keys, values))
+
+    chars = ""
+    count = 0
+    for index, (k, v) in enumerate(pairs):
+        if (chars or v) and any(values[index:]):
+            chars += "{}{}".format(v, k)
+            count += 1
+
+            if count >= depth:  # truncates, does Not round up
+                break
+
+    str_zeroes = list((str(0) + _) for _ in keys)
+    if not chars:
+        assert str_zero in str_zeroes, (str_zero, str_zeroes)
+        chars = str_zero
+
+    # Succeed
+
+    return chars  # such as '346ms' to mean 0.346 <= t <= 0.347
+
+
+#
 # Amp up Import PathLib
 #
 
 
-def pathname_read_version(pathname: str) -> str:
+def pathlib_path_read_version(pathname: str) -> str:
     """Hash the Bytes of a File down to a purely Decimal $Major.$Minor.$Micro Version Str"""
 
     path = pathlib.Path(pathname)
@@ -1525,6 +1663,7 @@ DOC_BY_VERB = dict(
     awk=AWK_DOC,
     cat=CAT_DOC,
     counter=COUNTER_DOC,
+    dt=DT_DOC,
     head=HEAD_DOC,
     jq=JQ_DOC,
     nl=NL_DOC,
@@ -1545,6 +1684,7 @@ FUNC_BY_VERB = dict(
     awk=do_awk,
     cat=do_cat,
     counter=do_counter,
+    dt=do_dt,
     head=do_head,
     jq=do_jq,
     nl=do_nl,
