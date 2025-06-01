@@ -213,6 +213,10 @@ but we leave '|b' and '|w' and '|z' unoccupied by us.
 We leave '|w' unoccupied, because Linux & Mac so often define '|w' to mean a form of 'who'.
 Even so, our '|pq w' or '|pq len' will give you the '|wc -l' count of Lines
 
++ |pq expand is for expanding more than Tabs:  also for making Printable Ascii out of Em-Dash and En-Dash and Quotation-Mark etc
++ |pq len is for Py Lines Count
++ |pq w is for Py Lines Count (also known as '|pq len')
+
 If you don't want to define 26 a..z Letters,
 you can settle for making yourself type out a word before them
 

@@ -338,6 +338,9 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
         if vb in verb_by_vb.keys():
             verb = verb_by_vb[vb]  # Aliases are often shorter than their Shell Verbs
 
+            if argv == ["dict"]:  # todo: declare more Aliases which imply Shell Args
+                argv.append("--keys")
+
         if verb not in func_by_verb.keys():
             eprint(f"xshverb: command not found: |{vb}")  # a la Bash & Zsh vs New Verbs
             sys.exit(2)  # exits 2 for bad Shell Verb
@@ -375,7 +378,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
         parser = AmpedArgumentParser(doc, add_help=False)  # enough to print Closing
         if argv[1:] == ["--"]:
-            self.do_show_closing(closing=parser.closing)
+            self.do_closing_show(closing=parser.closing)
             sys.exit(0)
 
         double_dashed = False
@@ -388,29 +391,29 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
                     continue
 
                 if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
-                    self.do_show_help()
+                    self.do_doc_show()
                     sys.exit(0)
 
                 if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
-                    self.do_show_version()
+                    self.do_version_show()
                     sys.exit(0)
 
         # often prints help & exits zero
 
-    def do_show_help(self) -> None:
+    def do_doc_show(self) -> None:
         """Show the Help and exit zero"""
 
         doc = self.doc
         print(doc)
 
-    def do_show_closing(self, closing: str) -> None:
+    def do_closing_show(self, closing: str) -> None:
         """Show the Closing and exit zero"""
 
         print()
         print(closing)
         print()
 
-    def do_show_version(self) -> None:
+    def do_version_show(self) -> None:
         """Show version and exit zero"""
 
         version = pathlib_path_read_version(__file__)
@@ -690,6 +693,7 @@ COUNTER_DOC = """
     examples:
       ls -l |i  u  # counts each Word, prints Lines of Count Tab Text
       ls -l |i  counter --keys  c  # prints each Word once
+      ls -l |i  dict  c  # same as '|counter --keys', but by way of the Python Datatypes Namespace
 
 """
 
@@ -1192,6 +1196,70 @@ def do_reverse(argv: list[str]) -> None:
 
 
 #
+# List distinct Chars in sorted order
+#
+
+
+SET_DOC = r"""
+
+    usage: set
+
+    list distinct Chars in sorted order
+
+    comparable to:
+      |sed 's,.,&\n,g' |sort |uniq |xargs |sed 's, ,,g'
+
+    quirks:
+      doesn't count Blanks of the " \t\n\f\r" kind
+      not pushed by us as '|set' because many macOS & Linux Shells define 'set NAME=VALUE'
+
+    examples:
+      ls -l |pbcopy && pq set c
+      cat bin/xshverb.py|pq set c
+      cat $(git ls-files) |pq set c
+
+"""
+
+
+def do_set(argv: list[str]) -> None:
+    """List distinct Chars in sorted order"""
+
+    # Form Shell Args Parser
+
+    doc = SET_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # List distinct Chars in sorted order
+
+    itext = alt.stdin.read_text()
+
+    iotext = itext
+    blanks = "\t\n\f\r "
+    for blank in blanks:
+        iotext = iotext.replace(blank, "")
+
+    otail = "".join(sorted(collections.Counter(iotext).keys()))
+
+    ohead = ""
+    for blank in blanks:
+        if blank in itext:
+            ohead += repr(blank)[1:-1]
+
+    oline = ohead + otail
+    olines = [oline]
+
+    otext = line_break_join_rstrips_plus_if(olines)
+    alt.stdout.write(otext)
+
+    # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
+
+
+#
 # Count or drop duplicate Lines, no sort required
 #
 
@@ -1474,7 +1542,7 @@ WCL_DOC = r"""
 
     quirks:
       counts the last Line, even without a closing Line-Break, like class Cat N, unlike classic WC L
-      not pushed by us as '|w' because many macOS & Linux define |w to mean a thing like |who
+      not pushed by us as '|w' because many macOS & Linux Shells define 'w' something like 'who'
       not pushed by us as '|wcl' because less is more
 
     examples:
@@ -1731,17 +1799,20 @@ class AmpedArgumentParser:
     def scrape_closing(self, epilog: str | None) -> str:
         """Pick out the last Graf of the Epilog, minus its Top Line"""
 
-        text = "" if (epilog is None) else epilog
+        text = epilog if epilog else ""
         lines = text.splitlines()
 
         indices = list(_ for _ in range(len(lines)) if lines[_])  # drops empty Lines
         indices = list(_ for _ in indices if not lines[_].startswith(" "))  # finds Ttop Lines
 
-        join = "\n".join(lines[indices[-1] + 1 :])  # last Graf, minus its Top Line
-        dedent = textwrap.dedent(join)
-        closing = dedent.strip()
+        closing = ""
+        if indices:
+            index = indices[-1] + 1
+            join = "\n".join(lines[index:])  # last Graf, minus its Top Line
+            dedent = textwrap.dedent(join)
+            closing = dedent.strip()
 
-        return closing
+        return closing  # maybe empty
 
     #
     # Parse the Shell Args, else print Help and exit zero or nonzero
@@ -1972,6 +2043,7 @@ DOC_BY_VERB = dict(
     jq=JQ_DOC,
     nl=NL_DOC,
     reverse=REVERSE_DOC,
+    set=SET_DOC,
     sort=SORT_DOC,
     split=SPLIT_DOC,
     strip=STRIP_DOC,
@@ -1982,7 +2054,9 @@ DOC_BY_VERB = dict(
 )
 
 for _K_ in DOC_BY_VERB.keys():
-    DOC_BY_VERB[_K_] = textwrap.dedent(DOC_BY_VERB[_K_]).strip()
+    _V_ = textwrap.dedent(DOC_BY_VERB[_K_])
+    assert not _V_.lstrip("\n").startswith(" "), (_V_, _K_)  # needs r""" ?
+    DOC_BY_VERB[_K_] = _V_.strip()
 
 
 FUNC_BY_VERB = dict(
@@ -1996,6 +2070,7 @@ FUNC_BY_VERB = dict(
     jq=do_jq,
     nl=do_nl,
     reverse=do_reverse,
+    set=do_set,
     sort=do_sort,
     split=do_split,
     strip=do_strip,
@@ -2009,6 +2084,7 @@ FUNC_BY_VERB = dict(
 VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
     "a": "awk",
     "c": "cat",
+    "dict": "counter",
     "g": "grep",
     "h": "head",
     "i": "split",
@@ -2059,6 +2135,9 @@ alt = ShellPipe()
 if __name__ == "__main__":
     main()
 
+
+# todo: |pq expand, like to collapse the kinds of - and " and ', also em-dash to ' -- '
+# todo: |pq expand, like to collapse em-dash to ' -- ' and en-dash to '--'
 
 # todo: pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
 
