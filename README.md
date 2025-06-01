@@ -53,7 +53,7 @@ with a Python from this decade in it, such as the Oct/2021 Python 3.10 of Ubuntu
 
 Install XShVerb to run once
 
-    curl -LSsf https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/install.sh | sh
+    curl -LSsf https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/install.sh |sh
 
 Or tap through to look at this Install·Sh Script first to know what it does
 > https://raw.githubusercontent.com/pelavarre/xshverb/refs/heads/main/install.sh
@@ -78,7 +78,7 @@ to have us say what we'll do, before you agree to have us to do it
 
     $ git show |y  i  u  s -nr  h  c
 
-    + |p split |p sort |p counter |p sort -nr |p head |cat -
+    + |pq split |pq sort |pq counter |pq sort -nr |pq head |cat -
 
     >> Press ⌃D to run, or ⌃C to quit <<
 
@@ -210,7 +210,7 @@ but with their defaults and options rethought and corrected to fit our new centu
 We define most of the 26 a..z Letters,
 but we leave '|b' and '|w' and '|z' unoccupied by us.
 We leave '|w' unoccupied, because Linux & Mac so often define '|w' to mean a form of 'who'.
-Even so, our '| p w' or '|p len' will give you the '|wc -l' count of Lines
+Even so, our '|pq w' or '|pq len' will give you the '|wc -l' count of Lines
 
 If you don't want to define 26 a..z Letters,
 you can settle for making yourself type out a word before them
@@ -490,7 +490,7 @@ Maybe we're not much testing operations with ordinary people involved?
 
 We sort Nulls Last, unless you ask us to sort Nulls First
 
-    |p sort --nulls=first
+    |pq sort --nulls=first
 
 To get there in classic Shell, you've got to go separate your Lines prefixed by a Number or not.
 Tactics such as

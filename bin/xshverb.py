@@ -565,8 +565,9 @@ CAT_DOC = """
       doesn't take Pathnames as Positional Arguments, doesn't define many Options
 
     examples:
-      bin/c a && pbpaste |cat -etv  # type your own Lines to chop down to their last Word
-      ls -l |bin/a c  # see what Awk would push into the Os Copy/Paste Buffer, without pushing it
+      c  # fill your Os Copy/Paste Buffer
+      c  a  c  # type your own Lines to chop down to their last Word
+      ls -l |a  c  # see what |a would shove into the Os Copy/Paste Buffer, without shoving it
 
 """
 
@@ -645,8 +646,8 @@ COUNTER_DOC = """
       |awk '{d[$_]++}END{for(k in d){print d[k],k}}'  # count duplicates
 
     examples:
-      ls -l |bin/i  u  # counts each Word, prints Lines of Count Tab Text
-      ls -l |bin/i  counter --keys  c  # prints each Word once
+      ls -l |i  u  # counts each Word, prints Lines of Count Tab Text
+      ls -l |i  counter --keys  c  # prints each Word once
 
 """
 
@@ -785,7 +786,7 @@ HEAD_DOC = """
       we could take the $LINES of the Terminal Window Tab Pane into account
 
     examples:
-      ls -l |bin/i  u  s -nr  h  c  # prints some most common Words
+      ls -l |i  u  s -nr  h  c  # prints some most common Words
       ls -hlAF -rt |h -3  c  # prints the first 3 Lines
 
 """
@@ -827,6 +828,62 @@ def do_head(argv: list[str]) -> None:
 
     otext = line_break_join_rstrips_plus_if(olines)
     alt.stdout.write(otext)
+
+
+#
+# Chop output to fit on screen
+#
+
+
+HT_DOC = r"""
+
+    usage: ht
+
+    chop output to fit on screen
+
+    comparable to:
+      |awk '{a[NR]=$0} END{print a[1]; print a[2]; print "..."; print a[NR - 1]; print a[NR]}'
+      |sed -n -e '1,3p;3,3s/.*/.../p;$p'  # prints only 1 of Tail
+
+    quirks:
+      shows 3 Lines of Head, 2 Lines of Tail, and '...' in the middle
+
+    examples:
+      seq 99 |ht  c  # show not much of 99 Lines
+      find . |ht  c  # show not much of many Pathnames that begin with "." Dot or not
+
+"""
+
+
+def do_ht(argv: list[str]) -> None:
+    """Chop output to fit on screen"""
+
+    # Form Shell Args Parser
+
+    doc = HT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Chop output to fit on screen
+
+    ilines = alt.stdin.readlines()
+    n = len(ilines)
+
+    if n < (3 + 3 + 2):
+        otext = line_break_join_rstrips_plus_if(ilines)
+        alt.stdout.write(otext)
+        return
+
+    olines = ilines[:3] + ["...", f"... 3+2 of {n} Lines shown ...", "..."] + ilines[-2:]
+    otext = line_break_join_rstrips_plus_if(olines)
+    alt.stdout.write(otext)
+
+    # todo: |ht [-B=BEFORE] [-A=AFTER] [-C=BOTH] for more/less above/below
+    # todo: |ht when the Output is too wide
 
 
 #
@@ -899,8 +956,8 @@ NL_DOC = """
       |nl -v1
 
     examples:
-      ls -l |bin/n  c  # number as if by |cat -n |expand
-      ls -l |bin/n +0  c  # number as if by |nl -v0 |expand
+      ls -l |n  c  # number as if by |cat -n |expand
+      ls -l |n +0  c  # number as if by |nl -v0 |expand
 
 """
 
@@ -963,7 +1020,7 @@ REVERSE_DOC = """
       |tail -r  # at macOS
 
     examples:
-      ls -1 |bin/r  c  # reverses the Sort-by-Name chosen by Ls
+      ls -1 |r  c  # reverses the Sort-by-Name chosen by Ls
 
 """
 
@@ -1020,8 +1077,8 @@ SORT_DOC = """
       doesn't offer --check, --merge, --dictionary-order, --ignore-case, --key, etc
 
     examples:
-      ls -l |bin/i  u  # counts each Word, prints Lines of Count Tab Text
-      ls -l |bin/i  counter --keys  c  # prints each Word once
+      ls -l |i  u  # counts each Word, prints Lines of Count Tab Text
+      ls -l |i  counter --keys  c  # prints each Word once
 
 """
 
@@ -1104,9 +1161,9 @@ SPLIT_DOC = r"""
       |tr + '\n'
 
     examples:
-      ls -l |bin/i  c
-      ls -l |bin/i --sep=' '  c
-      echo a+b++d |bin/i --sep=+  c
+      ls -l |i  c
+      ls -l |i --sep=' '  c
+      echo a+b++d |i --sep=+  c
 
 """
 
@@ -1156,8 +1213,8 @@ STRIP_DOC = r"""
       |sed 's,^  *,,g' |sed 's,  *$,,g'
 
     examples:
-      echo '  a  b  ' |bin/o |cat -etv
-      echo '++a++b++' |bin/o --chars='+' |cat -etv
+      echo '  a  b  ' |o |cat -etv
+      echo '++a++b++' |o --chars='+' |cat -etv
 
 """
 
@@ -1211,7 +1268,7 @@ TAIL_DOC = """
       we could co-evolve with |head
 
     examples:
-      ls -l |bin/i  u  s -nr  t  c  # prints some least common Words
+      ls -l |i  u  s -nr  t  c  # prints some least common Words
       ls -hlAF -rt bin/ |cat -n |expand |t -3  c  # prints the last 3 Lines
       ls -hlAF -rt bin/ |cat -n |expand |t +7  c  # prints the 7th Line and following
 
@@ -1276,7 +1333,7 @@ XARGS_DOC = r"""
       |xargs
 
     examples:
-      ls -l |bin/i  x  c
+      ls -l |i  x  c
 
 """
 
@@ -1318,7 +1375,7 @@ XSHVERB_DOC = __main__.__doc__
 assert XSHVERB_DOC, (XSHVERB_DOC,)
 
 
-def do_xshverb(argv: list[str]) -> None:
+def do_xshverb(argv: list[str]) -> None:  # def do_p  # def do_pq
 
     # eprint(sys.argv)
 
@@ -1668,6 +1725,7 @@ DOC_BY_VERB = dict(
     counter=COUNTER_DOC,
     dt=DT_DOC,
     head=HEAD_DOC,
+    ht=HT_DOC,
     jq=JQ_DOC,
     nl=NL_DOC,
     reverse=REVERSE_DOC,
@@ -1689,6 +1747,7 @@ FUNC_BY_VERB = dict(
     counter=do_counter,
     dt=do_dt,
     head=do_head,
+    ht=do_ht,
     jq=do_jq,
     nl=do_nl,
     reverse=do_reverse,
@@ -1753,18 +1812,16 @@ if __name__ == "__main__":
     main()
 
 
-# todo: ht
-# todo: dt
+# todo: our '| pq w' will give you the '|wc -l' count of Lines
 
 
-# todo: |p could dedent & str.strip the leading blank columns & leading/ trailing blank lines
 # todo: |p ascii or |p replace or ... for errors="replace" and .replace("\ufffd", "?")
 
 
 # todo: + |y is to show what's up and halt till you say move on
 
 # todo: + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
-# todo: + |k is for **Less** of the '|less -FIRX' kind because |l and |m were taken
+# todo: + |k is for **Less** of the '|tee >(less -FIRX)' kind because |l and |m were taken
 # todo: + |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
 
 # todo: + |m is for **Make**, but timestamp the work and never print the same Line twice
