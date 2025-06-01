@@ -63,6 +63,7 @@ import json
 import math
 import os
 import pathlib
+import re
 import shlex
 import subprocess
 import sys
@@ -282,19 +283,50 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
         func_by_verb = FUNC_BY_VERB
         verb_by_vb = VERB_BY_VB
 
-        # Pop the Shell Verb, and zero or more Dashed Options
+        # Pop the Shell Verb, its Options, and its Positional Arguments
 
+        argv: list[str]
         argv = list()
+
         while hints:
             arg = hints.pop(0)
+            words = arg.split()
+
+            # Accept an Identifier as the Shell Verb
+
+            if not argv:
+                if arg.isidentifier():
+                    assert len(words) == 1, (len(words), words, arg)
+
+                # Accept a Shell-Quote'd Verb with its baggage of Options and Args
+
+                elif len(words) > 1:
+                    splits = shlex.split(arg)
+                    assert splits, (splits, arg)
+                    if splits[0].isidentifier():
+                        argv = splits
+                        break
+
+                # Fall back to have Pq make sense of anything else
+
+                else:
+                    argv.append("pq")
+
             argv.append(arg)  # may be '--', and may be '--' more than once
 
-            if index == 0:  # todo: how to mark who bypasses the .isidentifier rules?
-                if argv[0] == "dt":
+            # Take all the remaining Words as Args, after a Gateway Verb into some other Namespacre
+
+            if index == 0:
+                if argv[0] in ("dt",):  # todo: which verbs consume indefinitely many hints?
                     continue
+
+            # Insert a Break between Shell Pipe Filters,
+            # rather than accepting a first Positional Argument,
+            # when not Shell-Quote'd in with the Verb
 
             if hints:
                 peek = hints[0]
+
                 if peek.isidentifier():  # not any '-' or '--' option, nor 'a|b' etc etc
                     break
 
@@ -388,30 +420,32 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
     """Parse Args, else show Version or Help and exit"""
 
-    # Take the Name of this Process as the first Hint
+    verb_by_vb = VERB_BY_VB
+
+    # Take the Name of this Process as the first Hint,
+    # except not when it is an XShVerb Alias serving as a Gateway Verb into this Name Space
+
+    basename = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
 
     hints = list(argv)
-    hints[0] = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
+    hints[0] = basename
+
+    if basename in verb_by_vb.keys():
+        verb = verb_by_vb[basename]
+        if verb == "xshverb":
+            hints.pop(0)
 
     # Take >= 1 Hints to build each Shell Pump
 
     shpumps: list[ShellPump]
     shpumps = list()
 
-    dropped_one_xshverb_shpump = False
     while hints:
         index = len(shpumps)
         with_hints = list(hints)
 
         shpump = ShellPump(hints, index=index)  # exits 0 for Doc, exits 2 for bad Hints
         assert len(hints) < len(with_hints), (hints, with_hints)
-
-        # Drop a Python if begun by it, as the door into this Name Space, not a substantial Hint
-
-        if (not shpumps) and (shpump.verb == "xshverb"):
-            if not dropped_one_xshverb_shpump:
-                dropped_one_xshverb_shpump = True
-                continue
 
         shpumps.append(shpump)
 
@@ -892,6 +926,106 @@ def do_ht(argv: list[str]) -> None:
 
     # todo: |ht [-B=BEFORE] [-A=AFTER] [-C=BOTH] for more/less above/below
     # todo: |ht when the Output is too wide
+
+
+#
+# Take Lines that match a Pattern
+#
+
+
+GREP_DOC = r"""
+
+    usage: grep [PATTERN ...]
+
+    take Lines that match a Pattern, drop the rest
+
+    positional arguments:
+      PATTERN  the text to find, or a Mixed Case Text to find in any Case, or a RegEx of () [] {}
+
+    comparable to:
+      |grep -F -i -e .1 -e .2
+
+    quirks:
+      takes one or more Patterns, not just one Pattern, without forcing you to spell out '-e '
+      takes the Pattern as requiring matching Case only when it contains Mixed Case
+      takes the Pattern as a RegEx only when it contains >=1 balanced pairs of () [] {}
+
+    examples:
+      echo .1 .2 .3 a1 b2 c3 |tr ' ' '\n' |pbcopy
+      g .1 .2 '(.3)'  c  # .1 .2 .3 c3
+      pq 'g a. b2 c.'  c  # b2
+
+"""
+
+
+def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
+    """Take Lines that match a Pattern, drop the rest"""
+
+    # Form Shell Args Parser
+
+    doc = GREP_DOC
+
+    pattern_help = (
+        "the text to find, or a Mixed Case Text to find in any Case, or a RegEx of () [] {}"
+    )
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="patterns", metavar="PATTERN", nargs="*", help=pattern_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+    patterns = ns.patterns
+
+    eprint(patterns)
+
+    # Say which Patterns we don't run as Regular Expressions
+
+    def str_is_re_pattern_ish(pattern: str) -> bool:
+
+        try:
+            re.compile(pattern)
+        except re.PatternError:
+            return False
+
+        if "(" not in pattern:
+            if "[" not in pattern:
+                if "{" not in pattern:
+                    return False
+
+        return True
+
+    # Take Lines that match a Pattern, drop the rest
+
+    ilines = alt.stdin.readlines()
+
+    olines = list()
+    for iline in ilines:
+        for pattern in patterns:
+
+            if pattern.islower() or pattern.isupper():
+                if pattern.casefold() not in iline.casefold():
+                    continue
+
+            elif str_is_re_pattern_ish(pattern):
+                if not re.search(pattern, iline):
+                    continue
+
+            elif pattern not in iline:
+                continue
+
+            olines.append(iline)
+            break
+
+            # todo: factor out pattern classification for speed
+
+        # todo: multiline patterns
+
+    otext = line_break_join_rstrips_plus_if(olines)
+    alt.stdout.write(otext)
+
+    # todo: |grep -n
 
 
 #
@@ -1832,6 +1966,7 @@ DOC_BY_VERB = dict(
     cat=CAT_DOC,
     counter=COUNTER_DOC,
     dt=DT_DOC,
+    grep=GREP_DOC,
     head=HEAD_DOC,
     ht=HT_DOC,
     jq=JQ_DOC,
@@ -1855,6 +1990,7 @@ FUNC_BY_VERB = dict(
     cat=do_cat,
     counter=do_counter,
     dt=do_dt,
+    grep=do_grep,
     head=do_head,
     ht=do_ht,
     jq=do_jq,
@@ -1873,6 +2009,7 @@ FUNC_BY_VERB = dict(
 VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
     "a": "awk",
     "c": "cat",
+    "g": "grep",
     "h": "head",
     "i": "split",
     "j": "jq",
@@ -1923,20 +2060,22 @@ if __name__ == "__main__":
     main()
 
 
+# todo: pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
+
+
 # todo: + |y is to show what's up and halt till you say move on
 
 # todo: + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
 # todo: + |k is for **Less** of the '|tee >(less -FIRX)' kind because |l and |m were taken
 # todo: + |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
 
-# todo: + |m is for **Make**, but timestamp the work and never print the same Line twice
+# todo: + m is for **Make**, but timestamp the work and never print the same Line twice
 
-# todo: + |g is for **Grep**, but default to '-i -F', and fill in the '-e' per Arg, and Python RegEx
-# todo: + |q is for **Git**, because G was taken
+# todo: + q is for **Git**, because G was taken
 
-# todo: + |d is for **Diff**, but default to '|diff -brpu a b'
-# todo: + |f is for **Find**, but default to search $PWD spelled as ""
-# todo: + |l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
+# todo: + d is for **Diff**, but default to '|diff -brpu a b'
+# todo: + f is for **Find**, but default to search $PWD spelled as ""
+# todo: + l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 
 
 # todo: |p ascii and |p repr without so many quotes in the output
