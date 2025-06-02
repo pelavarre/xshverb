@@ -811,6 +811,86 @@ def do_dt(argv: list[str]) -> None:
 
 
 #
+# Replace troublesome character encodings
+#
+
+
+EXPAND_DOC = r"""
+
+    usage: expand
+
+    replace troublesome character encodings
+
+    comparable to:
+      |expand |tr '' ''
+
+    quirks:
+      not pushed by us as '|expand' because many macOS & Linux Shells define '|expand' narrowly
+
+    examples:
+      echo $'\xC2\xA0 « » “ ’ ” – — ′ ″ ‴ ' |pq expand c
+
+"""
+
+
+def do_expand(argv: list[str]) -> None:  # do_expandtabs
+    """# Replace troublesome character encodings"""
+
+    # Form Shell Args Parser
+
+    doc = SET_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Replace troublesome character encodings
+
+    itext = alt.stdin.read_text()
+    iotext = str_expand_plus(itext)
+    olines = iotext.splitlines()
+
+    otext = line_break_join_rstrips_plus_if(olines)
+    alt.stdout.write(otext)
+
+    # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
+
+
+def str_expand_plus(text: str) -> str:
+    """# Replace troublesome character encodings"""
+
+    d = {
+        "\f": "<hr>",  # U+000C \f
+        unicodedata.lookup("No-Break Space"): "&nbsp;",  # U+00A0 \xA0  # vs Apple ⌥Space
+        unicodedata.lookup("Zero Width Space"): "-",  # U+200B
+        unicodedata.lookup("En Dash"): "--",  # U+2013  # vs Microsoft
+        unicodedata.lookup("Em Dash"): " -- ",  # U+2014  # vs Microsoft
+        unicodedata.lookup("Left Single Quotation Mark"): "'",  # U+2018 ‘  # vs Microsoft
+        unicodedata.lookup("Right Single Quotation Mark"): "'",  # U+2019 ’  # vs Microsoft
+        unicodedata.lookup("Left Double Quotation Mark"): '"',  # U+201C “  # vs Microsoft
+        unicodedata.lookup("Right Double Quotation Mark"): '"',  # U+201D ”  # vs Microsoft
+        unicodedata.lookup("Horizontal Ellipsis"): "...",  # U+2026  # vs Microsoft
+        unicodedata.lookup("Prime"): "'",  # U+2032
+        unicodedata.lookup("Double Prime"): "''",  # U+2033
+        unicodedata.lookup("Triple Prime"): "'''",  # U+2034
+    }
+
+    iotext = text
+    iotext = iotext.expandtabs(tabsize=8)
+    for k, v in d.items():
+        iotext = iotext.replace(k, v)
+
+    return iotext
+
+    # todo: are we happy leaving « » Angle Quotation Marks in place as U+00AB U+00BB
+
+    # todo: more conformity to PyPi·Org Black SHOUTED UPPER CASE Unicode Names
+    # todo: more conformity to PyPi·Org Black fuzz-the-eyes lowercase Hex
+
+
+#
 # Take only the first few Lines
 #
 
@@ -2037,6 +2117,7 @@ DOC_BY_VERB = dict(
     cat=CAT_DOC,
     counter=COUNTER_DOC,
     dt=DT_DOC,
+    expand=EXPAND_DOC,
     grep=GREP_DOC,
     head=HEAD_DOC,
     ht=HT_DOC,
@@ -2064,6 +2145,7 @@ FUNC_BY_VERB = dict(
     cat=do_cat,
     counter=do_counter,
     dt=do_dt,
+    expand=do_expand,
     grep=do_grep,
     head=do_head,
     ht=do_ht,
@@ -2089,6 +2171,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "h": "head",
     "i": "split",
     "j": "jq",
+    "len": "wcl",
     "n": "nl",
     "o": "strip",
     "p": "xshverb",
@@ -2102,6 +2185,8 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "xshverb.py": "xshverb",
     "|": "xshverb",
 }
+
+# todo: find Verbs by today's distinct partial Verbs, such as '|pq exp' for '|pq expand'
 
 
 _DOC_VERBS_ = list(DOC_BY_VERB.keys())
@@ -2135,9 +2220,6 @@ alt = ShellPipe()
 if __name__ == "__main__":
     main()
 
-
-# todo: |pq expand, like to collapse the kinds of - and " and ', also em-dash to ' -- '
-# todo: |pq expand, like to collapse em-dash to ' -- ' and en-dash to '--'
 
 # todo: pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
 
