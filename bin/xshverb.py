@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import __main__
 import argparse
+import bdb
 import collections.abc
 import dataclasses
 import datetime as dt
@@ -63,11 +64,14 @@ import json
 import math
 import os
 import pathlib
+import pdb
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import textwrap
+import traceback
 import unicodedata
 import zoneinfo  # new since Oct/2020 Python 3.9
 
@@ -90,7 +94,35 @@ GATEWAY_VERBS = ("dt", "e", "k", "v")  # these override how we parse the ArgV of
 
 
 def main() -> None:
-    """Run from the Sh Command Line"""
+    """Run from the Shell Command Line, else launch the Pdb Post-Mortem Debugger"""
+
+    try:
+        main_try()
+    except bdb.BdbQuit:
+        raise
+    except Exception as exc:
+        (exc_type, exc_value, exc_traceback) = sys.exc_info()
+        assert exc_type is type(exc_value), (exc_type, exc_value)
+        assert exc is exc_value, (exc, exc_value)
+
+        traceback.print_exc(file=sys.stderr)
+
+        print("\n", file=sys.stderr)
+        print("\n", file=sys.stderr)
+        print("\n", file=sys.stderr)
+
+        print(">>> sys.last_exc = sys.exc_info()[1]", file=sys.stderr)
+        assert not hasattr(sys, "last_exc"), (sys.last_exc,)
+        sys.last_exc = exc_value  # was .sys.last_traceback for awhile
+
+        print(">>> pdb.pm()", file=sys.stderr)
+        pdb.pm()
+
+        raise
+
+
+def main_try() -> None:
+    """Run from the Shell Command Line"""
 
     argv = sys.argv
 
@@ -119,6 +151,7 @@ def main() -> None:
     ns = parser.parse_args_if(args)  # often prints help & exits zero
 
     shpumps = argv_to_shell_pumps(argv=ns.hints)  # often prints help & exits zero
+    assert shpumps, (shpumps, ns.hints)
 
     alt.stdout = ShellFile()  # adds or replaces
     for index, shpump in enumerate(shpumps):
@@ -128,8 +161,12 @@ def main() -> None:
         alt.stdin = alt.stdout
         alt.stdout = ShellFile()  # adds or replaces
 
+        assert not alt.stdout.filled, (alt.stdout.filled, index)
+
         argv = shpump.argv
         shpump.func(argv)  # two positional args, zero keyword args
+
+        assert alt.stdout.filled, (alt.stdout.filled, index, argv)
 
     alt.stdout.drain_if()
 
@@ -193,6 +230,7 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
 
         shpump = ShellPump()
         shpump.pop_some_hints(["xshverb"], index=0)
+        shpumps.append(shpump)
 
     return shpumps
 
@@ -606,7 +644,7 @@ AWK_DOC = r"""
       a -1  # same deal, but more explicitly
       a 1  # similar deal, but keep only the first Column
       a 1 5 -1  # keep only the 1st, 5th, and last Column
-      echo $PATH |a -F:  # show only the last Dir in the Sh Path
+      echo $PATH |a -F:  # show only the last Dir in the Shell Path
       echo $PATH |a -F: -vOFS=$'\n' 0  # show 1 Dir per Line, as if |tr : '\n'
       echo 'a1 a2\tb1 b2\tc1 c2' |a -F$'\t' -vOFS=$'\t' 3 1  # Tabs in and Tabs out
 
@@ -918,7 +956,7 @@ EMACS_DOC = r"""
 
     quirks:
       tells Emacs to edit the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
-      replaces or creates ./$$-xshverb.pbpaste to edit, and doesn't delete it
+      replaces or creates a ./$$-xshverb.pbpaste File to edit those, but doesn't delete it
 
     examples:
       e  # edits the Os Copy/Paste Buffer
@@ -944,7 +982,7 @@ def do_emacs(argv: list[str]) -> None:
 
     # Call up Emacs inside the Terminal with no Menu Bar and no Splash
 
-    shverb = "/opt/homebrew/bin/emacs"
+    shverb = "emacs" if shutil.which("emacs") else "/opt/homebrew/bin/emacs"
     starts = shlex.split("-nw --no-splash --eval '(menu-bar-mode -1)'")
 
     _do_edit(argv, shverb=shverb, starts=starts)
@@ -2448,7 +2486,7 @@ alt = ShellPipe()
 
 
 #
-# Run from the Sh Command Line, if not imported
+# Run from the Shell Command Line, if not imported
 #
 
 
