@@ -938,7 +938,7 @@ def do_dt(argv: list[str]) -> None:
 
 
 #
-# Call for Emacs
+# Call up Emacs inside the Terminal with no Menu Bar and no Splash
 #
 
 
@@ -960,7 +960,7 @@ EMACS_DOC = r"""
 
     examples:
       e  # edits the Os Copy/Paste Buffer
-      printf 'echo abc' |e |sh  # edit a Shell Command and then run it
+      echo |e |sh  # edit a Shell Command and then run it
 
 """
 
@@ -986,8 +986,6 @@ def do_emacs(argv: list[str]) -> None:
     starts = shlex.split("-nw --no-splash --eval '(menu-bar-mode -1)'")
 
     _do_edit(argv, shverb=shverb, starts=starts)
-
-    # FIXME: spell out /opt/homebrew/bin/emacs only when not found by Py Which
 
 
 def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
@@ -1016,7 +1014,13 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
     shline = " ".join(shlex.quote(_) for _ in shargv)
     eprint("+", shline)
 
-    run = subprocess.run(shargv)
+    with open("/dev/tty", "rb") as notapipe_in:
+        with open("/dev/tty", "wb") as notapipe_out:
+            run = subprocess.run(shargv, stdin=notapipe_in, stdout=notapipe_out)
+
+            # todo: what works better with stdin=None when sys.stdin.isatty() ?
+            # todo: what works better with stdout=None when sys.stdout.isatty() ?
+
     returncode = run.returncode
     if returncode:
         eprint(f"+ exit {returncode}")
@@ -1027,15 +1031,6 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
     if ends:
         obytes = path.read_bytes()  # don't textify after edit
         alt.stdout.write_bytes(obytes)
-
-
-# FIXME
-
-LESS_DOC = EMACS_DOC
-VI_DOC = EMACS_DOC
-
-do_less = do_emacs
-do_vi = do_emacs
 
 
 #
@@ -1385,6 +1380,61 @@ def do_jq(argv: list[str]) -> None:
     assert otext == otext_, (otext, otext_)
 
     alt.stdout.write_text(otext)  # |jq textified by .json.dumps, we trust and verify
+
+
+#
+# Call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen
+#
+
+
+LESS_DOC = r"""
+
+    usage: k [WORD ...]
+
+    call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen
+
+    positional arguments:
+      WORD  a word of command: options and args of Less
+
+    comparable to:
+      less -FIRX
+
+    quirks:
+      tells Less to show the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
+      replaces or creates a ./$$-xshverb.pbpaste File to show those, but doesn't delete it
+      do make people press ⌃R to search for strings as strings, not as regular expressions
+      do make people learn and spell out \< \> to search for whole words
+
+    examples:
+      k  # shows the Os Copy/Paste Buffer
+      seq 123 |k  # shows a Pipe
+
+"""
+
+# todo: FIXME why doesn't 'seq 123 |k' end by showing as much as:  seq 123 |k >k && cat k
+
+
+def do_less(argv: list[str]) -> None:
+    """Call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen"""
+
+    # Form Shell Args Parser
+
+    doc = LESS_DOC
+    word_help = "a word of command: options and args of Less"
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
+
+    # Take up Shell Args
+
+    args = ["--"] + argv[1:]  # quotes them all, to forward onto Emacs unchanged
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen
+
+    shverb = "less"
+    starts = shlex.split("-FIRX")
+
+    _do_edit(argv, shverb=shverb, starts=starts)
 
 
 #
@@ -1821,6 +1871,57 @@ def do_tail(argv: list[str]) -> None:
     olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
     alt.stdout.write_splitlines(olines)
+
+
+#
+# Call up Vi
+#
+
+
+VI_DOC = r"""
+
+    usage: v [WORD ...]
+
+    call up Vi
+
+    positional arguments:
+      WORD  a word of command: options and args of Vi
+
+    comparable to:
+      vi ...
+
+    quirks:
+      tells Vi to edit the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
+      replaces or creates a ./$$-xshverb.pbpaste File to edit those, but doesn't delete it
+
+    examples:
+      v  # edits the Os Copy/Paste Buffer
+      echo |v |sh  # edit a Shell Command and then run it
+
+"""
+
+
+def do_vi(argv: list[str]) -> None:
+    """Call up Emacs inside the Terminal with no Menu Bar and no Splash"""
+
+    # Form Shell Args Parser
+
+    doc = VI_DOC
+    word_help = "a word of command: options and args of Vi"
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
+
+    # Take up Shell Args
+
+    args = ["--"] + argv[1:]  # quotes them all, to forward onto Emacs unchanged
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Call up Emacs inside the Terminal with no Menu Bar and no Splash
+
+    shverb = "vi"
+    starts: list[str] = list()  # aka starts = shlex.split("")
+
+    _do_edit(argv, shverb=shverb, starts=starts)
 
 
 #
@@ -2451,6 +2552,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "t": "tail",
     "u": "counter",
     "v": "vi",
+    "vim": "vi",
     "w": "wcl",
     "x": "xargs",
     "xshverb.py": "xshverb",
@@ -2513,6 +2615,9 @@ if __name__ == "__main__":
 # todo: + d is for **Diff**, but default to '|diff -brpu a b'
 # todo: + f is for **Find**, but default to search $PWD spelled as ""
 # todo: + l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
+
+
+# more test with 1 2 3 etc defined of particular nonsense such as:  seq 123 |sh
 
 
 # todo: |p ascii and |p repr without so many quotes in the output
