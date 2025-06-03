@@ -727,12 +727,14 @@ def do_cat(argv: list[str]) -> None:
             parser.parser.print_usage()
             sys.exit(2)  # exits 2 for bad Arg
 
-    # Read from Stdin Tty at start of Pipe
+    # Read from Stdin Tty into start of Pipe
 
     sys_stdin_isatty = sys.stdin.isatty()
 
     filled_from_tty = False
     if alt.index == 0:
+        assert not alt.stdin.filled, (alt.stdin.filled,)
+
         if not sys_stdin_isatty:
             alt.stdin.fill_from_stdin()
         else:
@@ -743,15 +745,15 @@ def do_cat(argv: list[str]) -> None:
                 + ". Press Return after each Line"
                 + ". Press ⌃D to continue, or ⌃C to quit"
             )
-            alt.stdin.fill_from_stdin()
+            alt.stdin.fill_from_stdin()  # todo: test TTY EOF after Chars without Line-Break
             eprint("")
 
-    # Strip trailing Blanks off each Line
+    # Write the Lines, maybe with enclosing Blanks, but closed
 
     splitlines = alt.stdin.read_splitlines()
     alt.stdout.write_splitlines(splitlines)
 
-    # Write to Stdout Tty at end of Pipe
+    # Drain end of Pipe to Stdout Tty (don't default that to Stdout Pipe or Os Copy/Paste Buffer)
 
     if not filled_from_tty:
         if alt.rindex == -1:
@@ -813,13 +815,13 @@ def do_counter(argv: list[str]) -> None:
     else:
         olines = list(f"{v:6}  {k}" for k, v in counter.items())
 
-        # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
+        # f"{v:6}\t{k}" with \t sometimes troublesome was the classic '|cat -n' format
 
     alt.stdout.write_splitlines(olines)
 
 
 #
-# Drop the Style out of Json Data
+# Do the thing, but show its date/time and pass/fail details
 #
 
 
@@ -830,7 +832,7 @@ DT_DOC = r"""
     do the thing, but show its date/time and pass/fail details
 
     positional arguments:
-      WORD  the words of command: the Shell verb and its options and args to run
+      WORD  a word of command: first the shell verb, and then its options and args
 
     comparable to:
       date && time ...; echo + exit $?
@@ -854,7 +856,7 @@ def do_dt(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = DT_DOC
-    word_help = "the words of command: the Shell verb and its options and args to run"
+    word_help = "a word of command: first the shell verb, and then its options and args"
     parser = AmpedArgumentParser(doc, add_help=False)
     parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
 
@@ -904,7 +906,7 @@ EXPAND_DOC = r"""
 
     usage: expand
 
-    replace troublesome character encodings
+    drop the enclosing Blanks, and replace other troublesome character encodings
 
     comparable to:
       |expand |tr '' ''
@@ -919,7 +921,7 @@ EXPAND_DOC = r"""
 
 
 def do_expand(argv: list[str]) -> None:  # do_expandtabs
-    """# Replace troublesome character encodings"""
+    """Drop the enclosing Blanks, and replace other troublesome character encodings"""
 
     # Form Shell Args Parser
 
@@ -931,19 +933,15 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     parser.parse_args_if(args)  # often prints help & exits zero
 
-    # Replace troublesome character encodings
+    # Drop the enclosing Blanks, and replace other troublesome character encodings
 
     itext = alt.stdin.read_text()
-    iotext = str_expand_plus(itext)
-    olines = iotext.splitlines()
-
-    alt.stdout.write_splitlines(olines)
-
-    # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
+    otext = str_expand_plus(itext)  # replaces troublesome character encodings
+    alt.stdout.write_text(otext)  # textified by .str_expand_plus, we trust
 
 
 def str_expand_plus(text: str) -> str:
-    """# Replace troublesome character encodings"""
+    """Drop the enclosing Blanks, and replace other troublesome character encodings"""
 
     d = {
         "\f": "<hr>",  # U+000C \f
@@ -961,12 +959,15 @@ def str_expand_plus(text: str) -> str:
         unicodedata.lookup("Triple Prime"): "'''",  # U+2034
     }
 
-    iotext = text
-    iotext = iotext.expandtabs(tabsize=8)
+    otext = text
+    otext = otext.expandtabs(tabsize=8)
+    otext = str_textify(otext)  # textified by |expand here
     for k, v in d.items():
-        iotext = iotext.replace(k, v)
+        otext = otext.replace(k, v)
 
-    return iotext
+    return otext
+
+    # todo: |expand of Control Chars
 
     # todo: are we happy leaving « » Angle Quotation Marks in place as U+00AB U+00BB
 
@@ -1131,6 +1132,7 @@ def do_head(argv: list[str]) -> None:
             sys.exit(2)  # exits 2 for bad Arg
 
     # Take only the first few Lines
+    # Write out the taken Lines, maybe with enclosing Blanks, but closed
 
     ilines = alt.stdin.read_splitlines()
     olines = ilines[:-n]
@@ -1176,7 +1178,7 @@ def do_ht(argv: list[str]) -> None:
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     parser.parse_args_if(args)  # often prints help & exits zero
 
-    # Chop output to fit on screen
+    # Write the Lines, maybe with enclosing Blanks, but closed and chopped to fit on screen
 
     ilines = alt.stdin.read_splitlines()
     n = len(ilines)
@@ -1216,6 +1218,8 @@ JQ_DOC = r"""
 
 """
 
+# todo: usage: |jq .
+
 
 def do_jq(argv: list[str]) -> None:
     """Drop the Style out of Json Data"""
@@ -1236,9 +1240,10 @@ def do_jq(argv: list[str]) -> None:
     j = json.loads(itext)
     otext = json.dumps(j, indent=2, ensure_ascii=False) + "\n"
 
-    otext_ = line_break_join_rstrips_plus_if(otext.splitlines())
+    otext_ = str_textify(otext)  # never need textify to |jq
     assert otext == otext_, (otext, otext_)
-    alt.stdout.write_text(otext)
+
+    alt.stdout.write_text(otext)  # |jq textified by .json.dumps, we trust and verify
 
 
 #
@@ -1295,7 +1300,7 @@ def do_nl(argv: list[str]) -> None:
             eprint(f"|nl: {ns.n!r}: could be +0 or +1, but isn't")
             sys.exit(2)  # exits 2 for bad Arg
 
-    # Number the Lines
+    # Number the Lines, and drop the trailing Blanks from each Line
 
     ilines = alt.stdin.read_splitlines()
 
@@ -1341,7 +1346,7 @@ def do_reverse(argv: list[str]) -> None:
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     parser.parse_args_if(args)  # often prints help & exits zero
 
-    # Change the order of Lines
+    # Reverse the order of Lines
 
     ilines = alt.stdin.read_splitlines()
 
@@ -1411,7 +1416,7 @@ def do_set(argv: list[str]) -> None:
 
     alt.stdout.write_splitlines(olines)
 
-    # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
+    # todo: |set of Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
 
 
 #
@@ -1555,11 +1560,11 @@ def do_split(argv: list[str]) -> None:
     itext = alt.stdin.read_text()
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
 
-    alt.stdout.write_splitlines(olines)
+    alt.stdout.write_splitlines(olines)  # may write enclosing Blanks when not split by Blanks
 
 
 #
-# Drop leading and trailing Blanks, or the Chars of some other Set
+# Drop leading and trailing Blanks in each Line, or leading/ trailing Chars of some other Set
 #
 
 
@@ -1567,7 +1572,7 @@ STRIP_DOC = r"""
 
     usage: strip [--charset CHARSET]
 
-    drop leading and trailing Blanks, or the Chars of some other Set
+    drop leading and trailing Blanks in each Line, or leading/ trailing Chars of some other Set
 
     options:
       --charset CHARSET  list the Chars to drop if found, preferably in sorted order
@@ -1583,7 +1588,7 @@ STRIP_DOC = r"""
 
 
 def do_strip(argv: list[str]) -> None:
-    """Drop leading and trailing Blanks, or the Chars of some other Set"""
+    """Drop leading and trailing Blanks in each Line, or leading/ trailing Chars of some other Set"""
 
     # Form Shell Args Parser
 
@@ -1600,7 +1605,7 @@ def do_strip(argv: list[str]) -> None:
 
     charset = None if (ns.charset is None) else ns.charset  # maybe empty
 
-    # Break Lines apart into Words
+    # Drop leading and trailing Blanks in each Line, or leading/ trailing Chars of some other Set
 
     ilines = alt.stdin.read_splitlines()
     olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
@@ -1667,6 +1672,7 @@ def do_tail(argv: list[str]) -> None:
             sys.exit(2)  # exits 2 for bad Arg
 
     # Take only the last few Lines, or take only a chosen Line and what follows
+    # Write out the taken Lines, maybe with enclosing Blanks, but closed
 
     assert n != 0, (n,)
 
@@ -1720,9 +1726,9 @@ def do_wcl(argv: list[str]) -> None:
 
     ilines = alt.stdin.read_splitlines()
     oint = len(ilines)
-    otext = str(oint)
+    otext = str(oint) + "\n"
 
-    alt.stdout.write_text(otext)
+    alt.stdout.write_text(otext)  # |wcl textified by construction
 
 
 #
@@ -1769,11 +1775,12 @@ def do_xargs(argv: list[str]) -> None:
     # Join the Lines into a single Line
 
     ilines = alt.stdin.read_splitlines()
-    otext = sep.join(ilines) + "\n"  # deletes Line-Break's when Sep is empty
+    oline = sep.join(ilines)  # deletes Line-Break's when Sep is empty
+    olines = [oline]
 
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
-    # can end Lines with Blanks when given Blanks in Sep
+    # |xargs can start or end its 1 Output Line with Blanks when Sep is Blank
 
 
 #
@@ -1790,14 +1797,14 @@ positional arguments:
   HINT  hint of which Shell Pipe Filter you mean
 
 quirks:
-  defaults to decode the Bytes as UTF-8, replacing decoding errors with U+003F '?' Question-Mark's
+  defaults to decode the Bytes as UTF-8, replacing decoding Errors with U+003F '?' Question-Mark's
   defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
   more help at:  xshverb.py --help
 
 examples:
   pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
   pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
-  pq v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vim to edit it
+  pq v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vi to edit it
   echo $'\xC0\x80' |pq |sort  # doesn't deny service to shout up "illegal byte sequence"
 """
 
@@ -1827,27 +1834,19 @@ def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
         eprint(f"|pq: {ns.hints!r}: no such Shell Pipe Filters yet")
         sys.exit(2)  # exits 2 for bad Args
 
-    # Dedents and strip the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
-
-    assert unicodedata.lookup("Replacement Character") == "\ufffd"
+    # Dedent and strip
 
     ibytes = alt.stdin.read_bytes()
-    decode = ibytes.decode(errors="replace")  # not errors="surrogateescape"
-    itext = decode.replace("\ufffd", "?")
-
-    dedent = textwrap.dedent(itext)
-    strip = dedent.strip()
-    olines = strip.splitlines()
-    otext = line_break_join_rstrips_plus_if(olines)
-
-    alt.stdout.write_splitlines(olines)
+    obytes = bytes_textify(ibytes)  # textified by |pq here
+    alt.stdout.write_bytes(obytes)
 
     # Say what the most plain Undirected Pq without Args means
 
+    otext = obytes.decode()
     if (alt.index == 0) and (alt.rindex == -1):
         if alt.sys_stdin_isatty and alt.sys_stdout_isatty:
 
-            # Dedent & strip & replace, first to Tty, and then to Pipe
+            # Write a copy to Tty without draining .alt.stdout
 
             sys.stdout.write(otext)
 
@@ -2077,18 +2076,69 @@ def argv_parse_if(parser: AmpedArgumentParser, argv: list[str]) -> argparse.Name
 
 
 #
+# Amp up Import BuiltsIns Bytes
+#
+
+
+def bytes_textify(bytes_: bytes) -> bytes:
+    """Keep the Text, but replace the Errors with '?' and drop the enclosing Blanks"""
+
+    # Convert to Str from Byte
+
+    assert unicodedata.lookup("Replacement Character") == "\ufffd"
+
+    decode = bytes_.decode(errors="replace")  # not errors="surrogateescape"
+    text = decode.replace("\ufffd", "?")  # U+003F Question-Mark
+
+    # Textify Str
+
+    dedent = textwrap.dedent(text)
+    strip = dedent.strip()
+    splitlines = strip.splitlines()
+
+    rstrips = list(_.rstrip() for _ in splitlines)
+    join = "\n".join(rstrips)
+
+    join_plus = (join + "\n") if join else ""
+
+    # Convert to Byte from Str
+
+    encode = join_plus.encode()  # doesn't raise UnicodeEncodeError
+
+    return encode
+
+    # doesn't start with Blank Columns, doesn't end any Line with Blank Chars
+    # doesn't start with Empty Lines, doesn't end with Empty Lines
+    # does end with "\n" when not empty
+
+    # doesn't raise UnicodeDecodeError, when decoded as UTF-8
+
+    # todo: .func vs Control Chars, and when to deal with just Ascii
+
+
+#
 # Amp up Import BuiltsIns Str
 #
 
 
-def line_break_join_rstrips_plus_if(lines: list[str]) -> str:
-    """Convert Lines to Chars but strip trailing Blanks off each Line"""
+def str_textify(text: str) -> str:
+    """Keep the Text, but drop the enclosing Blanks"""
 
-    rstrips = list(_.rstrip() for _ in lines)
+    dedent = textwrap.dedent(text)
+    strip = dedent.strip()
+    splitlines = strip.splitlines()
+
+    rstrips = list(_.rstrip() for _ in splitlines)
     join = "\n".join(rstrips)
-    plus_if = (join + "\n") if join else ""
 
-    return plus_if  # maybe empty  # maybe starts with or ends with Empty Lines
+    join_plus = (join + "\n") if join else ""
+
+    return join_plus
+
+    # todo: Who doesn't pipe text? Dt
+    # todo: Who calls to textify? Pq, Expand, and the editors: Emacs, Less, Vi
+    # todo: Who never needs to textify? Jq, Wcl
+    # todo: Who doesn't guarantee a closing Line-Break? Nobody?
 
 
 #
@@ -2279,6 +2329,8 @@ _SORTED_VBS_ = sorted(VERB_BY_VB.keys())
 _DIFF_VBS_ = list(difflib.unified_diff(a=_VBS_, b=_SORTED_VBS_, lineterm=""))
 assert not _DIFF_VBS_, (_DIFF_VBS_,)
 
+# todo: move these paragraphs of Code into a better place
+
 
 alt = ShellPipe()
 
@@ -2290,6 +2342,9 @@ alt = ShellPipe()
 
 if __name__ == "__main__":
     main()
+
+
+# todo: |grep -n
 
 
 # todo: pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
