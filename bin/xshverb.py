@@ -68,11 +68,14 @@ import pdb
 import re
 import shlex
 import shutil
+import socket
+import string
 import subprocess
 import sys
 import textwrap
 import traceback
 import unicodedata
+import urllib.parse
 import zoneinfo  # new since Oct/2020 Python 3.9
 
 
@@ -321,7 +324,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
             # Accept an Identifier as the Shell Verb
 
             if not argv:
-                if hint.isidentifier():
+                if str_is_identifier_ish(hint):
                     assert len(words) == 1, (len(words), words, hint)
 
                 # Accept a Shell-Quote'd Verb with its baggage of Options and Args
@@ -329,7 +332,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
                 elif len(words) > 1:
                     splits = shlex.split(hint)
                     assert splits, (splits, hint)
-                    if splits[0].isidentifier():
+                    if str_is_identifier_ish(splits[0]):
                         argv = splits
                         break
 
@@ -356,7 +359,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
             if hints:
                 next_hint = hints[0]
 
-                if next_hint.isidentifier():  # not any '-' or '--' option, nor '(.)' etc etc
+                if str_is_identifier_ish(next_hint):  # not any '-' or '--' option, nor '(.)' etc etc
                     break
 
         return argv
@@ -409,6 +412,16 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
         version = pathlib_path_read_version(__file__)
         print(YYYY_MM_DD, version)
+
+
+def str_is_identifier_ish(text: str) -> bool:
+    """Guess when a Str is an Identifier, or close enough"""
+
+    if text == ".":
+        return True
+
+    isidentifier = text.isidentifier()
+    return isidentifier
 
 
 @dataclasses.dataclass  # (order=False, frozen=False)
@@ -745,9 +758,9 @@ CAT_DOC = """
 def do_cat(argv: list[str]) -> None:
     """Read with prompt from the Terminal, or write to the Terminal"""
 
-    # Form Shell Args Parser
-
     assert argparse.OPTIONAL == "?"
+
+    # Form Shell Args Parser
 
     doc = CAT_DOC
     ifile_help = "explicitly mention the Terminal, in place of a Pathname"
@@ -859,6 +872,346 @@ def do_counter(argv: list[str]) -> None:
 
 
 #
+# Search out Code to match the Text and run the Code to tweak the Text
+#
+
+
+DOT_DOC = r"""
+usage: pq [HINT]
+
+search out Code to match the Text and run the Code to tweak the Text
+
+positional arguments:
+  HINT  one of codereviews|google|jenkins|jira|wiki, else toggle address|title, else fail
+
+quirks:
+  takes '.' as Hint to mean whatever one Hint works
+  
+conversions:
+  to http://codereviews/r/123456/diff of ReviewBoard
+    from https://codereviews.example.com/r/123456/diff/8/#index_header
+  to https://docs.google.com/document/d/$HASH
+    from https://docs.google.com/document/d/$HASH/edit?usp=sharing
+    from https://docs.google.com/document/d/$HASH/edit#gid=0'
+  to https://wiki.example.com/pages/viewpage.action?pageId=12345
+    from https://wiki.example.com/pages/viewpreviousversions.action?pageId=12345
+
+toggles:
+  between http://AbcJenkins
+    and https://abcjenkins.dev.example.com
+  between PROJ-12345
+    and https://jira.example.com/browse/PROJ-12345
+  between https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
+    and https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+
+examples:
+  pq .
+  pq dot chill
+"""
+
+
+def do_dot(argv: list[str]) -> None:
+    """Search out Code to match the Text and run the Code to tweak the Text"""
+
+    assert argparse.OPTIONAL == "?"
+
+    # Form Shell Args Parser
+
+    doc = DOT_DOC
+    hint_help = "one of codereviews|google|jenkins|jira|wiki, else toggle address|title, else fail"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    # parser.add_argument(arg="HINT", nargs="?", help=hint_help)  # FIXME
+    parser.add_argument("hint", metavar="HINT", nargs="?", help=hint_help)
+
+    # Name the bits of Code near here
+
+    func_by_hint = dict(
+        address=dot_address,
+        codereviews=dot_codereviews,
+        google=dot_google,
+        jenkins=dot_jenkins,
+        jira=dot_jira,
+        title=dot_title,
+        wiki=dot_wiki,
+    )
+
+    func_hints = list(func_by_hint.keys())
+
+    wave1 = ["codereviews", "google", "jenkins", "jira", "wiki"]
+    wave2 = ["address", "title"]
+    waves = [wave1, wave2]
+
+    waves_hints = sorted(set(_ for wave in waves for _ in wave))
+    assert func_hints == waves_hints, (func_hints, waves_hints)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    if ns.hint is not None:
+        if ns.hint not in func_hints:
+            parser.parser.print_usage()
+            eprint(f"|pq dot {ns.hint!r}: no such Shell Pipe Dot Filter yet")
+            sys.exit(2)  # exits 2 for bad Args
+
+    # Search for Code to match the Text
+
+    splitlines = alt.stdin.read_splitlines()
+
+    n = len(splitlines)
+    if n != 1:
+        eprint(f"|pq dot: our Codes need 1 Line of Text, got {n}")
+        sys.exit(1)  # exits 1 for bad Data
+
+    iline = splitlines[0]
+
+    oline = ""
+    ohints = list()
+    for wave in waves:
+        for hint in wave:
+            if (ns.hint is None) or (ns.hint == hint):
+                func = func_by_hint[hint]
+
+                try:
+                    hint_oline = func(iline)
+                except Exception:
+                    hint_oline = ""
+
+                if hint_oline:
+                    ohints.append(hint)
+                    oline = hint_oline  # replaces
+
+        if ohints:
+            break
+
+    ohints.sort()
+
+    # Require exactly one Code found
+
+    if not ohints:
+        if ns.hint is not None:
+            eprint(f"|pq dot {ns.hint!r}: doesn't fit {iline!r}")
+            sys.exit(1)  # exits 1 for no Code found by bad Data
+        else:
+            eprint(f"|pq dot: none of our Codes fits {iline!r}")
+            sys.exit(1)  # exits 1 for no Code found by bad Data
+
+    if len(ohints) > 1:
+        eprint(f"|pq dot: data fits multiple Codes {ohints!r}")
+        sys.exit(1)  # exits 1 for multiple Codes found by bad Data
+
+    # Succeed
+
+    alt.stdout.write_splitlines([oline])
+
+
+def dot_address(text: str) -> str:
+    """Drop Spaces to heat up a chilled Web Address Title"""
+
+    assert " " in text, (text,)
+
+    replace = text.replace(" ", "")
+    return replace
+
+    # to https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+    # from https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
+
+
+def dot_codereviews(text: str) -> str:
+    """Mention the Diff enclosing a more detailed Web Address"""
+
+    assert re.match(r"http.*codereviews[./]", string=text)
+
+    urlsplits = urllib.parse.urlsplit(text)
+    m = re.match(r"^/r/([0-9]+)", string=urlsplits.path)  # discards end of path
+    assert m, (m, urlsplits.path)
+
+    r = int(m.group(1))
+
+    osplits = urllib.parse.SplitResult(
+        scheme="http",  # not "https"
+        netloc=urlsplits.netloc.split(".")[0],  # "codereviews"
+        path=f"/r/{r}/diff",
+        query="",
+        fragment="",
+    )
+
+    geturl = osplits.geturl()
+    return geturl
+
+    # to http://codereviews/r/123456/diff
+    # from https://codereviews.example.com/r/123456/diff/8/#index_header
+
+
+def dot_google(text: str) -> str:
+    """More simply mention the Google Drive File involved in a detailed Web Address"""
+
+    assert re.match(r"http.*[.]google.com/", string=text)
+    assert ("/edit" in text) or ("/view" in text)
+
+    urlsplits = urllib.parse.urlsplit(text)
+
+    opath = urlsplits.path
+    opath = opath.removesuffix("/edit")
+    opath = opath.removesuffix("/view")
+
+    osplits = urllib.parse.SplitResult(
+        scheme=urlsplits.scheme,
+        netloc=urlsplits.netloc,
+        path=opath,
+        query="",
+        fragment="",
+    )
+
+    geturl = osplits.geturl()
+    return geturl
+
+    # to https://docs.google.com/document/d/$HASH
+    # from https://docs.google.com/document/d/$HASH/edit?usp=sharing
+    # from https://docs.google.com/document/d/$HASH/edit#gid=0'
+
+
+def dot_jenkins(text: str) -> str:
+    """Toggle between the Jenkins Title and the Jenkins Web Address"""
+
+    m1 = re.match(r"^http.*jenkins[0-9]*[.]", string=text)
+    m2 = re.search(r"[jJ]enkins[0-9]*/", string=text)
+    assert m1 or m2, (m1, m2)
+
+    if m1:
+        return dot_jenkins_thin(text)
+
+    return dot_jenkins_wide(text)
+
+
+def dot_jenkins_thin(text: str) -> str:
+    """Convert to the more brief Http Jenkins Web Address from the detailed HttpS"""
+
+    urlsplits = urllib.parse.urlsplit(text)
+    urlsplits = urlsplits._replace(scheme="http")
+    urlsplits = urlsplits._replace(path=urlsplits.path.rstrip("/") + "/")
+
+    netloc = urlsplits.netloc.split(".")[0]
+    netloc = string.capwords(netloc).replace("jenkins", "Jenkins")
+    urlsplits = urlsplits._replace(netloc=netloc)
+
+    geturl = urlsplits.geturl()
+    return geturl
+
+    # to http://AbcJenkins
+    # from https://abcjenkins.dev.example.com
+
+    # todo: prefer str.title over string.capwords, maybe
+
+
+def dot_jenkins_wide(text: str) -> str:
+    """Convert to the more precise HttpS Jenkins Web Address from the Http"""
+
+    fqdn = socket.getfqdn()
+    dn = fqdn.partition(".")[-1]  # 'Domain Name of HostName'
+    dn = dn or "example.com"
+
+    urlsplits = urllib.parse.urlsplit(text)
+    urlsplits = urlsplits._replace(scheme="https")
+    urlsplits = urlsplits._replace(path=urlsplits.path.rstrip("/"))
+
+    urlsplits = urlsplits._replace(netloc=f"{urlsplits.netloc.casefold()}.dev.{dn}")
+
+    geturl = urlsplits.geturl()
+    return geturl
+
+
+def dot_jira(text: str) -> str:
+    """Toggle between the Jira Title and the Jira Web Address"""
+
+    m1 = re.match(r"^http.*jira.*/browse/.*$", string=text)
+    m2 = re.match(r"^[A-Z]+[-][0-9]+$", string=text)
+    assert m1 or m2, (m1, m2)
+
+    if m1:
+        return dot_jira_title(text)
+
+    return dot_jira_address(text)
+
+
+def dot_jira_address(text: str) -> str:
+    """Convert to the Jira Web Address from the Jira Key"""
+
+    fqdn = socket.getfqdn()
+    dn = fqdn.partition(".")[-1]  # 'Domain Name of HostName'
+    dn = dn or "example.com"
+
+    _ = urllib.parse.urlsplit(text)
+
+    osplits = urllib.parse.SplitResult(
+        scheme="https",
+        netloc=f"jira.{dn}",
+        path=f"/browse/{text}",
+        query="",
+        fragment="",
+    )
+
+    geturl = osplits.geturl()
+    return geturl
+
+    # to https://jira.example.com/browse/PROJ-12345
+    # from PROJ-12345
+
+
+def dot_jira_title(text: str) -> str:
+    """Convert to the Jira Key from the Jira Web Address"""
+
+    urlsplits = urllib.parse.urlsplit(text)
+    path = urlsplits.path
+
+    assert path.startswith("/browse/"), (path,)
+    jira_key = path.removeprefix("/browse/")
+
+    return jira_key
+
+    # to PROJ-12345
+    # from https://jira.example.com/browse/PROJ-12345
+
+
+def dot_title(text: str) -> str:
+    """Insert Spaces to chill a hot-link'able Web Address HRef"""
+
+    assert text.startswith("http"), (text,)  # 'https', 'http', etc
+    assert " " not in text, (text,)
+
+    address = text
+    address = address.replace("/x.com/", "/twitter.com/")
+
+    splits = address.split("/")
+    assert splits[1] == "", (splits[1], splits, address)
+    chilled = (
+        splits[0].removesuffix(":")
+        + " :// "
+        + splits[2].replace(".", " . ")
+        + " /"
+        + "/".join(splits[3:])
+    )
+
+    return chilled
+
+    # to https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
+    # from https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+
+
+def dot_wiki(text: str) -> str:
+    """Mention the Page by Id of a Page-History Web-Address"""
+
+    urlsplits = urllib.parse.urlsplit(text)
+    assert urlsplits.path == "/pages/viewpreviousversions.action"
+    osplits = urlsplits._replace(path="/pages/viewpage.action")
+
+    geturl = osplits.geturl()
+    return geturl
+
+
+#
 # Do the thing, but show its date/time and pass/fail details
 #
 
@@ -890,6 +1243,8 @@ DT_DOC = r"""
 
 def do_dt(argv: list[str]) -> None:
     """Do the thing, but show its date/time and pass/fail details"""
+
+    assert argparse.ZERO_OR_MORE == "*"
 
     # Form Shell Args Parser
 
@@ -967,6 +1322,8 @@ EMACS_DOC = r"""
 
 def do_emacs(argv: list[str]) -> None:
     """Call up Emacs inside the Terminal with no Menu Bar and no Splash"""
+
+    assert argparse.ZERO_OR_MORE == "*"
 
     # Form Shell Args Parser
 
@@ -1143,6 +1500,8 @@ GREP_DOC = r"""
 
 def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
     """Take Lines that match a Pattern, drop the rest"""
+
+    assert argparse.ZERO_OR_MORE == "*"
 
     # Form Shell Args Parser
 
@@ -1416,6 +1775,8 @@ LESS_DOC = r"""
 
 def do_less(argv: list[str]) -> None:
     """Call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen"""
+
+    assert argparse.ZERO_OR_MORE == "*"
 
     # Form Shell Args Parser
 
@@ -1904,6 +2265,8 @@ VI_DOC = r"""
 def do_vi(argv: list[str]) -> None:
     """Call up Emacs inside the Terminal with no Menu Bar and no Splash"""
 
+    assert argparse.ZERO_OR_MORE == "*"
+
     # Form Shell Args Parser
 
     doc = VI_DOC
@@ -2057,6 +2420,8 @@ XSHVERB_DOC = PQ_DOC
 
 def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
     """Mess about inside the Os/Copy Paste Buffer"""
+
+    assert argparse.ZERO_OR_MORE == "*"
 
     # Form Shell Args Parser
 
@@ -2380,7 +2745,12 @@ def str_textify(text: str) -> str:
     # todo: Who doesn't pipe text? Dt
     # todo: Who calls to textify? Pq, Expand, and the editors: Emacs, Less, Vi
     # todo: Who never needs to textify? Jq, Wcl
-    # todo: Who doesn't guarantee a closing Line-Break? Nobody?
+    # todo: Who doesn't guarantee a closing Line-Break? The editors after the edit (Emacs, Vi)
+
+    # todo: Who haven't we put into a group here yet?
+    #
+    #   Awk, Cat, Counter, Grep, Head, Ht, Nl, Reverse, Set Sort, Strip, Tail, XArgs
+    #
 
 
 #
@@ -2479,6 +2849,7 @@ DOC_BY_VERB = dict(
     awk=AWK_DOC,
     cat=CAT_DOC,
     counter=COUNTER_DOC,
+    dot=DOT_DOC,
     dt=DT_DOC,
     emacs=EMACS_DOC,
     expand=EXPAND_DOC,
@@ -2510,6 +2881,7 @@ FUNC_BY_VERB = dict(
     awk=do_awk,
     cat=do_cat,
     counter=do_counter,
+    dot=do_dot,
     dt=do_dt,
     emacs=do_emacs,
     expand=do_expand,
@@ -2533,6 +2905,7 @@ FUNC_BY_VERB = dict(
 
 
 VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
+    ".": "dot",
     "a": "awk",
     "c": "cat",
     "dict": "counter",
@@ -2596,10 +2969,10 @@ if __name__ == "__main__":
     main()
 
 
+# todo: bug: no regex choosing @ cat bin/xshverb.py |g '(def.do_)'  a 2  c
+
+
 # todo: |grep -n
-
-
-# todo: pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
 
 
 # todo: + |y is to show what's up and halt till you say move on
