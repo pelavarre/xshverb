@@ -896,9 +896,112 @@ def do_dt(argv: list[str]) -> None:
 
     sys.exit(returncode)
 
+    # todo: test |dt when not placed as a Gateway Shell Verb at the far left
+
 
 #
-# Replace troublesome character encodings
+# Call for Emacs
+#
+
+
+EMACS_DOC = r"""
+
+    usage: e [WORD ...]
+
+    call up Emacs inside the Terminal with no Menu Bar and no Splash
+
+    positional arguments:
+      WORD  a word of command: options and args of Emacs
+
+    comparable to:
+      emacs -nw --no-splash --eval '(menu-bar-mode -1)' ...
+
+    quirks:
+      tells Emacs to edit the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
+      replaces or creates ./$$-xshverb.pbpaste to edit, and doesn't delete it
+
+    examples:
+      e  # edits the Os Copy/Paste Buffer
+      printf 'echo abc' |e |sh  # edit a Shell Command and then run it
+
+"""
+
+
+def do_emacs(argv: list[str]) -> None:
+    """Call up Emacs inside the Terminal with no Menu Bar and no Splash"""
+
+    # Form Shell Args Parser
+
+    doc = EMACS_DOC
+    word_help = "a word of command: options and args of Emacs"
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
+
+    # Take up Shell Args
+
+    args = ["--"] + argv[1:]  # quotes them all, to forward onto Emacs unchanged
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Call up Emacs inside the Terminal with no Menu Bar and no Splash
+
+    shverb = "/opt/homebrew/bin/emacs"
+    starts = shlex.split("-nw --no-splash --eval '(menu-bar-mode -1)'")
+
+    _do_edit(argv, shverb=shverb, starts=starts)
+
+    # FIXME: spell out /opt/homebrew/bin/emacs only when not found by Py Which
+
+
+def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
+    """Call up a Text Editor for Pos Args, else to edit the Shell Pipe or Os Copy/Paste Buffer"""
+
+    argv_tails = argv[1:]
+
+    # Read input
+
+    pid = os.getpid()
+    pathname = f"{pid}-xshverb.pbpaste"
+    path = pathlib.Path(pathname)
+
+    ends = list()
+    if (not argv_tails) or all(_.startswith("-") for _ in argv_tails):
+
+        ibytes = alt.stdin.read_bytes()
+        textify = bytes_textify(ibytes)  # do textify before edit
+        path.write_bytes(textify)
+
+        ends = [pathname]
+
+    # Trace and do work
+
+    shargv = [shverb] + starts + argv[1:] + ends
+    shline = " ".join(shlex.quote(_) for _ in shargv)
+    eprint("+", shline)
+
+    run = subprocess.run(shargv)
+    returncode = run.returncode
+    if returncode:
+        eprint(f"+ exit {returncode}")
+        sys.exit(returncode)
+
+    # Write output
+
+    if ends:
+        obytes = path.read_bytes()  # don't textify after edit
+        alt.stdout.write_bytes(obytes)
+
+
+# FIXME
+
+LESS_DOC = EMACS_DOC
+VI_DOC = EMACS_DOC
+
+do_less = do_emacs
+do_vi = do_emacs
+
+
+#
+# Drop the enclosing Blanks, and replace other troublesome character encodings
 #
 
 
@@ -2238,11 +2341,13 @@ DOC_BY_VERB = dict(
     cat=CAT_DOC,
     counter=COUNTER_DOC,
     dt=DT_DOC,
+    emacs=EMACS_DOC,
     expand=EXPAND_DOC,
     grep=GREP_DOC,
     head=HEAD_DOC,
     ht=HT_DOC,
     jq=JQ_DOC,
+    less=LESS_DOC,
     nl=NL_DOC,
     reverse=REVERSE_DOC,
     set=SET_DOC,
@@ -2250,6 +2355,7 @@ DOC_BY_VERB = dict(
     split=SPLIT_DOC,
     strip=STRIP_DOC,
     tail=TAIL_DOC,
+    vi=VI_DOC,
     wcl=WCL_DOC,
     xargs=XARGS_DOC,
     xshverb=XSHVERB_DOC,
@@ -2266,11 +2372,13 @@ FUNC_BY_VERB = dict(
     cat=do_cat,
     counter=do_counter,
     dt=do_dt,
+    emacs=do_emacs,
     expand=do_expand,
     grep=do_grep,
     head=do_head,
     ht=do_ht,
     jq=do_jq,
+    less=do_less,
     nl=do_nl,
     reverse=do_reverse,
     set=do_set,
@@ -2278,6 +2386,7 @@ FUNC_BY_VERB = dict(
     split=do_split,
     strip=do_strip,
     tail=do_tail,
+    vi=do_vi,
     wcl=do_wcl,
     xargs=do_xargs,
     xshverb=do_xshverb,
@@ -2288,10 +2397,12 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "a": "awk",
     "c": "cat",
     "dict": "counter",
+    "e": "emacs",
     "g": "grep",
     "h": "head",
     "i": "split",
     "j": "jq",
+    "k": "less",
     "len": "wcl",
     "n": "nl",
     "o": "strip",
@@ -2301,6 +2412,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "s": "sort",
     "t": "tail",
     "u": "counter",
+    "v": "vi",
     "w": "wcl",
     "x": "xargs",
     "xshverb.py": "xshverb",
