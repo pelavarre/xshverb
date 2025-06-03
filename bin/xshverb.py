@@ -386,11 +386,8 @@ class ShellFile:
     # Pump Bytes in
     #
 
-    def readlines(self, hint: int = -1) -> list[str]:
+    def read_splitlines(self) -> list[str]:
         """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
-
-        if hint != -1:  # .hint limits the count of Lines read in
-            raise NotImplementedError(str((hint,)))
 
         self.fill_if()
 
@@ -399,6 +396,9 @@ class ShellFile:
         splitlines = decode.splitlines()
 
         return splitlines
+
+        # standard .read_splitlines sends back a Line-Break as the end of most Lines
+        # standard .read_splitlines stops reading after Hint
 
     def read_text(self) -> str:
         """Read Chars from Stdin, else from Os Copy/Paste Buffer, at most once"""
@@ -409,6 +409,8 @@ class ShellFile:
 
         return decode
 
+        # maybe empty  # maybe enclosed in Blanks
+
     def read_bytes(self) -> bytes:
         """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
 
@@ -417,18 +419,21 @@ class ShellFile:
 
         return iobytes
 
+        # maybe empty  # maybe enclosed in Blanks
+
     def fill_if(self) -> None:
         """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
 
+        drained = self.drained
         filled = self.filled
+
+        assert not drained, (drained,)
         if filled:
             return
 
         if not sys.stdin.isatty():
             self.fill_from_stdin()
         else:
-
-            # eprint("fill_from_pbpaste")
 
             self.filled = True
 
@@ -445,7 +450,10 @@ class ShellFile:
     def fill_from_stdin(self) -> None:
         """Read Bytes from Stdin"""
 
-        # eprint("fill_from_stdin")
+        drained = self.drained
+        filled = self.filled
+        assert not drained, (drained,)
+        assert not filled, (filled,)
 
         self.filled = True
 
@@ -457,17 +465,55 @@ class ShellFile:
     # Pump Bytes out
     #
 
-    def write_text(self, text: str) -> int:
-        """Write Chars into Bytes, but don't drain yet"""
+    def write_splitlines(self, texts: list[str]) -> None:
+        """Write Lines into Bytes, and do close the last Line, but don't drain the Bytes yet"""
+
+        drained = self.drained
+        filled = self.filled
+        assert not drained, (drained,)
+        assert not filled, (filled,)
+
+        join = "\n".join(texts)
+        join_plus = (join + "\n") if join else ""
 
         self.filled = True
 
-        count = len(text)  # counts Decoded Chars, not Encoded Bytes
+        encode = join_plus.encode(errors="surrogateescape")
+        self.iobytes = encode  # replaces
+
+    def write_text(self, text: str) -> None:
+        """Write Chars into Bytes, and don't drain them yet"""
+
+        drained = self.drained
+        filled = self.filled
+        assert not drained, (drained,)
+        assert not filled, (filled,)
+
+        self.filled = True
+
         encode = text.encode(errors="surrogateescape")
         self.iobytes = encode  # replaces
 
-        return count
+        # may write zero Chars  # may write Chars enclosed in Blanks
 
+        # standard .write sends back a count of Chars written
+        # standard .writelines adds no Line-Break's to end the Lines
+
+    def write_bytes(self, data: bytes) -> None:
+        """Write Chars into Bytes, and don't drain them yet"""
+
+        drained = self.drained
+        filled = self.filled
+        assert not drained, (drained,)
+        assert not filled, (filled,)
+
+        self.filled = True
+
+        self.iobytes = data  # replaces
+
+        # may write zero Bytes  # may write enclosed in Blanks  # might not end with Line-Break
+
+        # standard .write forces the Def to count the Chars
         # standard .writelines forces the Caller to choose each Line-Break
 
     def drain_if(self) -> None:
@@ -476,14 +522,15 @@ class ShellFile:
         iobytes = self.iobytes
 
         drained = self.drained
+        filled = self.filled
+        assert filled, (filled,)
+
         if drained:
             return
 
         if not sys.stdout.isatty():
             self.drain_to_stdout()
         else:
-
-            # eprint("drain_to_pbcopy")
 
             self.drained = True
 
@@ -494,7 +541,10 @@ class ShellFile:
     def drain_to_stdout(self) -> None:
         """Write Bytes to Sydout"""
 
-        # eprint("drain_to_stdout")
+        drained = self.drained
+        filled = self.filled
+        assert not drained, (drained,)
+        assert filled, (filled,)
 
         iobytes = self.iobytes
         self.drained = True
@@ -597,7 +647,7 @@ def do_awk(argv: list[str]) -> None:
     # Pick one or more Columns of Words, and drop the rest
 
     olines = list()
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
 
     for iline in ilines:
         iwords = iline.split() if (isep is None) else iline.split(isep)
@@ -622,8 +672,7 @@ def do_awk(argv: list[str]) -> None:
         ojoin = osep.join(owords)
         olines.append(ojoin)
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -699,9 +748,8 @@ def do_cat(argv: list[str]) -> None:
 
     # Strip trailing Blanks off each Line
 
-    ilines = alt.stdin.readlines()
-    otext = line_break_join_rstrips_plus_if(ilines)
-    alt.stdout.write_text(otext)
+    splitlines = alt.stdin.read_splitlines()
+    alt.stdout.write_splitlines(splitlines)
 
     # Write to Stdout Tty at end of Pipe
 
@@ -757,7 +805,7 @@ def do_counter(argv: list[str]) -> None:
 
     # Count or drop duplicate Lines, no sort required
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     counter = collections.Counter(ilines)
 
     if ns.keys:
@@ -767,8 +815,7 @@ def do_counter(argv: list[str]) -> None:
 
         # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -890,8 +937,7 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
     iotext = str_expand_plus(itext)
     olines = iotext.splitlines()
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
     # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
 
@@ -998,7 +1044,7 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
 
     # Take Lines that match a Pattern, drop the rest
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
 
     olines = list()
     for iline in ilines:
@@ -1022,8 +1068,7 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
 
         # todo: multiline patterns
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
     # todo: |grep -n
 
@@ -1087,11 +1132,10 @@ def do_head(argv: list[str]) -> None:
 
     # Take only the first few Lines
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     olines = ilines[:-n]
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1134,17 +1178,15 @@ def do_ht(argv: list[str]) -> None:
 
     # Chop output to fit on screen
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     n = len(ilines)
 
     if n < (3 + 3 + 2):
-        otext = line_break_join_rstrips_plus_if(ilines)
-        alt.stdout.write_text(otext)
-        return
+        olines = list(ilines)  # 'copied is better than aliased'
+    else:
+        olines = ilines[:3] + ["...", f"... 3+2 of {n} Lines shown ...", "..."] + ilines[-2:]
 
-    olines = ilines[:3] + ["...", f"... 3+2 of {n} Lines shown ...", "..."] + ilines[-2:]
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
     # todo: |ht [-B=BEFORE] [-A=AFTER] [-C=BOTH] for more/less above/below
     # todo: |ht when the Output is too wide
@@ -1194,10 +1236,8 @@ def do_jq(argv: list[str]) -> None:
     j = json.loads(itext)
     otext = json.dumps(j, indent=2, ensure_ascii=False) + "\n"
 
-    olines = otext.splitlines()
-    otext_ = line_break_join_rstrips_plus_if(olines)
+    otext_ = line_break_join_rstrips_plus_if(otext.splitlines())
     assert otext == otext_, (otext, otext_)
-
     alt.stdout.write_text(otext)
 
 
@@ -1257,15 +1297,14 @@ def do_nl(argv: list[str]) -> None:
 
     # Number the Lines
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
 
     olines = list()
     for n_plus_index, iline in enumerate(ilines, start=n):
         oline = f"{n_plus_index:6}  {iline}"
         olines.append(oline)
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1304,13 +1343,12 @@ def do_reverse(argv: list[str]) -> None:
 
     # Change the order of Lines
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
 
     olines = list(ilines)  # todo: aka:  olines = list(reversed(ilines))
     olines.reverse()
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1371,8 +1409,7 @@ def do_set(argv: list[str]) -> None:
     oline = ohead + otail
     olines = [oline]
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
     # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
 
@@ -1456,7 +1493,7 @@ def do_sort(argv: list[str]) -> None:
 
     # Change the order of Lines
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
 
     if not numeric:
         olines = sorted(ilines)
@@ -1466,8 +1503,7 @@ def do_sort(argv: list[str]) -> None:
     if descending:
         olines.reverse()
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1519,8 +1555,7 @@ def do_split(argv: list[str]) -> None:
     itext = alt.stdin.read_text()
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1567,11 +1602,10 @@ def do_strip(argv: list[str]) -> None:
 
     # Break Lines apart into Words
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1636,11 +1670,10 @@ def do_tail(argv: list[str]) -> None:
 
     assert n != 0, (n,)
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1685,7 +1718,7 @@ def do_wcl(argv: list[str]) -> None:
 
     # Count the Lines
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     oint = len(ilines)
     otext = str(oint)
 
@@ -1735,7 +1768,7 @@ def do_xargs(argv: list[str]) -> None:
 
     # Join the Lines into a single Line
 
-    ilines = alt.stdin.readlines()
+    ilines = alt.stdin.read_splitlines()
     otext = sep.join(ilines) + "\n"  # deletes Line-Break's when Sep is empty
 
     alt.stdout.write_text(otext)
@@ -1805,9 +1838,9 @@ def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
     dedent = textwrap.dedent(itext)
     strip = dedent.strip()
     olines = strip.splitlines()
-
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write_text(otext)
+
+    alt.stdout.write_splitlines(olines)
 
     # Say what the most plain Undirected Pq without Args means
 
