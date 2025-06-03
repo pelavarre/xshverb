@@ -202,7 +202,7 @@ but with their defaults and options rethought and corrected to fit our new centu
 + |s is for **Sort**, but default to classic LC_ALL=C, same as last century
 + |t is for **Tail**, but update the classic -10 default just like |h does
 + |u is for **Uniq** Counter of the '|uniq -c |expand' kind, except don't force you to sort Lines
-+ |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
++ |v is for **Vi** but edit the Pipe Bytes, or the Os Copy/Paste Buffer, same as at |e
 + |w
 + |x is for **XArgs**, which defaults to mean Py Lines Join, the approximate inverse of |i
 + |y is to show what's up and halt till you say move on

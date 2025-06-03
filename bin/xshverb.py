@@ -40,7 +40,7 @@ examples:
   p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
   pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
   pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
-  v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vim to edit it
+  v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vi to edit it
 """
 
 # todo: --py to show the Python chosen, --py=... to supply your own Python
@@ -72,18 +72,18 @@ import unicodedata
 import zoneinfo  # new since Oct/2020 Python 3.9
 
 
+_: dict[str, int] | None  # new since Oct/2021 Python 3.10
+
+if not __debug__:
+    raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
+
+
 YYYY_MM_DD = "2025-05-31"  # date of last change to this Code, or an earlier date
 
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
 Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")  # todo: also welcome logins from the periphery
 UTC = zoneinfo.ZoneInfo("UTC")
-
-
-_: dict[str, int] | None  # new since Oct/2021 Python 3.10
-
-if not __debug__:
-    raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
 
 
 def main() -> None:
@@ -134,134 +134,61 @@ def main() -> None:
 
 
 @dataclasses.dataclass  # (order=False, frozen=False)
-class ShellFile:
-    """Pump Bytes in and out"""  # 'Store and forward'
+class ShellPipe:
+    """Pump Bytes through a pipe of Shell Pumps"""
 
-    iobytes: bytes = b""
+    def __init__(self) -> None:
 
-    filled: bool = False
-    drained: bool = False
+        self.stdin = ShellFile()  # what we're reading
+        self.stdout = ShellFile()  # what we're writing
 
-    #
-    # Pump Bytes in
-    #
+        self.index = -1  # how far from the left the present ShellPump is:  0, 1, 2, etc
+        self.rindex = 0  # how far from the right the present ShellPump is:  -1, -2, -3, etc
 
-    def readlines(self, hint: int = -1) -> list[str]:
-        """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
+        self.sys_stdin_isatty = sys.stdin.isatty()  # was Stdin left undirected
+        self.sys_stdout_isatty = sys.stdout.isatty()  # was Stdout left undirected
 
-        if hint != -1:  # .hint limits the count of Lines read in
-            raise NotImplementedError(str((hint,)))
 
-        self.fill_if()
+def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
+    """Parse Args, else show Version or Help and exit"""
 
-        iobytes = self.iobytes
-        decode = iobytes.decode(errors="surrogateescape")
-        splitlines = decode.splitlines()
+    verb_by_vb = VERB_BY_VB
 
-        return splitlines
+    # Take the Name of this Process as the first Hint,
+    # except not when it is an XShVerb Alias serving as a Gateway Verb into this Name Space
 
-    def read_text(self) -> str:
-        """Read Chars from Stdin, else from Os Copy/Paste Buffer, at most once"""
+    basename = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
 
-        self.fill_if()
-        iobytes = self.iobytes
-        decode = iobytes.decode(errors="surrogateescape")
+    hints = list(argv)
+    hints[0] = basename
 
-        return decode
+    if basename in verb_by_vb.keys():
+        verb = verb_by_vb[basename]
+        if verb == "xshverb":
+            hints.pop(0)
 
-    def read_bytes(self) -> bytes:
-        """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
+    # Take >= 1 Hints to build each Shell Pump
 
-        self.fill_if()
-        iobytes = self.iobytes
+    shpumps: list[ShellPump]
+    shpumps = list()
 
-        return iobytes
+    while hints:
+        index = len(shpumps)
+        with_hints = list(hints)
 
-    def fill_if(self) -> None:
-        """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
+        shpump = ShellPump(hints, index=index)  # exits 0 for Doc, exits 2 for bad Hints
+        assert len(hints) < len(with_hints), (hints, with_hints)
 
-        filled = self.filled
-        if filled:
-            return
+        shpumps.append(shpump)
 
-        if not sys.stdin.isatty():
-            self.fill_from_stdin()
-        else:
+    # Give meaning to the absence of Hints
 
-            # eprint("fill_from_pbpaste")
+    if not shpumps:
+        shpumps.append(ShellPump(["xshverb"], index=0))
 
-            self.filled = True
+    return shpumps
 
-            shline = "pbpaste"  # macOS convention, often not distributed at Linuxes
-            argv = shlex.split(shline)
-            run = subprocess.run(
-                argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=None, check=True
-            )
-
-            self.iobytes = run.stdout  # replaces
-
-        # .errors .returncode .shell .stdin unlike:  iobytes = os.popen(shline).read().encode()
-
-    def fill_from_stdin(self) -> None:
-        """Read Bytes from Stdin"""
-
-        # eprint("fill_from_stdin")
-
-        self.filled = True
-
-        path = pathlib.Path("/dev/stdin")  # todo: solve for Windows too
-        read_bytes = path.read_bytes()  # maybe not UTF-8 Encoded
-        self.iobytes = read_bytes  # replaces
-
-    #
-    # Pump Bytes out
-    #
-
-    def write(self, text: str) -> int:
-        """Write Chars into Bytes, but don't drain yet"""
-
-        self.filled = True
-
-        count = len(text)  # counts Decoded Chars, not Encoded Bytes
-        encode = text.encode(errors="surrogateescape")
-        self.iobytes = encode  # replaces
-
-        return count
-
-        # standard .writelines forces the Caller to choose each Line-Break
-
-    def drain_if(self) -> None:
-        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer, at most once"""
-
-        iobytes = self.iobytes
-
-        drained = self.drained
-        if drained:
-            return
-
-        if not sys.stdout.isatty():
-            self.drain_to_stdout()
-        else:
-
-            # eprint("drain_to_pbcopy")
-
-            self.drained = True
-
-            shline = "pbcopy"  # macOS convention, often not distributed at Linuxes
-            argv = shlex.split(shline)
-            subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
-
-    def drain_to_stdout(self) -> None:
-        """Write Bytes to Sydout"""
-
-        # eprint("drain_to_stdout")
-
-        iobytes = self.iobytes
-        self.drained = True
-
-        fd = sys.stdout.fileno()
-        data = iobytes  # maybe not UTF-8 Encoded
-        os.write(fd, data)
+    # often prints help & exits zero
 
 
 @dataclasses.dataclass  # (order=False, frozen=False)
@@ -378,7 +305,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
         parser = AmpedArgumentParser(doc, add_help=False)  # enough to print Closing
         if argv[1:] == ["--"]:
-            self.do_closing_show(closing=parser.closing)
+            self.closing_show(closing=parser.closing)
             sys.exit(0)
 
         double_dashed = False
@@ -391,91 +318,164 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
                     continue
 
                 if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
-                    self.do_doc_show()
+                    self.doc_show()
                     sys.exit(0)
 
                 if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
-                    self.do_version_show()
+                    self.version_show()
                     sys.exit(0)
 
         # often prints help & exits zero
 
-    def do_doc_show(self) -> None:
+    def doc_show(self) -> None:
         """Show the Help and exit zero"""
 
         doc = self.doc
         print(doc)
 
-    def do_closing_show(self, closing: str) -> None:
+    def closing_show(self, closing: str) -> None:
         """Show the Closing and exit zero"""
 
         print()
         print(closing)
         print()
 
-    def do_version_show(self) -> None:
+    def version_show(self) -> None:
         """Show version and exit zero"""
 
         version = pathlib_path_read_version(__file__)
         print(YYYY_MM_DD, version)
 
 
-def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
-    """Parse Args, else show Version or Help and exit"""
-
-    verb_by_vb = VERB_BY_VB
-
-    # Take the Name of this Process as the first Hint,
-    # except not when it is an XShVerb Alias serving as a Gateway Verb into this Name Space
-
-    basename = os.path.basename(argv[0])  # 'xshverb.py' from 'bin/xshverb.py'
-
-    hints = list(argv)
-    hints[0] = basename
-
-    if basename in verb_by_vb.keys():
-        verb = verb_by_vb[basename]
-        if verb == "xshverb":
-            hints.pop(0)
-
-    # Take >= 1 Hints to build each Shell Pump
-
-    shpumps: list[ShellPump]
-    shpumps = list()
-
-    while hints:
-        index = len(shpumps)
-        with_hints = list(hints)
-
-        shpump = ShellPump(hints, index=index)  # exits 0 for Doc, exits 2 for bad Hints
-        assert len(hints) < len(with_hints), (hints, with_hints)
-
-        shpumps.append(shpump)
-
-    # Give meaning to the absence of Hints
-
-    if not shpumps:
-        shpumps.append(ShellPump(["xshverb"], index=0))
-
-    return shpumps
-
-    # often prints help & exits zero
-
-
 @dataclasses.dataclass  # (order=False, frozen=False)
-class ShellPipe:
-    """Pump Bytes through a pipe of Shell Pumps"""
+class ShellFile:
+    """Pump Bytes in and out"""  # 'Store and forward'
 
-    def __init__(self) -> None:
+    iobytes: bytes = b""
 
-        self.stdin = ShellFile()  # what we're reading
-        self.stdout = ShellFile()  # what we're writing
+    filled: bool = False
+    drained: bool = False
 
-        self.index = -1  # how far from the left the present ShellPump is:  0, 1, 2, etc
-        self.rindex = 0  # how far from the right the present ShellPump is:  -1, -2, -3, etc
+    #
+    # Pump Bytes in
+    #
 
-        self.sys_stdin_isatty = sys.stdin.isatty()  # was Stdin left undirected
-        self.sys_stdout_isatty = sys.stdout.isatty()  # was Stdout left undirected
+    def readlines(self, hint: int = -1) -> list[str]:
+        """Read Lines from Bytes, but first fill from the Os Copy/Paste Buffer if need be"""
+
+        if hint != -1:  # .hint limits the count of Lines read in
+            raise NotImplementedError(str((hint,)))
+
+        self.fill_if()
+
+        iobytes = self.iobytes
+        decode = iobytes.decode(errors="surrogateescape")
+        splitlines = decode.splitlines()
+
+        return splitlines
+
+    def read_text(self) -> str:
+        """Read Chars from Stdin, else from Os Copy/Paste Buffer, at most once"""
+
+        self.fill_if()
+        iobytes = self.iobytes
+        decode = iobytes.decode(errors="surrogateescape")
+
+        return decode
+
+    def read_bytes(self) -> bytes:
+        """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
+
+        self.fill_if()
+        iobytes = self.iobytes
+
+        return iobytes
+
+    def fill_if(self) -> None:
+        """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
+
+        filled = self.filled
+        if filled:
+            return
+
+        if not sys.stdin.isatty():
+            self.fill_from_stdin()
+        else:
+
+            # eprint("fill_from_pbpaste")
+
+            self.filled = True
+
+            shline = "pbpaste"  # macOS convention, often not distributed at Linuxes
+            argv = shlex.split(shline)
+            run = subprocess.run(
+                argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=None, check=True
+            )
+
+            self.iobytes = run.stdout  # replaces
+
+        # .errors .returncode .shell .stdin unlike:  iobytes = os.popen(shline).read().encode()
+
+    def fill_from_stdin(self) -> None:
+        """Read Bytes from Stdin"""
+
+        # eprint("fill_from_stdin")
+
+        self.filled = True
+
+        path = pathlib.Path("/dev/stdin")  # todo: solve for Windows too
+        read_bytes = path.read_bytes()  # maybe not UTF-8 Encoded
+        self.iobytes = read_bytes  # replaces
+
+    #
+    # Pump Bytes out
+    #
+
+    def write_text(self, text: str) -> int:
+        """Write Chars into Bytes, but don't drain yet"""
+
+        self.filled = True
+
+        count = len(text)  # counts Decoded Chars, not Encoded Bytes
+        encode = text.encode(errors="surrogateescape")
+        self.iobytes = encode  # replaces
+
+        return count
+
+        # standard .writelines forces the Caller to choose each Line-Break
+
+    def drain_if(self) -> None:
+        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer, at most once"""
+
+        iobytes = self.iobytes
+
+        drained = self.drained
+        if drained:
+            return
+
+        if not sys.stdout.isatty():
+            self.drain_to_stdout()
+        else:
+
+            # eprint("drain_to_pbcopy")
+
+            self.drained = True
+
+            shline = "pbcopy"  # macOS convention, often not distributed at Linuxes
+            argv = shlex.split(shline)
+            subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
+
+    def drain_to_stdout(self) -> None:
+        """Write Bytes to Sydout"""
+
+        # eprint("drain_to_stdout")
+
+        iobytes = self.iobytes
+        self.drained = True
+
+        fd = sys.stdout.fileno()
+        data = iobytes  # maybe not UTF-8 Encoded
+        os.write(fd, data)
 
 
 #
@@ -585,7 +585,7 @@ def do_awk(argv: list[str]) -> None:
         olines.append(ojoin)
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -663,7 +663,7 @@ def do_cat(argv: list[str]) -> None:
 
     ilines = alt.stdin.readlines()
     otext = line_break_join_rstrips_plus_if(ilines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
     # Write to Stdout Tty at end of Pipe
 
@@ -730,7 +730,7 @@ def do_counter(argv: list[str]) -> None:
         # f"{v:6}\t{k}" with its sometimes troublesome \t is classic '|cat -n' format
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -853,7 +853,7 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
     olines = iotext.splitlines()
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
     # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
 
@@ -888,128 +888,6 @@ def str_expand_plus(text: str) -> str:
 
     # todo: more conformity to PyPi·Org Black SHOUTED UPPER CASE Unicode Names
     # todo: more conformity to PyPi·Org Black fuzz-the-eyes lowercase Hex
-
-
-#
-# Take only the first few Lines
-#
-
-
-HEAD_DOC = """
-
-    usage: head [-N]
-
-    take only the first few Lines
-
-    positional arguments:
-      -N  how many leading Lines to take (default: 10)
-
-    comparable to:
-      |head -N
-
-    future work:
-      we could make meaning out of |head - - |tail +++
-      we could take the $LINES of the Terminal Window Tab Pane into account
-
-    examples:
-      ls -l |i  u  s -nr  h  c  # prints some most common Words
-      ls -hlAF -rt |h -3  c  # prints the first 3 Lines
-
-"""
-
-
-def do_head(argv: list[str]) -> None:
-    """Take only the first few Lines"""
-
-    assert argparse.OPTIONAL == "?"
-
-    # Form Shell Args Parser
-
-    doc = HEAD_DOC
-    n_help = "how many leading Lines to take (default: 10)"
-
-    parser = AmpedArgumentParser(doc, add_help=False)
-    parser.add_argument(dest="n", metavar="-N", nargs="?", help=n_help)
-
-    # Take up Shell Args
-
-    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    ns = parser.parse_args_if(args)  # often prints help & exits zero
-
-    n = -10
-    if ns.n is not None:
-        try:
-            n = int(ns.n, base=0)
-            if n >= 0:
-                raise ValueError(ns.n)
-        except ValueError:
-            parser.parser.print_usage()
-            eprint(f"|head: {ns.n!r}: could be -10 or -3 or -12345, but isn't")
-            sys.exit(2)  # exits 2 for bad Arg
-
-    # Take only the first few Lines
-
-    ilines = alt.stdin.readlines()
-    olines = ilines[:-n]
-
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
-
-
-#
-# Chop output to fit on screen
-#
-
-
-HT_DOC = r"""
-
-    usage: ht
-
-    chop output to fit on screen
-
-    comparable to:
-      |awk '{a[NR]=$0} END{print a[1]; print a[2]; print "..."; print a[NR - 1]; print a[NR]}'
-      |sed -n -e '1,3p;3,3s/.*/.../p;$p'  # prints only 1 of Tail
-
-    quirks:
-      shows 3 Lines of Head, 2 Lines of Tail, and '...' in the middle
-
-    examples:
-      seq 99 |ht  c  # show not much of 99 Lines
-      find . |ht  c  # show not much of many Pathnames that begin with "." Dot or not
-
-"""
-
-
-def do_ht(argv: list[str]) -> None:
-    """Chop output to fit on screen"""
-
-    # Form Shell Args Parser
-
-    doc = HT_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
-
-    # Take up Shell Args
-
-    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    parser.parse_args_if(args)  # often prints help & exits zero
-
-    # Chop output to fit on screen
-
-    ilines = alt.stdin.readlines()
-    n = len(ilines)
-
-    if n < (3 + 3 + 2):
-        otext = line_break_join_rstrips_plus_if(ilines)
-        alt.stdout.write(otext)
-        return
-
-    olines = ilines[:3] + ["...", f"... 3+2 of {n} Lines shown ...", "..."] + ilines[-2:]
-    otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
-
-    # todo: |ht [-B=BEFORE] [-A=AFTER] [-C=BOTH] for more/less above/below
-    # todo: |ht when the Output is too wide
 
 
 #
@@ -1107,9 +985,131 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
         # todo: multiline patterns
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
     # todo: |grep -n
+
+
+#
+# Take only the first few Lines
+#
+
+
+HEAD_DOC = """
+
+    usage: head [-N]
+
+    take only the first few Lines
+
+    positional arguments:
+      -N  how many leading Lines to take (default: 10)
+
+    comparable to:
+      |head -N
+
+    future work:
+      we could make meaning out of |head - - |tail +++
+      we could take the $LINES of the Terminal Window Tab Pane into account
+
+    examples:
+      ls -l |i  u  s -nr  h  c  # prints some most common Words
+      ls -hlAF -rt |h -3  c  # prints the first 3 Lines
+
+"""
+
+
+def do_head(argv: list[str]) -> None:
+    """Take only the first few Lines"""
+
+    assert argparse.OPTIONAL == "?"
+
+    # Form Shell Args Parser
+
+    doc = HEAD_DOC
+    n_help = "how many leading Lines to take (default: 10)"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="n", metavar="-N", nargs="?", help=n_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    n = -10
+    if ns.n is not None:
+        try:
+            n = int(ns.n, base=0)
+            if n >= 0:
+                raise ValueError(ns.n)
+        except ValueError:
+            parser.parser.print_usage()
+            eprint(f"|head: {ns.n!r}: could be -10 or -3 or -12345, but isn't")
+            sys.exit(2)  # exits 2 for bad Arg
+
+    # Take only the first few Lines
+
+    ilines = alt.stdin.readlines()
+    olines = ilines[:-n]
+
+    otext = line_break_join_rstrips_plus_if(olines)
+    alt.stdout.write_text(otext)
+
+
+#
+# Chop output to fit on screen
+#
+
+
+HT_DOC = r"""
+
+    usage: ht
+
+    chop output to fit on screen
+
+    comparable to:
+      |awk '{a[NR]=$0} END{print a[1]; print a[2]; print "..."; print a[NR - 1]; print a[NR]}'
+      |sed -n -e '1,3p;3,3s/.*/.../p;$p'  # prints only 1 of Tail
+
+    quirks:
+      shows 3 Lines of Head, 2 Lines of Tail, and '...' in the middle
+
+    examples:
+      seq 99 |ht  c  # show not much of 99 Lines
+      find . |ht  c  # show not much of many Pathnames that begin with "." Dot or not
+
+"""
+
+
+def do_ht(argv: list[str]) -> None:
+    """Chop output to fit on screen"""
+
+    # Form Shell Args Parser
+
+    doc = HT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Chop output to fit on screen
+
+    ilines = alt.stdin.readlines()
+    n = len(ilines)
+
+    if n < (3 + 3 + 2):
+        otext = line_break_join_rstrips_plus_if(ilines)
+        alt.stdout.write_text(otext)
+        return
+
+    olines = ilines[:3] + ["...", f"... 3+2 of {n} Lines shown ...", "..."] + ilines[-2:]
+    otext = line_break_join_rstrips_plus_if(olines)
+    alt.stdout.write_text(otext)
+
+    # todo: |ht [-B=BEFORE] [-A=AFTER] [-C=BOTH] for more/less above/below
+    # todo: |ht when the Output is too wide
 
 
 #
@@ -1160,7 +1160,7 @@ def do_jq(argv: list[str]) -> None:
     otext_ = line_break_join_rstrips_plus_if(olines)
     assert otext == otext_, (otext, otext_)
 
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1227,7 +1227,7 @@ def do_nl(argv: list[str]) -> None:
         olines.append(oline)
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1272,7 +1272,7 @@ def do_reverse(argv: list[str]) -> None:
     olines.reverse()
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1334,7 +1334,7 @@ def do_set(argv: list[str]) -> None:
     olines = [oline]
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
     # todo: Control Chars other than the 5 "\t\n\f\r " kinds of Blanks
 
@@ -1429,7 +1429,7 @@ def do_sort(argv: list[str]) -> None:
         olines.reverse()
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1482,7 +1482,7 @@ def do_split(argv: list[str]) -> None:
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1533,7 +1533,7 @@ def do_strip(argv: list[str]) -> None:
     olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1602,7 +1602,7 @@ def do_tail(argv: list[str]) -> None:
     olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1651,7 +1651,7 @@ def do_wcl(argv: list[str]) -> None:
     oint = len(ilines)
     otext = str(oint)
 
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1700,7 +1700,7 @@ def do_xargs(argv: list[str]) -> None:
     ilines = alt.stdin.readlines()
     otext = sep.join(ilines) + "\n"  # deletes Line-Break's when Sep is empty
 
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
     # can end Lines with Blanks when given Blanks in Sep
 
@@ -1769,7 +1769,7 @@ def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
     olines = strip.splitlines()
 
     otext = line_break_join_rstrips_plus_if(olines)
-    alt.stdout.write(otext)
+    alt.stdout.write_text(otext)
 
     # Say what the most plain Undirected Pq without Args means
 
