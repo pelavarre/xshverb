@@ -86,6 +86,9 @@ Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")  # todo: also welcome logins 
 UTC = zoneinfo.ZoneInfo("UTC")
 
 
+GATEWAY_VERBS = ("dt", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
+
+
 def main() -> None:
     """Run from the Sh Command Line"""
 
@@ -176,15 +179,20 @@ def argv_to_shell_pumps(argv: list[str]) -> list[ShellPump]:
         index = len(shpumps)
         with_hints = list(hints)
 
-        shpump = ShellPump(hints, index=index)  # exits 0 for Doc, exits 2 for bad Hints
+        shpump = ShellPump()
+        shpump.pop_some_hints(hints, index=index)  # exits 2 at first bad Hint
         assert len(hints) < len(with_hints), (hints, with_hints)
+
+        shpump.exit_doc_if()  # exits 0 for Doc or Closing or Version
 
         shpumps.append(shpump)
 
     # Give meaning to the absence of Hints
 
     if not shpumps:
-        shpumps.append(ShellPump(["xshverb"], index=0))
+
+        shpump = ShellPump()
+        shpump.pop_some_hints(["xshverb"], index=0)
 
     return shpumps
 
@@ -197,11 +205,21 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
     vb: str  # 'a'  # 'p'
     verb: str  # 'awk'  # 'python'
+
     doc: str  # AWK_DOC  # PYTHON_DOC
     func: collections.abc.Callable[[list[str]], None]  # do_awk  # do_xshverb
     argv: list[str]  # ['a']  # ['awk']
 
-    def __init__(self, hints: list[str], index: int) -> None:
+    def __init__(self) -> None:
+
+        self.vb = ""
+        self.verb = ""
+
+        self.doc = ""
+        self.func = do_pass  # explicit 'def __init__' lets us mention .do_pass before defining it
+        self.argv = list()  # technically mutable, but replaced soon
+
+    def pop_some_hints(self, hints: list[str], index: int) -> None:
         """Pop some Hints, else show Help and exit"""
 
         assert hints, (hints,)
@@ -210,67 +228,22 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
         func_by_verb = FUNC_BY_VERB
         verb_by_vb = VERB_BY_VB
 
-        # Pop the Shell Verb, its Options, and its Positional Arguments
-
-        argv: list[str]
-        argv = list()
-
-        while hints:
-            arg = hints.pop(0)
-            words = arg.split()
-
-            # Accept an Identifier as the Shell Verb
-
-            if not argv:
-                if arg.isidentifier():
-                    assert len(words) == 1, (len(words), words, arg)
-
-                # Accept a Shell-Quote'd Verb with its baggage of Options and Args
-
-                elif len(words) > 1:
-                    splits = shlex.split(arg)
-                    assert splits, (splits, arg)
-                    if splits[0].isidentifier():
-                        argv = splits
-                        break
-
-                # Fall back to have Pq make sense of anything else
-
-                else:
-                    argv.append("pq")
-
-            argv.append(arg)  # may be '--', and may be '--' more than once
-
-            # Take all the remaining Words as Args, after a Gateway Verb into some other Namespacre
-
-            if index == 0:
-                if argv[0] in ("dt",):  # todo: which verbs consume indefinitely many hints?
-                    continue
-
-            # Insert a Break between Shell Pipe Filters,
-            # rather than accepting a first Positional Argument,
-            # when not Shell-Quote'd in with the Verb
-
-            if hints:
-                peek = hints[0]
-
-                if peek.isidentifier():  # not any '-' or '--' option, nor 'a|b' etc etc
-                    break
-
         # Require an Alias of a Shell Verb, or the Shell Verb itself
+
+        argv = self.pop_argv_from_hints(hints, index=index)
 
         vb = argv[0]
 
-        verb = vb
+        verb = vb  # goes with the Shell Verb itself
         if vb in verb_by_vb.keys():
-            verb = verb_by_vb[vb]  # Aliases are often shorter than their Shell Verbs
+            verb = verb_by_vb[vb]  # replaces an Alias with its Shell Verb
 
             if argv == ["dict"]:  # todo: declare more Aliases which imply Shell Args
                 argv.append("--keys")
 
         if verb not in func_by_verb.keys():
             eprint(f"xshverb: command not found: |{vb}")  # a la Bash & Zsh vs New Verbs
-            sys.exit(2)  # exits 2 for bad Shell Verb
+            sys.exit(2)  # exits 2 for bad Shell Verb Hint
 
         # Find the Doc
 
@@ -286,16 +259,69 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
         # Succeed
 
+        assert vb and verb and doc and argv, (vb, verb, doc, argv)  # doesn't constrain .func
+
         self.vb = vb
         self.verb = verb
 
         self.doc = doc
         self.func = func
-        self.argv = argv
+        self.argv = argv  # replaces a mutable
 
-        self.exit_doc_if()
+        # exits 2 for bad Shell Verb
 
-        # often prints help & exits zero  # exits 2 for bad Shell Verb
+    def pop_argv_from_hints(self, hints: list[str], index: int) -> list[str]:
+        """Pop the Shell Verb, its Options, and its Positional Arguments"""
+
+        argv: list[str]
+        argv = list()
+
+        while hints:
+            hint = hints.pop(0)
+            words = hint.split()
+
+            # Accept an Identifier as the Shell Verb
+
+            if not argv:
+                if hint.isidentifier():
+                    assert len(words) == 1, (len(words), words, hint)
+
+                # Accept a Shell-Quote'd Verb with its baggage of Options and Args
+
+                elif len(words) > 1:
+                    splits = shlex.split(hint)
+                    assert splits, (splits, hint)
+                    if splits[0].isidentifier():
+                        argv = splits
+                        break
+
+                # Fall back to have Pq make sense of anything else, and maybe more that follows
+
+                else:
+                    argv.append("pq")
+
+            arg = hint
+            argv.append(arg)  # may be '--', and may be '--' more than once
+
+            # Take all the remaining Hints as Args, after a Gateway Verb into a Namespacre
+
+            assert GATEWAY_VERBS == ("dt", "e", "k", "v")
+
+            if index == 0:
+                if argv[0] in GATEWAY_VERBS:  # todo: which verbs consume indefinitely many hints?
+                    continue
+
+            # Insert a Break between Shell Pipe Filters,
+            # rather than accepting a first Positional Argument,
+            # when not Shell-Quote'd in with the Verb
+
+            if hints:
+                next_hint = hints[0]
+
+                if next_hint.isidentifier():  # not any '-' or '--' option, nor '(.)' etc etc
+                    break
+
+        return argv
 
     def exit_doc_if(self) -> None:
         """Show Help or Closing or Version and exit zero, else return"""
@@ -476,6 +502,18 @@ class ShellFile:
         fd = sys.stdout.fileno()
         data = iobytes  # maybe not UTF-8 Encoded
         os.write(fd, data)
+
+
+#
+# Do nothing much,
+# like to hold the place of the main Func of a Shell Pump
+#
+
+
+def do_pass(argv: list[str]) -> None:
+    """Do nothing much"""
+
+    pass
 
 
 #
