@@ -5,6 +5,7 @@ define __EPILOG__
 
 make  # shows a few examples and exits zero
 make help  # shows many help lines and exits zero
+make bin  # updates the ~/bin/ Folder
 make pips  # installs/ replaces Python add-on's from PyPi·Org
 make smoke  # calls for Code Review from Black, Flake8, and MyPy Strict
 
@@ -22,6 +23,7 @@ positional arguments:
 examples:
   make  # shows a few examples and exits zero
   make help  # shows many help lines and exits zero
+  make bin  # updates the ~/bin/ Folder
   make pips  # installs/ replaces Python add-on's from PyPi·Org
   make smoke  # calls for Code Review from Black, Flake8, and MyPy Strict
 endef
@@ -37,7 +39,7 @@ help:
 	@true
 
 
-.PHONY: pips requirements.txt
+.PHONY: bin pips requirements.txt
 
 pips requirements.txt:
 	: 'remake our ~/.pyvenvs/pips/ in less than 10s'
@@ -79,7 +81,6 @@ flake8:
 			|grep -v '  from pkg_resources import iter_entry_points' \
 			|cat -
 
-
 # --max-line-length=999  # Black max line lengths over Flake8 max line lengths
 # --max-complexity 10  # limit how much McCabe Cyclomatic Complexity we accept
 # --ignore=E203  # Black '[ : ]' rules over E203 whitespace before ':'
@@ -91,6 +92,10 @@ mypy:
 	~/.pyvenvs/mypy/bin/mypy \
 		--strict \
 			bin/
+
+
+bin:
+	cp -p bin/? bin/pq bin/xshverb.py ~/bin/.
 
 
 # posted as:  https://github.com/pelavarre/xshverb/blob/main/Makefile
