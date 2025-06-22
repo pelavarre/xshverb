@@ -935,21 +935,27 @@ DOT_DOC = r"""
       takes '.' as Hint to mean whatever one Hint works
 
     conversions:
-      to http://codereviews/r/123456/diff of ReviewBoard as |pq . codereviews
-        from https://codereviews.example.com/r/123456/diff/8/#index_header
-      to https://docs.google.com/document/d/$HASH as |pq . google
-        from https://docs.google.com/document/d/$HASH/edit?usp=sharing
-        from https://docs.google.com/document/d/$HASH/edit#gid=0'
-      to https://wiki.example.com/pages/viewpage.action?pageId=12345
-        from https://wiki.example.com/pages/viewpreviousversions.action?pageId=12345
+      as |pq . codereviews
+        to http://codereviews/r/123456/diff of ReviewBoard
+          from https://codereviews.example.com/r/123456/diff/8/#index_header
+      as |pq . google
+        to https://docs.google.com/document/d/$HASH
+          from https://docs.google.com/document/d/$HASH/edit?usp=sharing
+          from https://docs.google.com/document/d/$HASH/edit#gid=0'
+      as |pq . wiki
+        to https://wiki.example.com/pages/viewpage.action?pageId=12345
+          from https://wiki.example.com/pages/viewpreviousversions.action?pageId=12345
 
     toggles:
-      between http://AbcJenkins
-        and https://abcjenkins.dev.example.com
-      between PROJ-12345
-        and https://jira.example.com/browse/PROJ-12345
-      between https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
-        and https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+      as pq . jenkins
+        between http://AbcJenkins
+          and https://abcjenkins.dev.example.com
+      as pq . jira
+        between PROJ-12345
+          and https://jira.example.com/browse/PROJ-12345
+      as pq . address and pq . title
+        between https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
+          and https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
 
     quirks:
       '|pq . title' is unrelated to '|pq title'
@@ -1229,8 +1235,9 @@ def dot_jira_title(text: str) -> str:
 def dot_title(text: str) -> str:
     """Insert Spaces to chill a hot-link'able Web Address HRef"""
 
-    assert text.startswith("http"), (text,)  # 'https', 'http', etc
     assert " " not in text, (text,)
+
+    assert text.startswith("http"), (text,)  # 'https', 'http', etc
 
     address = text
     address = address.replace("/x.com/", "/twitter.com/")
