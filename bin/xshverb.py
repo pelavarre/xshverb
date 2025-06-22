@@ -913,7 +913,7 @@ def do_dedent(argv: list[str]) -> None:
     # Drop the enclosing Blanks, and replace other troublesome character encodings
 
     itext = alt.stdin.read_text()
-    otext = textwrap.dedent(itext)  # but without .rstrip, and without .strip
+    otext = textwrap.dedent(itext)
     alt.stdout.write_text(otext)
 
 
@@ -923,36 +923,41 @@ def do_dedent(argv: list[str]) -> None:
 
 
 DOT_DOC = r"""
-usage: pq [HINT]
 
-search out Code to match the Text and run the Code to tweak the Text
+    usage: pq [HINT]
 
-positional arguments:
-  HINT  one of codereviews|google|jenkins|jira|wiki, else toggle address|title, else fail
+    search out Code to match the Text and run the Code to tweak the Text
 
-quirks:
-  takes '.' as Hint to mean whatever one Hint works
+    positional arguments:
+      HINT  one of codereviews|google|jenkins|jira|wiki, else toggle address|title, else fail
 
-conversions:
-  to http://codereviews/r/123456/diff of ReviewBoard
-    from https://codereviews.example.com/r/123456/diff/8/#index_header
-  to https://docs.google.com/document/d/$HASH
-    from https://docs.google.com/document/d/$HASH/edit?usp=sharing
-    from https://docs.google.com/document/d/$HASH/edit#gid=0'
-  to https://wiki.example.com/pages/viewpage.action?pageId=12345
-    from https://wiki.example.com/pages/viewpreviousversions.action?pageId=12345
+    quirks:
+      takes '.' as Hint to mean whatever one Hint works
 
-toggles:
-  between http://AbcJenkins
-    and https://abcjenkins.dev.example.com
-  between PROJ-12345
-    and https://jira.example.com/browse/PROJ-12345
-  between https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
-    and https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+    conversions:
+      to http://codereviews/r/123456/diff of ReviewBoard as |pq . codereviews
+        from https://codereviews.example.com/r/123456/diff/8/#index_header
+      to https://docs.google.com/document/d/$HASH as |pq . google
+        from https://docs.google.com/document/d/$HASH/edit?usp=sharing
+        from https://docs.google.com/document/d/$HASH/edit#gid=0'
+      to https://wiki.example.com/pages/viewpage.action?pageId=12345
+        from https://wiki.example.com/pages/viewpreviousversions.action?pageId=12345
 
-examples:
-  pq .
-  pq dot chill
+    toggles:
+      between http://AbcJenkins
+        and https://abcjenkins.dev.example.com
+      between PROJ-12345
+        and https://jira.example.com/browse/PROJ-12345
+      between https :// twitter . com /intent/tweet?text=/@PELaVarre+XShVerb
+        and https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+
+    quirks:
+      '|pq . title' is unrelated to '|pq title'
+
+    examples:
+      pq .
+      pq dot chill
+
 """
 
 
@@ -1454,7 +1459,7 @@ EXPAND_DOC = r"""
       not pushed by us as '|expand' because many macOS & Linux Shells define '|expand' narrowly
 
     examples:
-      echo $'\xC2\xA0 « » “ ’ ” – — ′ ″ ‴ ' |pq expand c
+      echo $'\xC2\xA0 « » “ ’ ” – — ′ ″ ‴ ' |pq expand |cat -
       echo $'\xC2\xA0 \xC2\xA0' |sed 's,\xC2\xA0,\&nsbp;,g'
       printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq expand  |cat -etv  # most stripped
 
@@ -1479,8 +1484,8 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
     # Drop the enclosing Blanks, and replace other troublesome character encodings
 
     itext = alt.stdin.read_text()
-    otext = str_expand_plus(itext)  # replaces troublesome character encodings
-    alt.stdout.write_text(otext)  # textified by .str_expand_plus, we trust
+    otext = str_expand_plus(itext)
+    alt.stdout.write_text(otext)
 
 
 def str_expand_plus(text: str) -> str:
@@ -1508,7 +1513,7 @@ def str_expand_plus(text: str) -> str:
 
     otext = text
     otext = otext.expandtabs(tabsize=8)
-    otext = str_textify(otext)  # textified by |expand here
+    otext = str_textify(otext)
     for k, v in d.items():
         otext = otext.replace(k, v)
 
@@ -1708,8 +1713,8 @@ HT_DOC = r"""
       shows 3 Lines of Head, 2 Lines of Tail, and '...' in the middle
 
     examples:
-      seq 99 |ht  c  # show not much of 99 Lines
-      find . |ht  c  # show not much of many Pathnames that begin with "." Dot or not
+      seq 99 |pq ht |cat -  # show not much of 99 Lines
+      find . |pq ht |cat -  # show not much of many Pathnames that begin with "." Dot or not
       printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq ht  |cat -etv  # no change
 
 """
@@ -1768,7 +1773,7 @@ JQ_DOC = r"""
 
 """
 
-# todo: usage: |jq .
+# todo: usage: |j .
 
 
 def do_jq(argv: list[str]) -> None:
@@ -1851,6 +1856,44 @@ def do_less(argv: list[str]) -> None:
     starts = shlex.split("-FIRX")
 
     _do_edit(argv, shverb=shverb, starts=starts)
+
+
+#
+# Lower the Case of each Word in each Line
+#
+
+
+LOWER_DOC = r"""
+
+    usage: lower
+
+    lower the Case of each Word in each Line
+
+    examples:
+      ls -l |pq lower |cat -
+
+"""
+
+
+def do_lower(argv: list[str]) -> None:
+    """Lower the Case of each Word in each Line"""
+
+    # Form Shell Args Parser
+
+    doc = LOWER_DOC
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Lower the Case of each Word in each Line
+
+    itext = alt.stdin.read_text()
+    otext = itext.lower()
+    alt.stdout.write_text(otext)
 
 
 #
@@ -1982,9 +2025,9 @@ SET_DOC = r"""
       not pushed by us as '|set' because many macOS & Linux Shells define 'set NAME=VALUE'
 
     examples:
-      ls -l |pbcopy && pq set c
-      cat bin/xshverb.py|pq set c
-      cat $(git ls-files) |pq set c
+      ls -l |pbcopy && pq set |cat -
+      cat bin/xshverb.py|pq set |cat -
+      cat $(git ls-files) |pq set |cat -
 
 """
 
@@ -2221,7 +2264,6 @@ def do_strip(argv: list[str]) -> None:
 
     ilines = alt.stdin.read_splitlines()
     olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
-
     alt.stdout.write_splitlines(olines)
 
 
@@ -2292,6 +2334,85 @@ def do_tail(argv: list[str]) -> None:
     olines = ilines[n:] if (n < 0) else ilines[(n - 1) :]
 
     alt.stdout.write_splitlines(olines)
+
+
+#
+# Title the Case of each Word in each Line
+#
+
+
+TITLE_DOC = r"""
+
+    usage: title
+
+    title the Case of each Word in each Line
+
+    quirks:
+      '|pq title' is unrelated to '|pq . title'
+
+    examples:
+      ls -l |pq title |cat -
+
+"""
+
+
+def do_title(argv: list[str]) -> None:
+    """Title the Case of each Word in each Line"""
+
+    # Form Shell Args Parser
+
+    doc = TITLE_DOC
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Title the Case of each Word in each Line
+
+    itext = alt.stdin.read_text()
+    otext = itext.title()
+    alt.stdout.write_text(otext)
+
+
+#
+# Upper the Case of each Word in each Line
+#
+
+
+UPPER_DOC = r"""
+
+    usage: upper
+
+    upper the Case of each Word in each Line
+
+    examples:
+      ls -l |pq upper |cat -
+
+"""
+
+
+def do_upper(argv: list[str]) -> None:
+    """Upper the Case of each Word in each Line"""
+
+    # Form Shell Args Parser
+
+    doc = UPPER_DOC
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Upper the Case of each Word in each Line
+
+    itext = alt.stdin.read_text()
+    otext = itext.upper()
+    alt.stdout.write_text(otext)
 
 
 #
@@ -2368,8 +2489,8 @@ WCL_DOC = r"""
       not pushed by us as '|wcl' because less is more
 
     examples:
-      ls -l |pq  w  c
-      ls -l |pq  wcl  c
+      ls -l |pq w |cat -
+      ls -l |pq wcl |cat -
 
 """
 
@@ -2454,25 +2575,27 @@ def do_xargs(argv: list[str]) -> None:
 
 
 XSHVERB_DOC = r"""
-usage: pq [HINT ...]
 
-mess about inside the Os/Copy Paste Buffer
+    usage: pq [HINT ...]
 
-positional arguments:
-  HINT  hint of which Shell Pipe Filter you mean
+    mess about inside the Os/Copy Paste Buffer
 
-quirks:
-  defaults to decode the Bytes as UTF-8, replacing decoding Errors with U+003F '?' Question-Mark's
-  defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
-  defaults to drop leading and trailing Blank Lines, but not the Dent of the first Line
-  more help at:  xshverb.py --help
+    positional arguments:
+      HINT  hint of which Shell Pipe Filter you mean
 
-examples:
-  pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
-  pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
-  pq v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vi to edit it
-  printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq  |cat -etv  # much stripped
-  echo $'\xC0\x80' |pq |sort  # doesn't deny service to shout up "illegal byte sequence"
+    quirks:
+      defaults to decode the Bytes as UTF-8, replacing decoding Errors with U+003F '?' Question-Mark's
+      defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
+      defaults to drop leading and trailing Blank Lines, but not the Dent of the first Line
+      more help at:  xshverb.py --help
+
+    examples:
+      pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
+      pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
+      pq v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vi to edit it
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq  |cat -etv  # much stripped
+      echo $'\xC0\x80' |pq |sort  # doesn't deny service to shout up "illegal byte sequence"
+
 """
 
 PQ_DOC = XSHVERB_DOC
@@ -2756,8 +2879,8 @@ def bytes_textify(bytes_: bytes) -> bytes:
     decode = bytes_.decode(errors="replace")  # not errors="surrogateescape"
     text = decode.replace("\ufffd", "?")  # U+003F Question-Mark
 
-    join_plus = str_textify(text)
-    encode = join_plus.encode()  # doesn't raise UnicodeEncodeError
+    textify = str_textify(text)
+    encode = textify.encode()  # doesn't raise UnicodeEncodeError
 
     return encode
 
@@ -2909,6 +3032,7 @@ DOC_BY_VERB = dict(
     ht=HT_DOC,
     jq=JQ_DOC,
     less=LESS_DOC,
+    lower=LOWER_DOC,
     nl=NL_DOC,
     reverse=REVERSE_DOC,
     set=SET_DOC,
@@ -2916,6 +3040,8 @@ DOC_BY_VERB = dict(
     split=SPLIT_DOC,
     strip=STRIP_DOC,
     tail=TAIL_DOC,
+    title=TITLE_DOC,
+    upper=UPPER_DOC,
     vi=VI_DOC,
     wcl=WCL_DOC,
     xargs=XARGS_DOC,
@@ -2945,7 +3071,7 @@ FUNC_BY_VERB = dict(
     ht=do_ht,
     jq=do_jq,
     less=do_less,
-    # lower=do_lower,
+    lower=do_lower,
     # lstrip=do_lstrip,
     nl=do_nl,
     reverse=do_reverse,
@@ -2956,8 +3082,8 @@ FUNC_BY_VERB = dict(
     strip=do_strip,
     # str_strip=do_str_strip,
     tail=do_tail,
-    # title=do_title,
-    # upper=do_upper,
+    title=do_title,
+    upper=do_upper,
     vi=do_vi,
     wcl=do_wcl,
     xargs=do_xargs,
