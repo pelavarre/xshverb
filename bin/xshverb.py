@@ -283,7 +283,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
                 argv.append("--keys")
 
         if verb not in func_by_verb.keys():
-            eprint(f"xshverb: command not found: |{vb}")  # a la Bash & Zsh vs New Verbs
+            eprint(f"xshverb: command not found: |pq {vb}")  # a la Bash & Zsh vs New Verbs
             sys.exit(2)  # exits 2 for bad Shell Verb Hint
 
         # Find the Doc
@@ -872,6 +872,52 @@ def do_counter(argv: list[str]) -> None:
 
 
 #
+# Drop blank Columns on the left
+#
+
+
+DEDENT_DOC = r"""
+
+    usage: dedent
+
+    drop blank Columns on the left
+
+    comparable to:
+      |pq expand
+      |pq strip
+
+    quirks:
+      doesn't drop trailing Blanks in each Line
+      doesn't drop leading and trailing Blank Lines
+
+    examples:
+      ls -l |pq dent |pq dedent
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq dedent  |cat -etv  # lots stripped
+
+"""
+
+
+def do_dedent(argv: list[str]) -> None:
+    """Drop blank Columns on the left"""
+
+    # Form Shell Args Parser
+
+    doc = DEDENT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Drop the enclosing Blanks, and replace other troublesome character encodings
+
+    itext = alt.stdin.read_text()
+    otext = textwrap.dedent(itext)  # but without .rstrip, and without .strip
+    alt.stdout.write_text(otext)
+
+
+#
 # Search out Code to match the Text and run the Code to tweak the Text
 #
 
@@ -886,7 +932,7 @@ positional arguments:
 
 quirks:
   takes '.' as Hint to mean whatever one Hint works
-  
+
 conversions:
   to http://codereviews/r/123456/diff of ReviewBoard
     from https://codereviews.example.com/r/123456/diff/8/#index_header
@@ -1402,15 +1448,19 @@ EXPAND_DOC = r"""
     drop the enclosing Blanks, and replace other troublesome character encodings
 
     comparable to:
-      |expand |tr '' ''
+      |expand |sed $'s,\xC2\xA0,\&nsbp;,g'
 
     quirks:
       not pushed by us as '|expand' because many macOS & Linux Shells define '|expand' narrowly
 
     examples:
       echo $'\xC2\xA0 « » “ ’ ” – — ′ ″ ‴ ' |pq expand c
+      echo $'\xC2\xA0 \xC2\xA0' |sed 's,\xC2\xA0,\&nsbp;,g'
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq expand  |cat -etv  # most stripped
 
 """
+
+# todo: better example for contrast with 'most stripped' here
 
 
 def do_expand(argv: list[str]) -> None:  # do_expandtabs
@@ -1418,7 +1468,7 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
 
     # Form Shell Args Parser
 
-    doc = SET_DOC
+    doc = EXPAND_DOC
     parser = AmpedArgumentParser(doc, add_help=False)
 
     # Take up Shell Args
@@ -1436,20 +1486,24 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
 def str_expand_plus(text: str) -> str:
     """Drop the enclosing Blanks, and replace other troublesome character encodings"""
 
+    ud = unicodedata
+
     d = {
         "\f": "<hr>",  # U+000C \f
-        unicodedata.lookup("No-Break Space"): "&nbsp;",  # U+00A0 \xA0  # vs Apple ⌥Space
-        unicodedata.lookup("Zero Width Space"): "-",  # U+200B
-        unicodedata.lookup("En Dash"): "--",  # U+2013  # vs Microsoft
-        unicodedata.lookup("Em Dash"): " -- ",  # U+2014  # vs Microsoft
-        unicodedata.lookup("Left Single Quotation Mark"): "'",  # U+2018 ‘  # vs Microsoft
-        unicodedata.lookup("Right Single Quotation Mark"): "'",  # U+2019 ’  # vs Microsoft
-        unicodedata.lookup("Left Double Quotation Mark"): '"',  # U+201C “  # vs Microsoft
-        unicodedata.lookup("Right Double Quotation Mark"): '"',  # U+201D ”  # vs Microsoft
-        unicodedata.lookup("Horizontal Ellipsis"): "...",  # U+2026  # vs Microsoft
-        unicodedata.lookup("Prime"): "'",  # U+2032
-        unicodedata.lookup("Double Prime"): "''",  # U+2033
-        unicodedata.lookup("Triple Prime"): "'''",  # U+2034
+        ud.lookup("No-Break Space"): "&nbsp;",  # U+00A0 \xA0  # vs Apple ⌥Space
+        ud.lookup("Left-Pointing Double Angle Quotation Mark"): "<<",  # U+00AB «  # vs Microsoft
+        ud.lookup("Right-Pointing Double Angle Quotation Mark"): "<<",  # U+00BB »  # vs Microsoft
+        ud.lookup("Zero Width Space"): "'",  # U+200B &ZeroWidthSpace;
+        ud.lookup("En Dash"): "--",  # U+2013 –  # vs Microsoft
+        ud.lookup("Em Dash"): "---",  # U+2014 —  # vs Microsoft
+        ud.lookup("Left Single Quotation Mark"): "'",  # U+2018 ‘  # vs Microsoft
+        ud.lookup("Right Single Quotation Mark"): "'",  # U+2019 ’  # vs Microsoft
+        ud.lookup("Left Double Quotation Mark"): '"',  # U+201C “  # vs Microsoft
+        ud.lookup("Right Double Quotation Mark"): '"',  # U+201D ”  # vs Microsoft
+        ud.lookup("Horizontal Ellipsis"): "...",  # U+2026 …  # vs Microsoft
+        ud.lookup("Prime"): "'",  # U+2032 ′
+        ud.lookup("Double Prime"): "''",  # U+2032 ″
+        ud.lookup("Triple Prime"): "'''",  # U+2034 ‴
     }
 
     otext = text
@@ -1656,6 +1710,7 @@ HT_DOC = r"""
     examples:
       seq 99 |ht  c  # show not much of 99 Lines
       find . |ht  c  # show not much of many Pathnames that begin with "." Dot or not
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq ht  |cat -etv  # no change
 
 """
 
@@ -2131,10 +2186,15 @@ STRIP_DOC = r"""
 
     comparable to:
       |sed 's,^  *,,g' |sed 's,  *$,,g'
+      |pq dedent
+
+    quirks:
+      doesn't drop leading and trailing Blank Lines
 
     examples:
       echo '  a  b  ' |o |cat -etv
       echo '++a++b++' |o --chars='+' |cat -etv
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq strip  |cat -etv  # some stripped
 
 """
 
@@ -2393,7 +2453,7 @@ def do_xargs(argv: list[str]) -> None:
 #
 
 
-PQ_DOC = r"""
+XSHVERB_DOC = r"""
 usage: pq [HINT ...]
 
 mess about inside the Os/Copy Paste Buffer
@@ -2404,16 +2464,18 @@ positional arguments:
 quirks:
   defaults to decode the Bytes as UTF-8, replacing decoding Errors with U+003F '?' Question-Mark's
   defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
+  defaults to drop leading and trailing Blank Lines, but not the Dent of the first Line
   more help at:  xshverb.py --help
 
 examples:
   pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
   pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
   pq v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vi to edit it
+  printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq  |cat -etv  # much stripped
   echo $'\xC0\x80' |pq |sort  # doesn't deny service to shout up "illegal byte sequence"
 """
 
-XSHVERB_DOC = PQ_DOC
+PQ_DOC = XSHVERB_DOC
 
 # "There is nothing -- absolutely nothing -- half so much worth doing as simply messing about in ..." ~ Kenneth Grahame
 
@@ -2690,37 +2752,14 @@ def argv_parse_if(parser: AmpedArgumentParser, argv: list[str]) -> argparse.Name
 def bytes_textify(bytes_: bytes) -> bytes:
     """Keep the Text, but replace the Errors with '?' and drop the enclosing Blanks"""
 
-    # Convert to Str from Byte
-
     assert unicodedata.lookup("Replacement Character") == "\ufffd"
-
     decode = bytes_.decode(errors="replace")  # not errors="surrogateescape"
     text = decode.replace("\ufffd", "?")  # U+003F Question-Mark
 
-    # Textify Str
-
-    dedent = textwrap.dedent(text)
-    strip = dedent.strip()
-    splitlines = strip.splitlines()
-
-    rstrips = list(_.rstrip() for _ in splitlines)
-    join = "\n".join(rstrips)
-
-    join_plus = (join + "\n") if join else ""
-
-    # Convert to Byte from Str
-
+    join_plus = str_textify(text)
     encode = join_plus.encode()  # doesn't raise UnicodeEncodeError
 
     return encode
-
-    # doesn't start with Blank Columns, doesn't end any Line with Blank Chars
-    # doesn't start with Empty Lines, doesn't end with Empty Lines
-    # does end with "\n" when not empty
-
-    # doesn't raise UnicodeDecodeError, when decoded as UTF-8
-
-    # todo: .func vs Control Chars, and when to deal with just Ascii
 
 
 #
@@ -2732,15 +2771,26 @@ def str_textify(text: str) -> str:
     """Keep the Text, but drop the enclosing Blanks"""
 
     dedent = textwrap.dedent(text)
-    strip = dedent.strip()
-    splitlines = strip.splitlines()
-
+    splitlines = dedent.splitlines()
     rstrips = list(_.rstrip() for _ in splitlines)
-    join = "\n".join(rstrips)
 
+    while rstrips and not rstrips[0]:
+        rstrips.pop(0)
+    while rstrips and not rstrips[-1]:
+        rstrips.pop()
+
+    join = "\n".join(rstrips)
     join_plus = (join + "\n") if join else ""
 
     return join_plus
+
+    # doesn't start with Blank Columns, doesn't end any Lines with Blank Chars
+    # doesn't start with Empty Lines, doesn't end with Empty Lines
+    # does end with "\n" when not empty
+
+    # doesn't raise UnicodeDecodeError, doesn't substitute \ufffd, does substitute '?'
+
+    # todo: .func vs Control Chars, and when to deal with just Ascii
 
     # todo: Who doesn't pipe text? Dt
     # todo: Who calls to textify? Pq, Expand, and the editors: Emacs, Less, Vi
@@ -2849,6 +2899,7 @@ DOC_BY_VERB = dict(
     awk=AWK_DOC,
     cat=CAT_DOC,
     counter=COUNTER_DOC,
+    dedent=DEDENT_DOC,
     dot=DOT_DOC,
     dt=DT_DOC,
     emacs=EMACS_DOC,
@@ -2871,6 +2922,8 @@ DOC_BY_VERB = dict(
     xshverb=XSHVERB_DOC,
 )
 
+# todo: dent, dedent
+
 for _K_ in DOC_BY_VERB.keys():
     _V_ = textwrap.dedent(DOC_BY_VERB[_K_])
     assert not _V_.lstrip("\n").startswith(" "), (_V_, _K_)  # needs r""" ?
@@ -2881,6 +2934,8 @@ FUNC_BY_VERB = dict(
     awk=do_awk,
     cat=do_cat,
     counter=do_counter,
+    dedent=do_dedent,
+    # dent=do_dent,
     dot=do_dot,
     dt=do_dt,
     emacs=do_emacs,
@@ -2890,13 +2945,19 @@ FUNC_BY_VERB = dict(
     ht=do_ht,
     jq=do_jq,
     less=do_less,
+    # lower=do_lower,
+    # lstrip=do_lstrip,
     nl=do_nl,
     reverse=do_reverse,
     set=do_set,
     sort=do_sort,
     split=do_split,
+    # rstrip=do_rstrip,
     strip=do_strip,
+    # str_strip=do_str_strip,
     tail=do_tail,
+    # title=do_title,
+    # upper=do_upper,
     vi=do_vi,
     wcl=do_wcl,
     xargs=do_xargs,
@@ -2955,6 +3016,7 @@ _DIFF_VBS_ = list(difflib.unified_diff(a=_VBS_, b=_SORTED_VBS_, lineterm=""))
 assert not _DIFF_VBS_, (_DIFF_VBS_,)
 
 # todo: move these paragraphs of Code into a better place
+# todo: do complain, but without blocking Test
 
 
 alt = ShellPipe()
