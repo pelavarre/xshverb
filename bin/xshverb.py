@@ -894,7 +894,7 @@ DEDENT_DOC = r"""
       doesn't drop leading and trailing Blank Lines
 
     examples:
-      ls -l |pq dent |pq dedent
+      ls -l |pq dent |pq dedent |cat -
       printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq dedent  |cat -etv  # lots stripped
 
 """
@@ -918,6 +918,53 @@ def do_dedent(argv: list[str]) -> None:
     itext = alt.stdin.read_text()
     otext = textwrap.dedent(itext)
     alt.stdout.write_text(otext)
+
+
+#
+# Insert 4 leading Blanks in each Line
+#
+
+
+DENT_DOC = r"""
+
+    usage: dent
+
+    insert 4 leading Blanks in each Line
+
+    comparable to:
+      |sed 's,,^    ,'
+
+    quirks:
+      doesn't drop leading Blank Lines
+
+    examples:
+      ls -l |pq dent dent |cat -
+      ls -l |pq dent dent |pq dedent  |cat -
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq dent  |cat -etv  # dented
+
+"""
+
+
+def do_dent(argv: list[str]) -> None:
+    """Insert 4 leading Blanks in each Line"""
+
+    # Form Shell Args Parser
+
+    doc = DENT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Insert 4 leading Blanks in each Line
+
+    dent = 4 * " "
+
+    ilines = alt.stdin.read_splitlines()
+    olines = list((dent + _) for _ in ilines)
+    alt.stdout.write_splitlines(olines)
 
 
 #
@@ -1907,6 +1954,57 @@ def do_lower(argv: list[str]) -> None:
 
 
 #
+# Drop leading Blanks in each Line, or leading Chars of some other Set
+#
+
+
+LSTRIP_DOC = r"""
+
+    usage: lstrip [--charset CHARSET]
+
+    drop leading Blanks in each Line, or leading Chars of some other Set
+
+    options:
+      --charset CHARSET  list the Chars to drop if found, preferably in sorted order
+
+    comparable to:
+      |sed 's,^  *,,'
+
+    quirks:
+      doesn't drop leading Blank Lines
+
+    examples:
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq lstrip  |cat -etv  # left stripped
+
+"""
+
+
+def do_lstrip(argv: list[str]) -> None:
+    """Drop leading Blanks in each Line, or leading Chars of some other Set"""
+
+    # Form Shell Args Parser
+
+    doc = LSTRIP_DOC
+    charset_help = "list the Chars to drop if found, preferably in sorted order"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument("--charset", metavar="CHARSET", help=charset_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    charset = None if (ns.charset is None) else ns.charset  # maybe empty
+
+    # Drop leading Blanks in each Line, or leading Chars of some other Set
+
+    ilines = alt.stdin.read_splitlines()
+    olines = list(_.lstrip(charset) for _ in ilines)
+    alt.stdout.write_splitlines(olines)
+
+
+#
 # Number the Lines
 #
 
@@ -2013,6 +2111,57 @@ def do_reverse(argv: list[str]) -> None:
     olines = list(ilines)  # todo: aka:  olines = list(reversed(ilines))
     olines.reverse()
 
+    alt.stdout.write_splitlines(olines)
+
+
+#
+# Drop trailing Blanks in each Line, or trailing Chars of some other Set
+#
+
+
+RSTRIP_DOC = r"""
+
+    usage: rstrip [--charset CHARSET]
+
+    drop trailing Blanks in each Line, or trailing Chars of some other Set
+
+    options:
+      --charset CHARSET  list the Chars to drop if found, preferably in sorted order
+
+    comparable to:
+      |sed 's,  *$,,'
+
+    quirks:
+      doesn't drop trailing Blank Lines
+
+    examples:
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq rstrip  |cat -etv  # right stripped
+
+"""
+
+
+def do_rstrip(argv: list[str]) -> None:
+    """Drop trailing Blanks in each Line, or trailing Chars of some other Set"""
+
+    # Form Shell Args Parser
+
+    doc = RSTRIP_DOC
+    charset_help = "list the Chars to drop if found, preferably in sorted order"
+
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument("--charset", metavar="CHARSET", help=charset_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    charset = None if (ns.charset is None) else ns.charset  # maybe empty
+
+    # Drop trailing Blanks in each Line, or trailing Chars of some other Set
+
+    ilines = alt.stdin.read_splitlines()
+    olines = list(_.rstrip(charset) for _ in ilines)
     alt.stdout.write_splitlines(olines)
 
 
@@ -2172,50 +2321,6 @@ def do_sort(argv: list[str]) -> None:
 
 
 #
-# Drop leading and trailing Blank Lines, and the leading Blanks in the first Line
-#
-
-
-STR_STRIP_DOC = r"""
-
-    usage: str.strip
-
-    drop leading and trailing Blank Lines, and the leading Blanks in the first Line
-
-    comparable to:
-      |pq expand
-      |pq strip
-
-    quirks:
-      doesn't drop leading nor trailing Blanks in each Line
-
-    examples:
-      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq str.strip  |cat -etv  # some stripped
-
-"""
-
-
-def do_str_strip(argv: list[str]) -> None:
-    """Drop leading and trailing Blank Lines, and the leading Blanks in the first Line"""
-
-    # Form Shell Args Parser
-
-    doc = DEDENT_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
-
-    # Take up Shell Args
-
-    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
-    parser.parse_args_if(args)  # often prints help & exits zero
-
-    # Drop leading and trailing Blank Lines, and the leading Blanks in the first Line
-
-    itext = alt.stdin.read_text()
-    otext = itext.strip()
-    alt.stdout.write_text(otext)
-
-
-#
 # Break Lines apart into Words
 #
 
@@ -2263,8 +2368,51 @@ def do_split(argv: list[str]) -> None:
 
     itext = alt.stdin.read_text()
     olines = itext.split(sep)  # raises ValueError("empty separator") when Sep is empty
-
     alt.stdout.write_splitlines(olines)  # may write enclosing Blanks when not split by Blanks
+
+
+#
+# Drop leading and trailing Blank Lines, and the leading Blanks in the first Line
+#
+
+
+STR_STRIP_DOC = r"""
+
+    usage: str.strip
+
+    drop leading and trailing Blank Lines, and the leading Blanks in the first Line
+
+    comparable to:
+      |pq expand
+      |pq strip
+
+    quirks:
+      doesn't drop leading nor trailing Blanks in each Line
+
+    examples:
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq str.strip  |cat -etv  # some stripped
+
+"""
+
+
+def do_str_strip(argv: list[str]) -> None:
+    """Drop leading and trailing Blank Lines, and the leading Blanks in the first Line"""
+
+    # Form Shell Args Parser
+
+    doc = STR_STRIP_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Drop leading and trailing Blank Lines, and the leading Blanks in the first Line
+
+    itext = alt.stdin.read_text()
+    otext = itext.strip()
+    alt.stdout.write_text(otext)
 
 
 #
@@ -2282,7 +2430,7 @@ STRIP_DOC = r"""
       --charset CHARSET  list the Chars to drop if found, preferably in sorted order
 
     comparable to:
-      |sed 's,^  *,,g' |sed 's,  *$,,g'
+      |sed 's,^  *,,' |sed 's,  *$,,'
       |pq dedent
 
     quirks:
@@ -2317,7 +2465,7 @@ def do_strip(argv: list[str]) -> None:
     # Drop leading and trailing Blanks in each Line, or leading/ trailing Chars of some other Set
 
     ilines = alt.stdin.read_splitlines()
-    olines = list(_.strip(charset) for _ in ilines)  # drops enclosing Blanks when Sep is empty
+    olines = list(_.strip(charset) for _ in ilines)
     alt.stdout.write_splitlines(olines)
 
 
@@ -3077,6 +3225,7 @@ DOC_BY_VERB = dict(
     cat=CAT_DOC,
     counter=COUNTER_DOC,
     dedent=DEDENT_DOC,
+    dent=DENT_DOC,
     dot=DOT_DOC,
     dt=DT_DOC,
     emacs=EMACS_DOC,
@@ -3087,8 +3236,10 @@ DOC_BY_VERB = dict(
     jq=JQ_DOC,
     less=LESS_DOC,
     lower=LOWER_DOC,
+    lstrip=LSTRIP_DOC,
     nl=NL_DOC,
     reverse=REVERSE_DOC,
+    rstrip=RSTRIP_DOC,
     set=SET_DOC,
     sort=SORT_DOC,
     split=SPLIT_DOC,
@@ -3113,7 +3264,7 @@ FUNC_BY_VERB = dict(
     cat=do_cat,
     counter=do_counter,
     dedent=do_dedent,
-    # dent=do_dent,
+    dent=do_dent,
     dot=do_dot,
     dt=do_dt,
     emacs=do_emacs,
@@ -3124,15 +3275,14 @@ FUNC_BY_VERB = dict(
     jq=do_jq,
     less=do_less,
     lower=do_lower,
-    # lstrip=do_lstrip,
+    lstrip=do_lstrip,
     nl=do_nl,
     reverse=do_reverse,
+    rstrip=do_rstrip,
     set=do_set,
     sort=do_sort,
     split=do_split,
-    # rstrip=do_rstrip,
     strip=do_strip,
-    # str_strip=do_str_strip,
     tail=do_tail,
     title=do_title,
     upper=do_upper,
@@ -3203,7 +3353,7 @@ DOC_BY_VERB["textwrap.dedent"] = DEDENT_DOC
 FUNC_BY_VERB["str.strip"] = do_str_strip
 FUNC_BY_VERB["textwrap.dedent"] = do_dedent
 
-# todo: merge these in above
+# todo: merge these in above, like as .do_textwrap_dedent, .do_str_strip
 
 
 alt = ShellPipe()
