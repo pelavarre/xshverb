@@ -420,8 +420,11 @@ def str_is_identifier_ish(text: str) -> bool:
     if text == ".":
         return True
 
-    isidentifier = text.isidentifier()
-    return isidentifier
+    splits = text.split(".")
+    if all(_.isidentifier() for _ in splits):
+        return True
+
+    return False
 
 
 @dataclasses.dataclass  # (order=False, frozen=False)
@@ -2169,6 +2172,50 @@ def do_sort(argv: list[str]) -> None:
 
 
 #
+# Drop leading and trailing Blank Lines, and the leading Blanks in the first Line
+#
+
+
+STR_STRIP_DOC = r"""
+
+    usage: str.strip
+
+    drop leading and trailing Blank Lines, and the leading Blanks in the first Line
+
+    comparable to:
+      |pq expand
+      |pq strip
+
+    quirks:
+      doesn't drop leading nor trailing Blanks in each Line
+
+    examples:
+      printf '\n\n      a3 a4 a5 \n   b2 b3       \n\n\n' |pq str.strip  |cat -etv  # some stripped
+
+"""
+
+
+def do_str_strip(argv: list[str]) -> None:
+    """Drop leading and trailing Blank Lines, and the leading Blanks in the first Line"""
+
+    # Form Shell Args Parser
+
+    doc = DEDENT_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Drop leading and trailing Blank Lines, and the leading Blanks in the first Line
+
+    itext = alt.stdin.read_text()
+    otext = itext.strip()
+    alt.stdout.write_text(otext)
+
+
+#
 # Break Lines apart into Words
 #
 
@@ -3055,8 +3102,6 @@ DOC_BY_VERB = dict(
     xshverb=XSHVERB_DOC,
 )
 
-# todo: dent, dedent
-
 for _K_ in DOC_BY_VERB.keys():
     _V_ = textwrap.dedent(DOC_BY_VERB[_K_])
     assert not _V_.lstrip("\n").startswith(" "), (_V_, _K_)  # needs r""" ?
@@ -3150,6 +3195,15 @@ assert not _DIFF_VBS_, (_DIFF_VBS_,)
 
 # todo: move these paragraphs of Code into a better place
 # todo: do complain, but without blocking Test
+
+
+DOC_BY_VERB["str.strip"] = STR_STRIP_DOC
+DOC_BY_VERB["textwrap.dedent"] = DEDENT_DOC
+
+FUNC_BY_VERB["str.strip"] = do_str_strip
+FUNC_BY_VERB["textwrap.dedent"] = do_dedent
+
+# todo: merge these in above
 
 
 alt = ShellPipe()
