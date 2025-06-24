@@ -54,7 +54,6 @@ from __future__ import annotations
 
 import __main__
 import argparse
-import bdb
 import collections.abc
 import dataclasses
 import datetime as dt
@@ -73,7 +72,7 @@ import string
 import subprocess
 import sys
 import textwrap
-import traceback
+import types
 import unicodedata
 import urllib.parse
 import zoneinfo  # new since Oct/2020 Python 3.9
@@ -85,46 +84,50 @@ if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
 
 
-YYYY_MM_DD = "2025-05-31"  # date of last change to this Code, or an earlier date
+#
+# Name a few things
+#
+
+
+YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier date
 
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
-Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")  # todo: also welcome logins from the periphery
-UTC = zoneinfo.ZoneInfo("UTC")
+Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
+UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
 GATEWAY_VERBS = ("dt", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
 
 
+#
+# Do exit into a Post-Mortem Debugger, when not exiting via SystemExit
+#
+
+
+with_hook = sys.excepthook
+assert (with_hook.__module__, with_hook.__name__) == ("sys", "excepthook"), (with_hook,)
+
+
+def excepthook(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_traceback: types.TracebackType | None,
+) -> None:
+    with_hook(exc_type, exc_value, exc_traceback)
+    print(">>> pdb.pm()", file=sys.stderr)
+    pdb.pm()
+
+
+sys.excepthook = excepthook
+
+
+#
+# Run from the Shell Command Line
+#
+
+
 def main() -> None:
-    """Run from the Shell Command Line, else launch the Pdb Post-Mortem Debugger"""
-
-    try:
-        main_try()
-    except bdb.BdbQuit:
-        raise
-    except Exception as exc:
-        (exc_type, exc_value, exc_traceback) = sys.exc_info()
-        assert exc_type is type(exc_value), (exc_type, exc_value)
-        assert exc is exc_value, (exc, exc_value)
-
-        traceback.print_exc(file=sys.stderr)
-
-        print("\n", file=sys.stderr)
-        print("\n", file=sys.stderr)
-        print("\n", file=sys.stderr)
-
-        print(">>> sys.last_exc = sys.exc_info()[1]", file=sys.stderr)
-        assert not hasattr(sys, "last_exc"), (sys.last_exc,)
-        sys.last_exc = exc_value  # was .sys.last_traceback for awhile
-
-        print(">>> pdb.pm()", file=sys.stderr)
-        pdb.pm()
-
-        raise
-
-
-def main_try() -> None:
     """Run from the Shell Command Line"""
 
     argv = sys.argv
