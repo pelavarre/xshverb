@@ -1,7 +1,5 @@
 things to do, futures to build
 
-    e, v with a file name, sys.last_traceback at exit
-
     t = dt.datetime.now() implied inside demos/p
 
     abbreviate down to d and to p what now is

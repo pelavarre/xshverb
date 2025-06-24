@@ -440,6 +440,19 @@ class ShellFile:
     drained: bool = False
 
     #
+    # Pump Bytes in from Nowhere and out to Nowhere
+    #
+
+    def fill_and_drain(self) -> None:
+        """Fill from Nowhere, and drain to Nowhere"""
+
+        assert not self.filled, (self.filled,)
+        assert not self.drained, (self.drained,)
+
+        self.filled = True
+        self.drained = True
+
+    #
     # Pump Bytes in
     #
 
@@ -1461,7 +1474,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
     argv_tails = argv[1:]
 
-    # Read input
+    # Choose to work inside a LocalHost GetCwd File, or not
 
     pid = os.getpid()
     pathname = f"{pid}-xshverb.pbpaste"
@@ -1469,16 +1482,18 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
     ends = list()
     if (not argv_tails) or all(_.startswith("-") for _ in argv_tails):
+        ends = [pathname]
 
+    # Read LocalHost GetCwd File, or not
+
+    if ends:
         ibytes = alt.stdin.read_bytes()
         textify = bytes_textify(ibytes)  # do textify before edit
         path.write_bytes(textify)
 
-        ends = [pathname]
-
     # Trace and do work
 
-    shargv = [shverb] + starts + argv[1:] + ends
+    shargv = [shverb] + starts + argv_tails + ends
     shline = " ".join(shlex.quote(_) for _ in shargv)
     eprint("+", shline)
 
@@ -1494,11 +1509,16 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
         eprint(f"+ exit {returncode}")
         sys.exit(returncode)
 
-    # Write output
+    # Write LocalHost GetCwd File, or not
 
     if ends:
         obytes = path.read_bytes()  # don't textify after edit
         alt.stdout.write_bytes(obytes)
+
+    # Leave Pipe and Os Copy/Paste Buffer undisturbed, when working inside a chosen Pathname
+
+    if not ends:
+        alt.stdout.fill_and_drain()
 
 
 #
