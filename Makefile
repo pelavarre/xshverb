@@ -39,6 +39,19 @@ help:
 	@true
 
 
+#
+# Install stale copies into my Sh Path ~/bin/ Folder
+#
+
+bin:
+	cp -p bin/? bin/pq bin/xshverb.py ~/bin/.
+
+
+#
+# Installs/ replaces Python add-on's from PyPi·Org
+#
+
+
 .PHONY: bin pips requirements.txt
 
 pips requirements.txt:
@@ -59,6 +72,11 @@ pips requirements.txt:
 	:
 	git diff --color-moved requirements.txt
 	:
+
+
+#
+# Calls for Python Code Review from Black, Flake8, and MyPy Strict
+#
 
 
 smoke: black flake8 mypy
@@ -94,8 +112,19 @@ mypy:
 			bin/
 
 
-bin:
-	cp -p bin/? bin/pq bin/xshverb.py ~/bin/.
+#
+# Calls for Shell Code Review from ShellCheck
+#
+
+
+shellcheck:
+	if ! which shellcheck; then \
+		ls /usr/bin/shellcheck || :; \
+		echo 'ok by you? or do you want:  date && time  sudo apt install shellcheck'; \
+		exit 1; \
+	fi
+	:
+	shellcheck bin/pwnme
 
 
 # posted as:  https://github.com/pelavarre/xshverb/blob/main/Makefile
