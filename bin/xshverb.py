@@ -37,7 +37,7 @@ examples:
   a --  # shows the Closing Paragraph of the Help Doc for the Awk Shell Verb
   a --help  # shows the whole Help Doc for the Awk Shell Verb
   a --version  # shows the Version of the Code here
-  p  # chats with Python, and doesn't make you spell out the Imports, or builds & runs a Shell Pipe
+  p  # chats with Python, and doesn't make you spell out the Imports
   pq  # dedents and strips the Os/Copy Paste Buffer, first to Tty Out, and then to replace itself
   pq .  # guesses what edit you want in the Os/Copy Paste Buffer and runs ahead to do it
   v  # dedents and strips the Os/Copy Paste Buffer, and then calls Vi to edit it
@@ -2892,6 +2892,70 @@ def do_upper(argv: list[str]) -> None:
 
 
 #
+# Split and unsplit a Web Address
+#
+
+
+URLLIB_DOC = r"""
+
+    usage: urrlib
+
+    split and unsplit a Web Address
+
+    quirks:
+      splits a single line, unsplits multiple lines
+
+    examples:
+      echo 'https://www.google.com/search?tbm=isch&q=carelman' |pq urllib |cat -
+      echo 'https://www.google.com/search?tbm=isch&q=carelman' |pq urllib |pq urllib |cat -
+
+"""
+
+
+def do_urllib(argv: list[str]) -> None:
+    """Split and unsplit a Web Address"""
+
+    # Form Shell Args Parser
+
+    doc = URLLIB_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    # Split and unsplit a Web Address
+
+    ilines = alt.stdin.read_splitlines()
+
+    if len(ilines) != 1:
+        oline = " ".join(ilines)
+        oline = oline.replace(" ", "")
+        alt.stdout.write_splitlines([oline])
+        return
+
+    iline = ilines[-1]
+
+    urlsplits = urllib.parse.urlsplit(iline)
+
+    pairs = urllib.parse.parse_qsl(urlsplits.query)
+    join = "\n".join(f"&{k}={v}" for k, v in pairs)
+    lstrip = join.lstrip(" &")
+
+    olines = list()
+    olines.append(urlsplits.scheme + "://")
+    olines.append(urlsplits.netloc)
+    olines.append(urlsplits.path + ("?" if lstrip else ""))
+    olines.extend(lstrip.splitlines())
+    olines.append(urlsplits.fragment)
+
+    olines = list(_ for _ in olines if _)
+
+    alt.stdout.write_splitlines(olines)
+
+
+#
 # Call up Vi
 #
 
@@ -3523,6 +3587,7 @@ DOC_BY_VERB = dict(
     tail=TAIL_DOC,
     title=TITLE_DOC,
     upper=UPPER_DOC,
+    urllib=URLLIB_DOC,
     vi=VI_DOC,
     wcl=WCL_DOC,
     xargs=XARGS_DOC,
@@ -3564,6 +3629,7 @@ FUNC_BY_VERB = dict(
     tail=do_tail,
     title=do_title,
     upper=do_upper,
+    urllib=do_urllib,
     vi=do_vi,
     wcl=do_wcl,
     xargs=do_xargs,

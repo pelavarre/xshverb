@@ -1,7 +1,7 @@
 things to do, futures to build
 
-    |pq urllib the link, such as .../k1=v1&k2=v2
-        call .urlsplit and .parse_qs too
+    pq python names to call them in order on each iline etc
+    p arbitrary python expression on each iline etc
 
     trace what pq . chose to mean
         and accept |pq . codereviews
