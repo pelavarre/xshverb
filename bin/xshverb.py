@@ -97,7 +97,7 @@ Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
 UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
-GATEWAY_VERBS = ("dt", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
+GATEWAY_VERBS = ("dt", "d", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
 
 
 #
@@ -349,7 +349,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
             # Take all the remaining Hints as Args, after a Gateway Verb into a Namespacre
 
-            assert GATEWAY_VERBS == ("dt", "e", "k", "v")
+            assert GATEWAY_VERBS == ("dt", "d", "e", "k", "v")
 
             if index == 0:
                 if argv[0] in GATEWAY_VERBS:  # todo: which verbs consume indefinitely many hints?
@@ -981,6 +981,73 @@ def do_dent(argv: list[str]) -> None:
     ilines = alt.stdin.read_splitlines()
     olines = list((dent + _) for _ in ilines)
     alt.stdout.write_splitlines(olines)
+
+
+#
+# Diff two texts
+#
+
+
+DIFF_DOC = r"""
+
+    usage: diff [A] [B]
+
+    compare and contrast two texts
+
+    positional arguments:
+      A  the earlier file (default: a)
+      B  the later file (default: b)
+
+    comparable to:
+      diff -brpu A B
+
+    examples:
+      d  # diff -brpu a b
+      d y  # diff -brpu a y
+      d x y  # diff -brpu x y
+
+"""
+
+
+def do_diff(argv: list[str]) -> None:
+    """Compare and contrast two texts"""
+
+    assert argparse.OPTIONAL == "?"
+
+    # Form Shell Args Parser
+
+    doc = DIFF_DOC
+    a_help = "the earlier file (default: a)"
+    b_help = "the later file (default: b)"
+    parser = AmpedArgumentParser(doc, add_help=False)
+    parser.add_argument(dest="a", metavar="A", nargs="?", help=a_help)
+    parser.add_argument(dest="b", metavar="B", nargs="?", help=b_help)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    ns = parser.parse_args_if(args)  # often prints help & exits zero
+
+    if ns.a is None:
+        assert ns.b is None, (ns.b,)
+        (a, b) = ("a", "b")
+    elif ns.b is None:
+        (a, b) = ("a", ns.a)
+    else:
+        (a, b) = (ns.a, ns.b)
+
+    # Do the Diff & exit
+
+    shargv = ["diff", "-brpu", a, b]
+    shline = " ".join(shlex.quote(_) for _ in shargv)
+    eprint("+", shline)
+
+    run = subprocess.run(shargv, stdin=None)
+    returncode = run.returncode
+
+    sys.exit(returncode)
+
+    # todo: test |d when not placed as a Gateway Shell Verb at the far left
 
 
 #
@@ -3249,6 +3316,7 @@ DOC_BY_VERB = dict(
     counter=COUNTER_DOC,
     dedent=DEDENT_DOC,
     dent=DENT_DOC,
+    diff=DIFF_DOC,
     dot=DOT_DOC,
     dt=DT_DOC,
     emacs=EMACS_DOC,
@@ -3288,6 +3356,7 @@ FUNC_BY_VERB = dict(
     counter=do_counter,
     dedent=do_dedent,
     dent=do_dent,
+    diff=do_diff,
     dot=do_dot,
     dt=do_dt,
     emacs=do_emacs,
@@ -3320,6 +3389,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     ".": "dot",
     "a": "awk",
     "c": "cat",
+    "d": "diff",
     "dict": "counter",
     "e": "emacs",
     "g": "grep",
@@ -3393,27 +3463,15 @@ if __name__ == "__main__":
 
 # todo: bug: no regex choosing @ cat bin/xshverb.py |g '(def.do_)'  a 2  c
 
-
 # todo: |grep -n
 
-
 # todo: + |y is to show what's up and halt till you say move on
-
-# todo: + |e is for **Emacs**, but inside the Terminal with no Menu Bar and no Splash
-# todo: + |k is for **Less** of the '|tee >(less -FIRX)' kind because |l and |m were taken
-# todo: + |v is for **Vi** but default to edit the Os Copy/Paste Buffer, same as at |e
-
 # todo: + m is for **Make**, but timestamp the work and never print the same Line twice
-
 # todo: + q is for **Git**, because G was taken
-
-# todo: + d is for **Diff**, but default to '|diff -brpu a b'
 # todo: + f is for **Find**, but default to search $PWD spelled as ""
 # todo: + l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
 
-
 # more test with 1 2 3 etc defined of particular nonsense such as:  seq 123 |sh
-
 
 # todo: |p ascii and |p repr without so many quotes in the output
 
