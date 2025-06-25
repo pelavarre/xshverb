@@ -59,6 +59,7 @@ import dataclasses
 import datetime as dt
 import difflib
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -94,6 +95,7 @@ YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier dat
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
 Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
+PacificLaunch = dt.datetime.now(Pacific)
 UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
@@ -128,6 +130,18 @@ sys.excepthook = excepthook
 
 
 def main() -> None:
+    """Run from the Shell Command Line, but never raise SystemExit"""
+
+    try:
+        try_main()
+    except SystemExit as exc:
+        if exc.code:
+            raise
+
+    # falling out, rather than raising SystemExit, makes os.environ["PYTHONINSPECT"] work
+
+
+def try_main() -> None:
     """Run from the Shell Command Line"""
 
     argv = sys.argv
@@ -376,7 +390,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
         parser = AmpedArgumentParser(doc, add_help=False)  # enough to print Closing
         if argv[1:] == ["--"]:
             self.closing_show(closing=parser.closing)
-            sys.exit(0)
+            sys.exit(0)  # exits 0 after printing Closing
 
         double_dashed = False
         for arg in argv[1:]:
@@ -389,11 +403,11 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
                 if (arg == "-h") or ("--help".startswith(arg) and arg.startswith("--h")):
                     self.doc_show()
-                    sys.exit(0)
+                    sys.exit(0)  # exits 0 after printing Help
 
                 if (arg == "-V") or ("--version".startswith(arg) and arg.startswith("--v")):
                     self.version_show()
-                    sys.exit(0)
+                    sys.exit(0)  # exits 0 after printing Version
 
         # often prints help & exits zero
 
@@ -1045,7 +1059,12 @@ def do_diff(argv: list[str]) -> None:
     run = subprocess.run(shargv, stdin=None)
     returncode = run.returncode
 
-    sys.exit(returncode)
+    if returncode:
+        sys.exit(returncode)  # silently exits nonzero after Diff exits nonzero
+
+    # Don't disturb Pipe and Os Copy/Paste Buffer, after a chat with Python
+
+    alt.stdout.fill_and_drain()
 
     # todo: test |d when not placed as a Gateway Shell Verb at the far left
 
@@ -1464,7 +1483,7 @@ def do_dt(argv: list[str]) -> None:
 
     if not argv[1:]:
         assert ns.words == ["true"], (ns.words,)
-        sys.exit(0)
+        sys.exit(0)  # exits 0 after printing Date/Time
 
     shargv = ns.words
     shline = " ".join(shlex.quote(_) for _ in shargv)
@@ -1478,7 +1497,7 @@ def do_dt(argv: list[str]) -> None:
     t1t0 = t1 - t0
     eprint(dt_timedelta_strftime(t1t0))  # such as '346ms' to mean 0.346 <= t <= 0.347
 
-    sys.exit(returncode)
+    sys.exit(returncode)  # exits after Dating & Timing 1 Shell Command Line
 
     # todo: test |dt when not placed as a Gateway Shell Verb at the far left
 
@@ -1574,7 +1593,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
     returncode = run.returncode
     if returncode:
         eprint(f"+ exit {returncode}")
-        sys.exit(returncode)
+        sys.exit(returncode)  # exits sad after Editing
 
     # Write LocalHost GetCwd File, or not
 
@@ -1582,7 +1601,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
         obytes = path.read_bytes()  # don't textify after edit
         alt.stdout.write_bytes(obytes)
 
-    # Leave Pipe and Os Copy/Paste Buffer undisturbed, when working inside a chosen Pathname
+    # Don't disturb Pipe and Os Copy/Paste Buffer, when working inside a chosen Pathname
 
     if not ends:
         alt.stdout.fill_and_drain()
@@ -2158,6 +2177,171 @@ def do_nl(argv: list[str]) -> None:
         olines.append(oline)
 
     alt.stdout.write_splitlines(olines)
+
+
+#
+# Launch a chat with Python
+#
+
+
+PYTHON_DOC = r"""
+
+    usage: python
+
+    launch a chat with Python
+
+    comparable to:
+      python3 -i -c '...'
+
+    examples:
+      p
+
+"""
+
+
+def do_python(argv: list[str]) -> None:
+    """Launch a chat with Python"""
+
+    # Form Shell Args Parser
+
+    doc = PYTHON_DOC
+    parser = AmpedArgumentParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    globals_add_python_import_names()
+
+    # Don't disturb Pipe and Os Copy/Paste Buffer
+
+    alt.stdout.fill_and_drain()
+
+    # Schedule a chat with Python to happen after Return from Def Main
+
+    os.environ["PYTHONINSPECT"] = str(True)
+
+    # todo: test |p when not placed as a Gateway Shell Verb at the far left
+
+
+def globals_add_python_import_names() -> None:
+
+    g = globals()
+    for name in PYTHON_IMPORTS:
+        if name not in g.keys():
+            g[name] = LazyImport(name)
+
+    if "dt" not in g.keys():
+        dt = LazyImport(import_="datetime", as_="dt")
+        g["dt"] = dt
+
+    if "et" not in g.keys():
+        et = LazyImport(import_="xml.etree.ElementTree", as_="et")
+        g["et"] = et
+
+    if "np" not in g.keys():
+        np = LazyImport(import_="numpy", as_="np")
+        g["np"] = np
+
+    if "pd" not in g.keys():
+        pd = LazyImport(import_="pandas", as_="pd")
+        g["pd"] = pd
+
+    if "plt" not in g.keys():
+        plt = LazyImport(import_="matplotlib.pyplot", as_="plt")
+        g["plt"] = plt
+
+    if "t" not in g.keys():
+        g["t"] = PacificLaunch
+
+
+class LazyImport:
+    """Defer the work of "import X as Y" till first Y.Z fetched"""
+
+    def __init__(self, import_: str, as_: str | None = None) -> None:
+        self.import_ = import_
+        self.as_ = import_ if (as_ is None) else as_
+
+    def __getattribute__(self, name: str) -> object:
+        if name in "as_ import_".split():
+            return super().__getattribute__(name)
+        module = importlib.import_module(self.import_)
+        globals()[self.as_] = module
+        return module.__getattribute__(name)
+
+    def __repr__(self) -> str:
+        module = importlib.import_module(self.import_)
+        globals()[self.as_] = module
+        return module.__repr__()
+
+
+_PYTHON_IMPORTS_TEXT = """
+
+
+    # hard-to-discover basics
+    # sorted(_[0] for _  in sys.modules.items() if not hasattr(_[-1], "__file__"))
+
+    __main__
+
+    atexit builtins errno itertools marshal posix pwd sys time
+
+
+    # from ".so" Shared Object Libraries
+    # minus deprecated: audioop nis pyexpat
+
+    array binascii cmath fcntl grp
+    math mmap readline resource select syslog termios unicodedata zlib
+
+
+    # from Py Files
+    # minus deprecated: aifc cgi cgitb chunk crypt imghdr
+    # minus deprecated: mailcap nntplib pipes sndhdr sunau telnetlib uu uuid xdrlib
+
+    abc antigravity argparse ast asynchat asyncore  base64 bdb bisect bz2
+    cProfile calendar cmd code codecs codeop colorsys
+        compileall configparser contextlib contextvars copy copyreg csv
+    dataclasses datetime decimal difflib dis doctest  enum
+    filecmp fileinput fnmatch fractions ftplib functools
+    genericpath getopt getpass gettext glob graphlib gzip
+    hashlib heapq hmac  imaplib imp inspect io ipaddress  keyword
+    linecache locale lzma
+
+    mailbox mimetypes modulefinder
+    netrc ntpath nturl2path numbers  opcode operator optparse os
+    pathlib pdb pickle pickletools pkgutil platform plistlib poplib posixpath
+        pprint profile pstats pty py_compile pyclbr pydoc
+    queue quopri  random reprlib rlcompleter runpy
+    sched secrets selectors shelve shlex shutil signal site smtpd smtplib socket
+        socketserver sre_compile sre_constants sre_parse ssl stat statistics string
+        stringprep struct subprocess symtable sysconfig
+    tabnanny tarfile tempfile textwrap this threading timeit token tokenize
+        trace traceback tracemalloc tty turtle types typing
+    warnings  wave weakref webbrowser  zipapp zipfile zipimport
+
+
+    # from Dirs containing an "_init__.py" File
+
+    asyncio  collections concurrent ctypes curses  dbm distutils
+    email encodings ensurepip  html http  idlelib importlib  json  lib2to3 logging
+
+    multiprocessing  pydoc_data  re  sqlite3  test tkinter tomllib turtledemo
+    unittest urllib urllib.parse  venv  wsgiref  xml xmlrpc  zoneinfo
+
+
+    # from VEnv Pip Install
+
+    jira matplotlib numpy pandas psutil psycopg2 redis requests
+
+
+"""
+
+PYTHON_IMPORTS = _PYTHON_IMPORTS_TEXT.splitlines()
+PYTHON_IMPORTS = list(_.partition("#")[0] for _ in PYTHON_IMPORTS)
+PYTHON_IMPORTS = list(_.strip() for _ in PYTHON_IMPORTS)
+PYTHON_IMPORTS = " ".join(PYTHON_IMPORTS).split()
+
+assert len(PYTHON_IMPORTS) == 201, (len(PYTHON_IMPORTS), 201)
 
 
 #
@@ -3329,6 +3513,7 @@ DOC_BY_VERB = dict(
     lower=LOWER_DOC,
     lstrip=LSTRIP_DOC,
     nl=NL_DOC,
+    python=PYTHON_DOC,
     reverse=REVERSE_DOC,
     rstrip=RSTRIP_DOC,
     set=SET_DOC,
@@ -3369,6 +3554,7 @@ FUNC_BY_VERB = dict(
     lower=do_lower,
     lstrip=do_lstrip,
     nl=do_nl,
+    python=do_python,
     reverse=do_reverse,
     rstrip=do_rstrip,
     set=do_set,
@@ -3400,7 +3586,7 @@ VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell V
     "len": "wcl",
     "n": "nl",
     "o": "strip",
-    "p": "xshverb",
+    "p": "python",
     "pq": "xshverb",  # |pq in homage of |jq, not |py and not |python
     "r": "reverse",
     "s": "sort",
