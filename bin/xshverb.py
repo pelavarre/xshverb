@@ -94,12 +94,22 @@ YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier dat
 
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
+
+GatewayVerbs = ("dt", "d", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
+
+
 Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
 PacificLaunch = dt.datetime.now(Pacific)
 UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
-GATEWAY_VERBS = ("dt", "d", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
+AppPathname = f"xshverb.pbpaste"  # traces the last Pipe
+
+OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
+ProcessPathname = f"{OsGetPid}-xshverb.pbpaste"
+
+GotClipboard = shutil.which("pbpaste") and shutil.which("pbcopy")
+# GotClipboard = None  # runs as if Clipboard not found
 
 
 #
@@ -363,10 +373,10 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
             # Take all the remaining Hints as Args, after a Gateway Verb into a Namespacre
 
-            assert GATEWAY_VERBS == ("dt", "d", "e", "k", "v")
+            assert GatewayVerbs == ("dt", "d", "e", "k", "v")
 
             if index == 0:
-                if argv[0] in GATEWAY_VERBS:  # todo: which verbs consume indefinitely many hints?
+                if argv[0] in GatewayVerbs:  # todo: which verbs consume indefinitely many hints?
                     continue
 
             # Insert a Break between Shell Pipe Filters,
@@ -521,13 +531,35 @@ class ShellFile:
 
             self.filled = True
 
-            shline = "pbpaste"  # macOS convention, often not distributed at Linuxes
-            argv = shlex.split(shline)
-            run = subprocess.run(
-                argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=None, check=True
-            )
+            app_path = pathlib.Path(AppPathname)
+            if not GotClipboard:
 
-            self.iobytes = run.stdout  # replaces
+                if not app_path.exists():
+                    iobytes = Jabberwocky.encode()  # fabricates Bytes to begin with
+                else:
+                    iobytes = app_path.read_bytes()  # runs on into next Process
+
+            else:
+
+                shline = "pbpaste"  # macOS convention, often not distributed at Linuxes
+                argv = shlex.split(shline)
+
+                run = subprocess.run(
+                    argv,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=None,
+                    check=True,
+                )
+
+                iobytes = run.stdout
+
+            app_path.write_bytes(iobytes)  # traces Date/ Time/ Bytes of PbPaste
+
+            process_path = pathlib.Path(ProcessPathname)  # adds next revision of Paste Buffer
+            process_path.write_bytes(iobytes)
+
+            self.iobytes = iobytes
 
         # .errors .returncode .shell .stdin unlike:  iobytes = os.popen(shline).read().encode()
 
@@ -618,9 +650,17 @@ class ShellFile:
 
             self.drained = True
 
-            shline = "pbcopy"  # macOS convention, often not distributed at Linuxes
-            argv = shlex.split(shline)
-            subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
+            process_path = pathlib.Path(ProcessPathname)  # adds next revision of Paste Buffer
+            process_path.write_bytes(iobytes)
+
+            app_path = pathlib.Path(AppPathname)
+            app_path.write_bytes(iobytes)  # traces Date/ Time/ Bytes of PbCopy
+
+            if GotClipboard:
+
+                shline = "pbcopy"  # macOS convention, often not distributed at Linuxes
+                argv = shlex.split(shline)
+                subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
 
     def drain_to_stdout(self) -> None:
         """Write Bytes to Sydout"""
@@ -1562,8 +1602,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
     # Choose to work inside a LocalHost GetCwd File, or not
 
-    pid = os.getpid()
-    pathname = f"{pid}-xshverb.pbpaste"
+    pathname = ProcessPathname  # not AppPathname
     path = pathlib.Path(pathname)
 
     ends = list()
@@ -3549,6 +3588,53 @@ def pathlib_path_read_version(pathname: str) -> str:
 
 def eprint(*args: object) -> None:
     print(*args, file=sys.stderr)
+
+
+#
+# Fabricate Bytes to begin with, for the case of we got no Input
+#
+
+
+Jabberwocky = """
+
+    ’Twas brillig, and the slithy toves
+        Did gyre and gimble in the wabe:
+    All mimsy were the borogoves,
+        And the mome raths outgrabe.
+
+    “Beware the Jabberwock, my son!
+        The jaws that bite, the claws that catch!
+    Beware the Jubjub bird, and shun
+        The frumious Bandersnatch!”
+
+    He took his vorpal sword in hand;
+        Long time the manxome foe he sought—
+    So rested he by the Tumtum tree
+        And stood awhile in thought.
+
+    And, as in uffish thought he stood,
+        The Jabberwock, with eyes of flame,
+    Came whiffling through the tulgey wood,
+        And burbled as it came!
+
+    One, two! One, two! And through and through
+        The vorpal blade went snicker-snack!
+    He left it dead, and with its head
+        He went galumphing back.
+
+    “And hast thou slain the Jabberwock?
+        Come to my arms, my beamish boy!
+    O frabjous day! Callooh! Callay!”
+        He chortled in his joy.
+
+    ’Twas brillig, and the slithy toves
+        Did gyre and gimble in the wabe:
+    All mimsy were the borogoves,
+        And the mome raths outgrabe.
+
+"""
+
+# for as to defeat "the tyranny of the blank page"
 
 
 #
