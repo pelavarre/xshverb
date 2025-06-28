@@ -108,8 +108,8 @@ AppPathname = f"xshverb.pbpaste"  # traces the last Pipe
 OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
 ProcessPathname = f"{OsGetPid}-xshverb.pbpaste"
 
-GotClipboard = shutil.which("pbpaste") and shutil.which("pbcopy")
-# GotClipboard = None  # runs as if Clipboard not found
+GotClipboard = bool(shutil.which("pbpaste") and shutil.which("pbcopy"))
+# GotClipboard = False  # runs as if Clipboard not found
 
 
 #
