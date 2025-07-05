@@ -97,7 +97,7 @@ YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier dat
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
 
-GatewayVerbs = ("dt", "d", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
+GatewayVerbs = ("dt", "d", "g", "e", "k", "v")  # these override how we parse the ArgV of each ShPump
 
 
 Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
@@ -375,7 +375,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
             # Take all the remaining Hints as Args, after a Gateway Verb into a Namespacre
 
-            assert GatewayVerbs == ("dt", "d", "e", "k", "v")
+            assert GatewayVerbs == ("dt", "d", "g", "e", "k", "v")
 
             if index == 0:
                 if argv[0] in GatewayVerbs:  # todo: which verbs consume indefinitely many hints?
@@ -1759,9 +1759,7 @@ GREP_DOC = r"""
       takes the Pattern as a RegEx only when it contains >=1 balanced pairs of () [] {}
 
     examples:
-      echo .1 .2 .3 a1 b2 c3 |tr ' ' '\n' |pbcopy
-      g .1 .2 '(.3)'  c  # .1 .2 .3 c3
-      pq 'g a. b2 c.'  c  # b2
+      ls -l |g FUTU Make '(n$)' |c
 
 """
 
@@ -1788,7 +1786,7 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
     ns = parser.parse_args_if(args)  # often prints help & exits zero
     patterns = ns.patterns
 
-    eprint(patterns)
+    # eprint(patterns)
 
     # Say which Patterns we don't run as Regular Expressions
 
@@ -1814,16 +1812,23 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
     for iline in ilines:
         for pattern in patterns:
 
-            if pattern.islower() or pattern.isupper():
-                if pattern.casefold() not in iline.casefold():
-                    continue
-
-            elif str_is_re_pattern_ish(pattern):
+            if str_is_re_pattern_ish(pattern):
                 if not re.search(pattern, iline):
+                    # eprint(f"re.search {pattern!r} skips:", iline)
                     continue
+                # eprint(f"re.search {pattern!r} takes:", iline)
 
-            elif pattern not in iline:
-                continue
+            elif pattern.islower() or pattern.isupper():
+                if pattern.casefold() not in iline.casefold():
+                    # eprint(f"casefold.in {pattern!r} skips:", iline)
+                    continue
+                # eprint(f"casefold.in {pattern!r} takes:", iline)
+
+            else:
+                if pattern not in iline:
+                    # eprint("str.in skips:", iline)
+                    continue
+                # eprint(f"str.in {pattern!r} takes:", iline)
 
             olines.append(iline)
             break

@@ -2,8 +2,6 @@ things to do, futures to build
 
 soon
 
-    |g: Revive
-
     choose from the same Help Doc for
         bin/xshverb.py
         bin/xshverb.py --help
