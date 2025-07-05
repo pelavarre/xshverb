@@ -57,6 +57,7 @@ import argparse
 import collections.abc
 import dataclasses
 import datetime as dt
+import decimal
 import difflib
 import hashlib
 import importlib
@@ -2271,6 +2272,9 @@ def globals_add_python_import_names() -> None:
         if name not in g.keys():
             g[name] = LazyImport(name)
 
+    if "D" not in g.keys():
+        g["D"] = decimal.Decimal  # todo: lazily do:  from decimal import Decimal as D
+
     if "dt" not in g.keys():
         dt = LazyImport(import_="datetime", as_="dt")
         g["dt"] = dt
@@ -2282,6 +2286,10 @@ def globals_add_python_import_names() -> None:
     if "np" not in g.keys():
         np = LazyImport(import_="numpy", as_="np")
         g["np"] = np
+
+    if "parser" not in g.keys():
+        parser = argparse.ArgumentParser()
+        g["parser"] = parser
 
     if "pd" not in g.keys():
         pd = LazyImport(import_="pandas", as_="pd")
