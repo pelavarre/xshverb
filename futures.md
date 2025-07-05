@@ -2,7 +2,7 @@ things to do, futures to build
 
 soon
 
-    bury the $pid-xshverb.pbpaste into the __pycache__/ folder
+    |g: Revive
 
     choose from the same Help Doc for
         bin/xshverb.py

@@ -15,6 +15,7 @@ options:
 quirks:
   defaults to dedent the Lines, strip trailing Blanks from each Line, and end with 1 Line-Break
   docs the [-h] and [-V] options only here, not again and again for every different Hint
+  often replaces or creates a ./xshverb.pbpaste File, and also __pycache__/$pid-xshverb.pbpaste
   more doc at https://github.com/pelavarre/xshverb
 
 most common Python words:
@@ -107,7 +108,7 @@ UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond
 AppPathname = f"xshverb.pbpaste"  # traces the last Pipe
 
 OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
-ProcessPathname = f"{OsGetPid}-xshverb.pbpaste"
+ProcessPathname = f"__pycache__/{OsGetPid}-xshverb.pbpaste"
 
 GotClipboard = bool(shutil.which("pbpaste") and shutil.which("pbcopy"))
 # GotClipboard = False  # runs as if Clipboard not found
@@ -558,6 +559,7 @@ class ShellFile:
             app_path.write_bytes(iobytes)  # traces Date/ Time/ Bytes of PbPaste
 
             process_path = pathlib.Path(ProcessPathname)  # adds next revision of Paste Buffer
+            process_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
             process_path.write_bytes(iobytes)
 
             self.iobytes = iobytes
@@ -652,6 +654,7 @@ class ShellFile:
             self.drained = True
 
             process_path = pathlib.Path(ProcessPathname)  # adds next revision of Paste Buffer
+            process_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
             process_path.write_bytes(iobytes)
 
             app_path = pathlib.Path(AppPathname)
@@ -1562,7 +1565,6 @@ EMACS_DOC = r"""
 
     quirks:
       tells Emacs to edit the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
-      replaces or creates a ./$$-xshverb.pbpaste File to edit those, but doesn't delete it
 
     examples:
       e  # edits the Os Copy/Paste Buffer
@@ -1603,19 +1605,20 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
     # Choose to work inside a LocalHost GetCwd File, or not
 
-    pathname = ProcessPathname  # not AppPathname
-    path = pathlib.Path(pathname)
+    process_path = pathlib.Path(ProcessPathname)  # not AppPathname
 
     ends = list()
     if (not argv_tails) or all(_.startswith("-") for _ in argv_tails):
-        ends = [pathname]
+        ends = [process_path.name]
 
     # Read LocalHost GetCwd File, or not
 
     if ends:
         ibytes = alt.stdin.read_bytes()
         textify = bytes_textify(ibytes)  # do textify before edit
-        path.write_bytes(textify)
+
+        process_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
+        process_path.write_bytes(textify)
 
     # Trace and do work
 
@@ -1638,7 +1641,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
     # Write LocalHost GetCwd File, or not
 
     if ends:
-        obytes = path.read_bytes()  # don't textify after edit
+        obytes = process_path.read_bytes()  # don't implicitly textify after edit
         alt.stdout.write_bytes(obytes)
 
     # Don't disturb Pipe and Os Copy/Paste Buffer, when working inside a chosen Pathname
@@ -2026,7 +2029,6 @@ LESS_DOC = r"""
 
     quirks:
       tells Less to show the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
-      replaces or creates a ./$$-xshverb.pbpaste File to show those, but doesn't delete it
       do make people press ⌃R to search for strings as strings, not as regular expressions
       do make people learn and spell out \< \> to search for whole words
 
@@ -3021,7 +3023,6 @@ VI_DOC = r"""
 
     quirks:
       tells Vi to edit the Shell Pipe or Os Copy/Paste Buffer only when you give no Pos Args
-      replaces or creates a ./$$-xshverb.pbpaste File to edit those, but doesn't delete it
 
     examples:
       v  # edits the Os Copy/Paste Buffer
