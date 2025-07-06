@@ -1,4 +1,4 @@
--- Show Outer vs Inner Join
+-- Show Cross vs Inner vs Outer Join
 
 
 DROP TABLE foods;
@@ -11,11 +11,11 @@ CREATE TABLE foods
 ;
 
 INSERT INTO foods VALUES
+    (NULL, 'Black'),
     ('Apple', 'Green'),
-    ('Potato', 'White'),
-    ('Potato', 'Red'),
     ('Popsicle', 'Blue'),
-    (NULL, 'Black')
+    ('Potato', 'Red'),
+    ('Potato', 'White')
 ;
 
 
@@ -28,19 +28,30 @@ CREATE TABLE things
 );
 
 INSERT INTO things VALUES
-    ('Truck', 'Red'),
-    ('Scarf', 'Green'),
-    ('Table', 'White'),
+    (NULL, 'Orange'),
     ('Hat', 'Purple'),
+    ('Scarf', 'Green'),
     ('Shirt', 'Black'),
-    (NULL, 'Orange')
+    ('Table', 'White'),
+    ('Truck', 'Red')
 ;
 
 
 SELECT * FROM foods
+ORDER BY 1, 2
 ;
 
 SELECT * FROM things
+ORDER BY 1, 2
+;
+
+SELECT
+    f.food AS f_food,
+    f.color AS f_color,
+    t.thing AS t_thing,
+    t.color AS t_color
+FROM foods f
+	CROSS JOIN things t
 ;
 
 
@@ -88,8 +99,6 @@ FROM foods f
 ;
 
 
-
-
 SELECT
     f.food AS f_food,
     f.color AS f_color,
@@ -101,12 +110,12 @@ FROM foods f
 
 UNION DISTINCT
 
-SELECT
-    f.food AS f_food,
-    f.color AS f_color,
-    t.thing AS t_thing,
-    t.color AS t_color
-FROM foods f
-	RIGHT OUTER JOIN things t
-		ON f.color = t.color
+	SELECT
+		f.food AS f_food,
+		f.color AS f_color,
+		t.thing AS t_thing,
+		t.color AS t_color
+	FROM foods f
+		RIGHT OUTER JOIN things t
+			ON f.color = t.color
 ;
