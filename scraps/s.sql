@@ -1,7 +1,7 @@
 -- Show Cross vs Inner vs Outer Join
 
 
-DROP TABLE foods;
+-- DROP TABLE foods;
 
 CREATE TABLE foods
 (
@@ -19,7 +19,7 @@ INSERT INTO foods VALUES
 ;
 
 
-DROP TABLE things;
+-- DROP TABLE things;
 
 CREATE TABLE things
 (
