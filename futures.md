@@ -2,6 +2,11 @@ things to do, futures to build
 
 soon
 
+    |g should imply |g c, because it is last
+
+    fix many bugs of
+        $ : tac && fh |pq r |pq 'uniq --keys' |r |grep press |grep -iv PLaVarre
+
     choose from the same Help Doc for
         bin/xshverb.py
         bin/xshverb.py --help

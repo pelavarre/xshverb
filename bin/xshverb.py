@@ -1523,7 +1523,7 @@ def do_dt(argv: list[str]) -> None:
     t0 = dt.datetime.now(UTC)  # 2025-06-01 10:26:51 -0700  (2025-06-01 17:26:51.743258)
     s0a = t0.astimezone(Pacific).strftime("%Y-%m-%d %H:%M:%S %z")
     s0b = t0.strftime("%Y-%m-%d %H:%M:%S.%f")
-    eprint(f"{s0a}  ({s0b})")
+    eprint(f"{s0a}  ({s0b})  enter")
 
     if not argv[1:]:
         assert ns.words == ["true"], (ns.words,)
@@ -1538,6 +1538,10 @@ def do_dt(argv: list[str]) -> None:
     eprint(f"+ exit {returncode}")  # printed even when zero
 
     t1 = dt.datetime.now(UTC)
+    s1a = t1.astimezone(Pacific).strftime("%Y-%m-%d %H:%M:%S %z")
+    s1b = t1.strftime("%Y-%m-%d %H:%M:%S.%f")
+    eprint(f"{s1a}  ({s1b})  exit")
+
     t1t0 = t1 - t0
     eprint(dt_timedelta_strftime(t1t0))  # such as '346ms' to mean 0.346 <= t <= 0.347
 
