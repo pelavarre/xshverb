@@ -124,7 +124,7 @@ with_hook = sys.excepthook
 assert (with_hook.__module__, with_hook.__name__) == ("sys", "excepthook"), (with_hook,)
 
 
-assert signal.SIGINT == 2
+assert int(signal.SIGINT) == 2  # 'mypy --strict' needs the int() here
 
 
 def excepthook(
