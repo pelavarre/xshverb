@@ -1543,7 +1543,7 @@ def do_dt(argv: list[str]) -> None:
     eprint(f"{s1a}  ({s1b})  exit")
 
     t1t0 = t1 - t0
-    eprint(dt_timedelta_strftime(t1t0))  # such as '346ms' to mean 0.346 <= t <= 0.347
+    eprint(dt_timedelta_strftime(t1t0))  # '9ms331us' to mean 9ms 331us <= t < 9ms 333us
 
     sys.exit(returncode)  # exits after Dating & Timing 1 Shell Command Line
 
@@ -3528,7 +3528,7 @@ def str_textify(text: str) -> str:
 #
 
 
-def dt_timedelta_strftime(td: dt.timedelta, depth: int = 1, str_zero: str = "0s") -> str:
+def dt_timedelta_strftime(td: dt.timedelta, depth: int = 2, str_zero: str = "0s") -> str:
     """Give 'w d h m s ms us ms' to mean 'weeks=', 'days=', etc"""
 
     # Pick Weeks out of Days, Minutes out of Seconds, and Millis out of Micros
@@ -3568,7 +3568,7 @@ def dt_timedelta_strftime(td: dt.timedelta, depth: int = 1, str_zero: str = "0s"
 
     # Succeed
 
-    return chars  # such as '346ms' to mean 0.346 <= t <= 0.347
+    return chars  # '9ms331us' to mean 9ms 331us <= t < 9ms 333us
 
 
 #

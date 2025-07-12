@@ -2,13 +2,8 @@ things to do, futures to build
 
 soon
 
-    qla --numstat  # is NOT just me
-    whereas qla is --numstat nowadays
-
     |pq| didn't scrub out the destructive unprintable control codes, from Sh Screen
     |pq expand| didn't either
-
-    dt too concisely said 38s and 4m, at 38s 418ms and at 4m 26s
 
     |c too loud and interactive when cancelled by one ⌃C TTY INT
 
