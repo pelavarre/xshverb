@@ -70,6 +70,7 @@ import pdb
 import re
 import shlex
 import shutil
+import signal
 import socket
 import string
 import subprocess
@@ -105,7 +106,7 @@ PacificLaunch = dt.datetime.now(Pacific)
 UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
-AppPathname = f"xshverb.pbpaste"  # traces the last Pipe
+AppPathname = "xshverb.pbpaste"  # traces the last Pipe
 
 OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
 ProcessPathname = f"__pycache__/{OsGetPid}-xshverb.pbpaste"
@@ -123,12 +124,21 @@ with_hook = sys.excepthook
 assert (with_hook.__module__, with_hook.__name__) == ("sys", "excepthook"), (with_hook,)
 
 
+assert signal.SIGINT == 2
+
+
 def excepthook(
     exc_type: type[BaseException],
     exc_value: BaseException,
     exc_traceback: types.TracebackType | None,
 ) -> None:
+
+    if exc_type is KeyboardInterrupt:
+        sys.stderr.write("\n")
+        sys.exit(0x80 + 2)  # signal.SIGINT
+
     with_hook(exc_type, exc_value, exc_traceback)
+
     print(">>> pdb.pm()", file=sys.stderr)
     pdb.pm()
 

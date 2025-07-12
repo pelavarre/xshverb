@@ -5,8 +5,6 @@ soon
     |pq| didn't scrub out the destructive unprintable control codes, from Sh Screen
     |pq expand| didn't either
 
-    |c too loud and interactive when cancelled by one ⌃C TTY INT
-
     |g should imply |g c, because it is last
 
     fix many bugs of
