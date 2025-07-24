@@ -750,6 +750,21 @@ AWK_DOC = r"""
 
 """
 
+_STALE_AWK_DOC = """
+
+    positional arguments:
+      NUMBER                the Number of a Column to copy out, or 0 to copy them all (default: -1)
+
+    options:
+      -F ISEP, --isep ISEP  input word separator (default: Blanks)
+      -vOFS OSEP, --osep OSEP
+                            output word separator (default: Double Space)
+
+    comparable to:
+
+"""
+
+
 # todo: |awk --tsv to abbreviate |awk -F$'\t' -vOFS=$'\t'
 
 
@@ -760,7 +775,17 @@ def do_awk(argv: list[str]) -> None:
 
     assert argparse.ZERO_OR_MORE == "*"
 
+    stale_awk_doc = _STALE_AWK_DOC
+    stale_start = stale_awk_doc.index("positional arguments")
+    stale_end = stale_awk_doc.index("comparable to")
+    stale = stale_awk_doc[stale_start:stale_end]
+
     doc = AWK_DOC
+    fresh_start = doc.index("positional arguments")
+    fresh_end = doc.index("comparable to")
+    if sys.version_info < (3, 13):
+        doc = doc[:fresh_start] + stale + doc[fresh_end:]
+
     number_help = "the Number of a Column to copy out, or 0 to copy them all (default: -1)"
     isep_help = "input word separator (default: Blanks)"
     osep_help = "output word separator (default: Double Space)"
