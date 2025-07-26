@@ -109,7 +109,7 @@ UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond
 AppPathname = "xshverb.pbpaste"  # traces the last Pipe
 
 OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
-ProcessPathname = f"__pycache__/{OsGetPid}-xshverb.pbpaste"
+PidPathname = f"__pycache__/{OsGetPid}-xshverb.pbpaste"
 
 GotOsCopyPasteClipboardBuffer = bool(shutil.which("pbpaste") and shutil.which("pbcopy"))
 # GotOsCopyPasteClipboardBuffer = False  # runs as if Clipboard not found
@@ -527,7 +527,7 @@ class ShellFile:
 
         # maybe empty  # maybe enclosed in Blanks
 
-    def fill_if(self) -> pathlib.Path:
+    def fill_if(self) -> None:
         """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
 
         assert AppPathname == "xshverb.pbpaste"
@@ -535,22 +535,24 @@ class ShellFile:
 
         assert not self.drained, (self.drained,)
         if self.filled:
-            return app_path  # maybe doesn't exist
+            return
 
         # Fill from somewhere, always
 
         if not sys.stdin.isatty():
+            self.tprint("fill_from_stdin")
             self.fill_from_stdin()
         elif GotOsCopyPasteClipboardBuffer:
+            self.tprint("fill_from_clipboard")
             self.fill_from_clipboard()
         elif app_path.exists():
+            self.tprint("fill from", app_path)
             self.filled = True
             self.iobytes = app_path.read_bytes()
         else:
+            self.tprint("fill from Jabberwocky")
             self.filled = True
             self.iobytes = Jabberwocky.encode()  # fills from Source, if need be
-
-        return app_path  # maybe doesn't exist
 
         # .errors .returncode .shell .stdin unlike:  iobytes = os.popen(shline).read().encode()
 
@@ -568,10 +570,7 @@ class ShellFile:
     def fill_from_clipboard(self) -> None:
         """Read Bytes from Clipboard"""
 
-        assert (not self.filled) and (not self.drained), (
-            self.filled,
-            self.drained,
-        )
+        assert (not self.filled) and (not self.drained), (self.filled, self.drained)
         self.filled = True
 
         shline = "pbpaste"  # macOS convention, often not distributed at Linuxes
@@ -596,10 +595,7 @@ class ShellFile:
     def write_splitlines(self, texts: list[str]) -> None:
         """Write Lines into Bytes, and do close the last Line, but don't drain the Bytes yet"""
 
-        assert (not self.filled) and (not self.drained), (
-            self.filled,
-            self.drained,
-        )
+        assert (not self.filled) and (not self.drained), (self.filled, self.drained)
         self.filled = True
 
         join = "\n".join(texts)
@@ -611,10 +607,7 @@ class ShellFile:
     def write_text(self, text: str) -> None:
         """Write Chars into Bytes, and don't drain them yet"""
 
-        assert (not self.filled) and (not self.drained), (
-            self.filled,
-            self.drained,
-        )
+        assert (not self.filled) and (not self.drained), (self.filled, self.drained)
         self.filled = True
 
         encode = text.encode(errors="surrogateescape")
@@ -628,10 +621,7 @@ class ShellFile:
     def write_bytes(self, data: bytes) -> None:
         """Write Chars into Bytes, and don't drain them yet"""
 
-        assert (not self.filled) and (not self.drained), (
-            self.filled,
-            self.drained,
-        )
+        assert (not self.filled) and (not self.drained), (self.filled, self.drained)
         self.filled = True
 
         self.iobytes = data  # replaces
@@ -641,35 +631,54 @@ class ShellFile:
         # standard .write forces the Def to count the Chars
         # standard .writelines forces the Caller to choose each Line-Break
 
-    def drain_if(self) -> pathlib.Path:
-        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer, at most once"""
-
-        iobytes = self.iobytes
-
-        assert AppPathname == "xshverb.pbpaste"
-        app_path = pathlib.Path(AppPathname)
-        process_path = pathlib.Path(ProcessPathname)  # adds next revision of Paste Buffer
+    def drain_if(self) -> None:
+        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer, else nowhere, at most once"""
 
         assert self.filled, (self.filled,)
         if self.drained:
-            return app_path
+            return
+
+        self.drain()
+
+    def drain(self) -> pathlib.Path:
+        """Write Bytes to Stdout, else to the Os Copy/Paste Buffer, else nowhere"""
+
+        iobytes = self.iobytes
+
+        # Write Bytes to Pid Path and App Path
+
+        app_path = self.write_to_path_etc(iobytes)
 
         # Drain if possible
 
         if not sys.stdout.isatty():
+            self.tprint("drain_to_stdout")
             self.drain_to_stdout()
         elif GotOsCopyPasteClipboardBuffer:
+            self.tprint("drain_to_clipboard")  # , iobytes)
             self.drain_to_clipboard()
         else:
+            self.tprint("drain to nowhere")
             self.drained = True
+
+        return app_path
+
+    def write_to_path_etc(self, iobytes: bytes) -> pathlib.Path:
+        """Write Bytes to Pid Path and then App Path and then return App Path"""
+
+        assert AppPathname == "xshverb.pbpaste"
+        app_path = pathlib.Path(AppPathname)
+        pid_path = pathlib.Path(PidPathname)  # adds next revision of Paste Buffer
 
         # Retain one File of Output per XShVerb Process Id
 
-        process_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
-        process_path.write_bytes(iobytes)
+        self.tprint("write shadow copy to", pid_path)
+        pid_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
+        pid_path.write_bytes(iobytes)
 
-        # Push a File into the next XShVerb Process
+        # Push a File into the next XShVerb Process  # todo: same Date/Time Stamp as Pid Path
 
+        self.tprint("write shadow copy to", app_path)
         app_path.write_bytes(iobytes)  # traces Date/ Time/ Bytes of PbCopy
 
         return app_path
@@ -679,10 +688,7 @@ class ShellFile:
 
         iobytes = self.iobytes
 
-        assert self.filled and (not self.drained), (
-            self.filled,
-            self.drained,
-        )
+        assert self.filled and (not self.drained), (self.filled, self.drained)
         self.drained = True
 
         fd = sys.stdout.fileno()
@@ -702,15 +708,24 @@ class ShellFile:
 
         iobytes = self.iobytes
 
-        assert self.filled and (not self.drained), (
-            self.filled,
-            self.drained,
-        )
+        assert self.filled and (not self.drained), (self.filled, self.drained)
         self.drained = True
 
         shline = "pbcopy"  # macOS convention, often not distributed at Linuxes
         argv = shlex.split(shline)
         subprocess.run(argv, input=iobytes, stdout=subprocess.PIPE, stderr=None, check=True)
+
+    #
+    # Print to Stderr, or don't
+    #
+
+    def tprint(self, *args: object) -> None:
+        """Print to Stderr, or don't"""
+
+        text = " ".join(str(_) for _ in args)  # always does test if printable enough
+
+        if False:  # prints, or doesn't print
+            print(text, file=sys.stderr)
 
 
 #
@@ -1159,12 +1174,9 @@ def do_diff(argv: list[str]) -> None:
     run = subprocess.run(shargv, stdin=None)
     returncode = run.returncode
 
+    alt.stdout.fill_and_drain()  # leaves Pipe and Os Copy/Paste Buffer alone
     if returncode:
         sys.exit(returncode)  # silently exits nonzero after Diff exits nonzero
-
-    # Don't disturb Pipe and Os Copy/Paste Buffer, after a chat with Python
-
-    alt.stdout.fill_and_drain()
 
 
 #
@@ -1663,17 +1675,29 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
     argv_tails = argv[1:]
 
-    # Start work inside a LocalHost GetCwd File, if need be
+    # Drain early into a LocalHost GetCwd File, if need be
 
-    ends_path = pathlib.Path()
-    ends = list()
+    drain_path = pathlib.Path()
+    drain_pathname = ""
+
     if (not argv_tails) or all(_.startswith("-") for _ in argv_tails):
-        ends_path = alt.stdin.fill_if()
-        ends = [ends_path.name]
+        alt.stdin.fill_if()
+        if not sys.stdout.isatty():
+            drain_path = alt.stdin.write_to_path_etc(iobytes=alt.stdin.iobytes)
+        else:
+            drain_path = alt.stdin.drain()
+
+            # todo: do touch but don't rewrite the PbPaste Buffer before an Edit of its Bytes
+
+        drain_pathname = drain_path.name
+        assert drain_pathname, (drain_pathname, drain_path)
 
     # Trace and do work
 
-    shargv = [shverb] + starts + argv_tails + ends
+    shargv = [shverb] + starts + argv_tails
+    if drain_pathname:
+        shargv.append(drain_pathname)
+
     shline = " ".join(shlex.quote(_) for _ in shargv)
     eprint("+", shline)
 
@@ -1687,15 +1711,17 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
     returncode = run.returncode
     if returncode:
         eprint(f"+ exit {returncode}")
-        sys.exit(returncode)  # exits sad after Editing
+        sys.exit(returncode)  # doesn't drain, when exiting sad after Editing
 
-    # End work inside a LocalHost GetCwd File, if need be
+    # Don't drain at exist, unless already drained early
 
-    if not ends:
-        alt.stdout.fill_and_drain()
+    if not drain_pathname:
+        alt.stdout.fill_and_drain()  # leaves Pipe and Os Copy/Paste Buffer alone
     else:
-        obytes = ends_path.read_bytes()  # don't implicitly textify after edit
+        obytes = drain_path.read_bytes()  # don't implicitly textify after edit
         alt.stdout.write_bytes(obytes)
+
+        # todo: do touch but don't rewrite the AppPathname after an Edit of its Bytes
 
 
 #
@@ -3863,13 +3889,16 @@ if __name__ == "__main__":
 
 # todo: |grep -n
 
-# todo: + |y is to show what's up and halt till you say move on
-# todo: + m is for **Make**, but timestamp the work and never print the same Line twice
-# todo: + q is for **Git**, because G was taken
+# todo: define b f l m q w y z  # especially: b z
+#
 # todo: + f is for **Find**, but default to search $PWD spelled as ""
+# todo: + q is for **Git**, because G was taken
 # todo: + l is for **Ls** of the '|ls -dhlAF -rt' kind, not more popular less detailed '|ls -CF'
+# todo: + m is for **Make**, but timestamp the work and never print the same Line twice
+# todo: + |y is to show what's up and halt till you say move on
+#
 
-# more test with 1 2 3 etc defined of particular nonsense such as:  seq 123 |sh
+# more test with 1 2 3 etc defined of some particular nonsense such as:  seq 123 |sh
 
 # todo: |p ascii and |p repr without so many quotes in the output
 
