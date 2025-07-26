@@ -124,7 +124,7 @@ with_hook = sys.excepthook
 assert (with_hook.__module__, with_hook.__name__) == ("sys", "excepthook"), (with_hook,)
 
 
-assert int(signal.SIGINT) == 2  # 'mypy --strict' needs the int() here
+assert int(0x80 + signal.SIGINT) == 130  # 'mypy --strict' needs the int() here
 
 
 def excepthook(
@@ -135,7 +135,7 @@ def excepthook(
 
     if exc_type is KeyboardInterrupt:
         sys.stderr.write("\n")
-        sys.exit(0x80 + 2)  # signal.SIGINT
+        sys.exit(130)  # 0x80 + signal.SIGINT
 
     with_hook(exc_type, exc_value, exc_traceback)
 
@@ -687,7 +687,15 @@ class ShellFile:
 
         fd = sys.stdout.fileno()
         data = iobytes  # maybe not UTF-8 Encoded
-        os.write(fd, data)
+
+        assert int(0x80 + signal.SIGPIPE) == 141  # 'mypy --strict' needs the int() here
+        try:
+            os.write(fd, data)
+        except BrokenPipeError:
+            sys.exit(141)  # 0x80 + signal.SIGPIPE
+
+            # tested by:  set -o pipefail && seq 123456 |pq |head -1; echo + exit $?
+            # else:  BrokenPipeError: [Errno 32] Broken pipe
 
     def drain_to_clipboard(self) -> None:
         """Write Bytes to Clipboard"""
