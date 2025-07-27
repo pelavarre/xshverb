@@ -177,7 +177,7 @@ def try_main() -> None:
     hint_help = "hint of which Shell Pipe Filter you mean"
     version_help = "show version and exit"
 
-    parser = AmpedArgumentParser(doc, add_help=True)
+    parser = ArgDocParser(doc, add_help=True)
     parser.add_argument(dest="hints", metavar="HINT", nargs="*", help=hint_help)
     parser.add_argument("-V", "--version", action="store_true", help=version_help)
 
@@ -408,7 +408,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
         doc = self.doc
         argv = self.argv
 
-        parser = AmpedArgumentParser(doc, add_help=False)  # enough to print Closing
+        parser = ArgDocParser(doc, add_help=False)  # enough to print Closing
         if argv[1:] == ["--"]:
             self.closing_show(closing=parser.closing)
             sys.exit(0)  # exits 0 after printing Closing
@@ -827,7 +827,7 @@ def do_awk(argv: list[str]) -> None:
     isep_help = "input word separator (default: Blanks)"
     osep_help = "output word separator (default: Double Space)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="numbers", metavar="NUMBER", nargs="*", help=number_help)
     parser.add_argument("-F", "--isep", metavar="ISEP", help=isep_help)
     parser.add_argument("-vOFS", "--osep", metavar="OSEP", help=osep_help)
@@ -914,7 +914,7 @@ def do_cat(argv: list[str]) -> None:
     doc = CAT_DOC
     ifile_help = "explicitly mention the Terminal, in place of a Pathname"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("ifile", metavar="-", nargs="?", help=ifile_help)
 
     # Take up Shell Args
@@ -997,7 +997,7 @@ def do_counter(argv: list[str]) -> None:
     doc = COUNTER_DOC
     keys_help = "print each distinct Line when it first arrives, without a count (default: False)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("-k", "--keys", action="count", help=keys_help)
 
     # Take up Shell Args
@@ -1052,7 +1052,7 @@ def do_dedent(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = DEDENT_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -1097,7 +1097,7 @@ def do_dent(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = DENT_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -1149,7 +1149,7 @@ def do_diff(argv: list[str]) -> None:
     doc = DIFF_DOC
     a_help = "the earlier file (default: a)"
     b_help = "the later file (default: b)"
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="a", metavar="A", nargs="?", help=a_help)
     parser.add_argument(dest="b", metavar="B", nargs="?", help=b_help)
 
@@ -1240,7 +1240,7 @@ def do_dot(argv: list[str]) -> None:
     doc = DOT_DOC
     hint_help = "one of codereviews|google|jenkins|jira|wiki, else toggle address|title, else fail"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     # parser.add_argument(arg="HINT", nargs="?", help=hint_help)  # FIXME
     parser.add_argument("hint", metavar="HINT", nargs="?", help=hint_help)
 
@@ -1571,7 +1571,7 @@ def do_dt(argv: list[str]) -> None:
 
     doc = DT_DOC
     word_help = "a word of command: first the shell verb, and then its options and args"
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
 
     # Take up Shell Args
@@ -1655,7 +1655,7 @@ def do_emacs(argv: list[str]) -> None:
 
     doc = EMACS_DOC
     word_help = "a word of command: options and args of Emacs"
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
 
     # Take up Shell Args
@@ -1758,7 +1758,7 @@ def do_expand(argv: list[str]) -> None:  # do_expandtabs
     # Form Shell Args Parser
 
     doc = EXPAND_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -1852,7 +1852,7 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
         "the text to find, or a Mixed Case Text to find in any Case, or a RegEx of () [] {}"
     )
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="patterns", metavar="PATTERN", nargs="*", help=pattern_help)
 
     # Take up Shell Args
@@ -1955,7 +1955,7 @@ def do_head(argv: list[str]) -> None:
     doc = HEAD_DOC
     n_help = "how many leading Lines to take (default: 10)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="n", metavar="-N", nargs="?", help=n_help)
 
     # Take up Shell Args
@@ -2015,7 +2015,7 @@ def do_ht(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = HT_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2071,7 +2071,7 @@ def do_jq(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = JQ_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2130,7 +2130,7 @@ def do_less(argv: list[str]) -> None:
 
     doc = LESS_DOC
     word_help = "a word of command: options and args of Less"
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
 
     # Take up Shell Args
@@ -2170,7 +2170,7 @@ def do_lower(argv: list[str]) -> None:
 
     doc = LOWER_DOC
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2218,7 +2218,7 @@ def do_lstrip(argv: list[str]) -> None:
     doc = LSTRIP_DOC
     charset_help = "list the Chars to drop if found, preferably in sorted order"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("--charset", metavar="CHARSET", help=charset_help)
 
     # Take up Shell Args
@@ -2270,7 +2270,7 @@ def do_nl(argv: list[str]) -> None:
     doc = NL_DOC
     n_help = "up from what (default: +1)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="n", metavar="+N", nargs="?", help=n_help)
 
     # Take up Shell Args
@@ -2327,7 +2327,7 @@ def do_python(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = PYTHON_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2498,7 +2498,7 @@ def do_reverse(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = REVERSE_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2549,7 +2549,7 @@ def do_rstrip(argv: list[str]) -> None:
     doc = RSTRIP_DOC
     charset_help = "list the Chars to drop if found, preferably in sorted order"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("--charset", metavar="CHARSET", help=charset_help)
 
     # Take up Shell Args
@@ -2598,7 +2598,7 @@ def do_set(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = SET_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2676,7 +2676,7 @@ def do_sort(argv: list[str]) -> None:
     n_help = "sort as numbers, from least to most positive, but nulls last (default: sort as text)"
     r_help = "reverse the sort (default: ascending)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("-n", action="count", help=n_help)
     parser.add_argument("-r", action="count", help=r_help)
 
@@ -2755,7 +2755,7 @@ def do_split(argv: list[str]) -> None:
     doc = SPLIT_DOC
     sep_help = "split at each SEP, no matter if empty (default: split by Blanks & drop empty Words)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("--sep", metavar="SEP", help=sep_help)
 
     # Take up Shell Args
@@ -2802,7 +2802,7 @@ def do_str_strip(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = STR_STRIP_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -2853,7 +2853,7 @@ def do_strip(argv: list[str]) -> None:
     doc = STRIP_DOC
     charset_help = "list the Chars to drop if found, preferably in sorted order"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("--charset", metavar="CHARSET", help=charset_help)
 
     # Take up Shell Args
@@ -2909,7 +2909,7 @@ def do_tail(argv: list[str]) -> None:
     doc = TAIL_DOC
     n_help = "how many trailing Lines to take, or which Line to take before the rest (default: -10)"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="n", metavar="-N|+N", nargs="?", help=n_help)
 
     # Take up Shell Args
@@ -2966,7 +2966,7 @@ def do_title(argv: list[str]) -> None:
 
     doc = TITLE_DOC
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -3004,7 +3004,7 @@ def do_upper(argv: list[str]) -> None:
 
     doc = UPPER_DOC
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -3045,7 +3045,7 @@ def do_urllib(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = URLLIB_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -3118,7 +3118,7 @@ def do_vi(argv: list[str]) -> None:
 
     doc = VI_DOC
     word_help = "a word of command: options and args of Vi"
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
 
     # Take up Shell Args
@@ -3167,7 +3167,7 @@ def do_wcl(argv: list[str]) -> None:
     # Form Shell Args Parser
 
     doc = WCL_DOC
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
 
     # Take up Shell Args
 
@@ -3214,7 +3214,7 @@ def do_xargs(argv: list[str]) -> None:
     doc = XARGS_DOC
     sep_help = "the Char or Chars to place between each two Lines"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument("--sep", metavar="SEP", help=sep_help)
 
     # Take up Shell Args
@@ -3279,7 +3279,7 @@ def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
     doc = XSHVERB_DOC
     hint_help = "hint of which Shell Pipe Filter you mean"
 
-    parser = AmpedArgumentParser(doc, add_help=False)
+    parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="hints", metavar="HINT", nargs="*", help=hint_help)
 
     # Take up Shell Args
@@ -3314,7 +3314,7 @@ def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
 #
 
 
-class AmpedArgumentParser:
+class ArgDocParser:
     """Pick out Prog & Description & Epilog well enough to form an Argument Parser"""
 
     text: str  # something like the __main__.__doc__, but dedented and stripped
@@ -3517,7 +3517,7 @@ class AmpedArgumentParser:
         return diffs
 
 
-def argv_parse_if(parser: AmpedArgumentParser, argv: list[str]) -> argparse.Namespace:
+def argv_parse_if(parser: ArgDocParser, argv: list[str]) -> argparse.Namespace:
     """Parse the Shell Args, else print Help and exit zero or nonzero"""
 
     args = ["--"]  # for when I'm feeling lucky
