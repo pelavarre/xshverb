@@ -1680,7 +1680,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
     # Drain early into a LocalHost GetCwd File, if need be
 
     drain_path = pathlib.Path()
-    drain_pathname = ""
+    drain_fspath = ""
 
     if (not argv_tails) or all(_.startswith("-") for _ in argv_tails):
         alt.stdin.fill_if()
@@ -1691,14 +1691,14 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
             # todo: do touch but don't rewrite the PbPaste Buffer before an Edit of its Bytes
 
-        drain_pathname = drain_path.name
-        assert drain_pathname, (drain_pathname, drain_path)
+        drain_fspath = os.fspath(drain_path)  # '__pycache__/p.pbpaste'
+        assert drain_fspath, (drain_fspath, drain_path)
 
     # Trace and do work
 
     shargv = [shverb] + starts + argv_tails
-    if drain_pathname:
-        shargv.append(drain_pathname)
+    if drain_fspath:
+        shargv.append(drain_fspath)
 
     shline = " ".join(shlex.quote(_) for _ in shargv)
     eprint("+", shline)
@@ -1717,7 +1717,7 @@ def _do_edit(argv: list[str], shverb: str, starts: list[str]) -> None:
 
     # Don't drain at exist, unless already drained early
 
-    if not drain_pathname:
+    if not drain_fspath:
         alt.stdout.fill_and_drain()  # leaves Pipe and Os Copy/Paste Buffer alone
     else:
         obytes = drain_path.read_bytes()  # don't implicitly textify after edit
