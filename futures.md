@@ -31,7 +31,12 @@ soon
 someday
 
 
-    struggle vs special tests of Gateway Verbs:  e k v, d, dt, & g
+    pq . address should gracefully accept its work done already
+        likewise pq . title
+        maybe also . codereviews, . google. . jenkins, . jira
+
+
+    struggle vs special tests of Gateway Verbs:  e k v, d, dt, & dot g
 
         |g p1 p2 p3
         |g p1 |g p2 |g p3
@@ -42,7 +47,9 @@ someday
         pq 'dt lsa' 'g drwx' 'c '
         pq 'dt echo here' 'pq e' 'dto echo there'
 
-        by placement
+        usage by placement
+
+            |dot doesn't care, always wants indentifier args
 
             outside of pipe
                 e k v, d, dt, & g have clear meanings

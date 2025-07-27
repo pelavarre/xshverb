@@ -98,7 +98,7 @@ YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier dat
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
 
-GatewayVerbs = ("dt", "d", "g", "e", "k", "v")  # todo: these eat args despite str_is_identifier_ish
+GatewayVerbs = ("d", "dot", "dt", "e", "g", "k", "v")  # these eat args despite str_is_identifier_ish
 
 
 Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
@@ -387,7 +387,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 
             # Take all the remaining Hints as Args, after a Gateway Verb into a Namespacre
 
-            assert GatewayVerbs == ("dt", "d", "g", "e", "k", "v")
+            assert GatewayVerbs == ("d", "dot", "dt", "e", "g", "k", "v")
 
             if argv[0] in GatewayVerbs:
                 continue
@@ -1189,7 +1189,7 @@ def do_diff(argv: list[str]) -> None:
 
 DOT_DOC = r"""
 
-    usage: pq [HINT]
+    usage: dot [HINT]
 
     search out Code to match the Text and run the Code to tweak the Text
 
@@ -1227,7 +1227,7 @@ DOT_DOC = r"""
 
     examples:
       pq .
-      pq dot chill
+      pq dot title
 
 """
 
@@ -1243,7 +1243,6 @@ def do_dot(argv: list[str]) -> None:
     hint_help = "one of codereviews|google|jenkins|jira|wiki, else toggle address|title, else fail"
 
     parser = ArgDocParser(doc, add_help=False)
-    # parser.add_argument(arg="HINT", nargs="?", help=hint_help)  # FIXME
     parser.add_argument("hint", metavar="HINT", nargs="?", help=hint_help)
 
     # Name the bits of Code near here
@@ -1314,7 +1313,7 @@ def do_dot(argv: list[str]) -> None:
 
     if not ohints:
         if ns.hint is not None:
-            eprint(f"|pq dot {ns.hint!r}: doesn't fit {iline!r}")
+            eprint(f"|pq dot {ns.hint}: this Code doesn't fit {iline!r}")
             sys.exit(1)  # exits 1 for no Code found by bad Data
         else:
             eprint(f"|pq dot: none of our Codes fits {iline!r}")
