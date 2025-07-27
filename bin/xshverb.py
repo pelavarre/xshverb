@@ -990,7 +990,7 @@ COUNTER_DOC = """
 
 """
 
-# todo: |counter --tsv to write Tab as O Sep
+# todo: |counter --tsv to write Tab as Sep
 # todo: abbreviate as |i co -k, as |i cou -k, etc
 
 
@@ -2122,8 +2122,6 @@ LESS_DOC = r"""
 
 """
 
-# todo: FIXME why doesn't 'seq 123 |k' end by showing as much as:  seq 123 |k >k && cat k
-
 
 def do_less(argv: list[str]) -> None:
     """Call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen"""
@@ -3045,31 +3043,35 @@ def globals_add_do_turtling_names() -> None:
 
 class turtling:  # todo: duck out of giving this Class a lowercase name
 
-    _tty_fileno: int = -1
+    _fileno: int = -1
 
     @staticmethod
-    def _find_tty_fileno_once() -> int:
-        """Open /dev/tty at most once, and never sooner than needed"""
+    def _find_fileno_once() -> int:
+        """Open Dev Tty at most once, and never sooner than needed"""
 
-        fileno = turtling._tty_fileno
+        fileno = turtling._fileno
         if fileno >= 0:
             return fileno
 
         assert sys.__stderr__, (sys.__stderr__,)
-        fileno_ = sys.__stderr__.fileno()
-        assert fileno_ >= 0, (fileno_,)
+        stderr_fileno = sys.__stderr__.fileno()
+        assert stderr_fileno >= 0, (stderr_fileno,)
 
-        turtling._tty_fileno = fileno_
+        turtling._fileno = stderr_fileno
 
-        return fileno_
+        return stderr_fileno
 
-        # may raise OSError: [Errno 6] No such device or address: '/dev/tty'
+        # open("/dev/tty") may raise OSError: [Errno 6] No such device or address: '/dev/tty'
+
+        # todo: failover to ⎋[18t call for reply ⎋[{rows};{columns}t
+        # when os.get_terminal_size() rejects open("/dev/tty").fileno()
+        # like by raising OSError: [Errno 9] Bad file descriptor
 
     @staticmethod
     def window_width() -> int:
         """Count Terminal Screen Pane Columns"""
 
-        fileno = turtling._find_tty_fileno_once()
+        fileno = turtling._find_fileno_once()
         size = os.get_terminal_size(fileno)
 
         return size.columns  # 80
@@ -3080,7 +3082,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
     def window_height() -> int:
         """Count Terminal Screen Pane Rows"""
 
-        fileno = turtling._find_tty_fileno_once()
+        fileno = turtling._find_fileno_once()
         size = os.get_terminal_size(fileno)
 
         return size.lines  # 24
@@ -3120,7 +3122,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
     def schars_write(text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
-        fileno = turtling._find_tty_fileno_once()
+        fileno = turtling._find_fileno_once()
         os.write(fileno, text.encode())
 
 
