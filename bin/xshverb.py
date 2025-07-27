@@ -3093,37 +3093,84 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
     def _window_resume() -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
-        puckland_text = textwrap.dedent(Puckland).strip()
-        width = turtling.window_width()
-
         screen_path = pathlib.Path(TurtleScreenPathname)
         assert not screen_path.exists()  # text = screen_path.read_text()
 
-        puckland_width = max(len(_) for _ in puckland_text.splitlines())
-        rows = ["", ""] + puckland_text.splitlines() + ["", ""]
-        rows = list(_.ljust(puckland_width) for _ in rows)
-        rows = list(_.center(width) for _ in rows)
-        text = "\n".join(rows) + "\n"
+        # todo: assert "\x1b[{}G" == ...
+        # todo: assert "\x1b[H" == ...
+        # todo: assert "\x1b[J" == ...
+        # todo: assert "\x1b[{}m" == ...
 
-        turtling.cchars_write("\x1b[H")
-        turtling.schars_write(text)
-        turtling.cchars_write("\x1b[J")
+        text = textwrap.dedent(Puckland).strip()
+        split_width = max(len(_) for _ in text.splitlines())
+
+        width = turtling.window_width()
+        puck_width = 4 + split_width + 4
+        dent_width = ((width - puck_width) // 2) + 1
+
+        rows = ["", ""] + text.splitlines() + ["", ""]
+        rows = list(_.ljust(split_width) for _ in rows)
+        rows = list(("    " + _ + "    ") for _ in rows)
+
+        turtling.cchars_write("\x1b[H")  # Warp to Upper Left
+
+        for row in rows:
+            turtling.cchars_write(f"\x1b[{dent_width}G")
+            turtling.puck_chars_write(row)
+            turtling.cchars_write("\n")
+
+        turtling.cchars_write("\x1b[m")  # Plain Style
+        turtling.cchars_write("\n")
+        turtling.cchars_write("\x1b[J")  # Erase to Right and Below
 
         # todo: br() to scroll the Chat Pane
         # todo: frame & color the Puckland, its Dots & Pellets and Puckman
+        # todo: don't overwrite the Chars outside the Frame
 
     @staticmethod
     def cchars_write(text: str) -> None:
         """Write Terminal Screen Controls"""
 
-        turtling.schars_write(text)
+        fileno = turtling._find_fileno_once()
+        os.write(fileno, text.encode())
 
     @staticmethod
-    def schars_write(text: str) -> None:
+    def puck_chars_write(text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
         fileno = turtling._find_fileno_once()
-        os.write(fileno, text.encode())
+
+        #
+
+        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
+
+        Dot = "\x1b[38;5;214m"  # setPenColor "ff8000" 8  # 0o20 + int("530", base=6)
+        Pellet = Dot
+        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
+        Wall = "\x1b[38;5;39m"  # setPenColor "0080ff" 8  # 0o20 + int("035", base=6)
+
+        FullBlock = unicodedata.lookup("Full Block")  # '█'
+
+        penscape_by_ch = {
+            "(": Pellet,
+            ")": Pellet,
+            "@": Dot,
+            FullBlock: Puckman,
+        }
+
+        #
+
+        colored = OnBlack
+        for ch in text:
+            if ch != " ":
+                default_eq_str = ""
+                penscape = penscape_by_ch.get(ch, default_eq_str)
+                colored += penscape if penscape else Wall
+            colored += ch
+
+        #
+
+        os.write(fileno, colored.encode())
 
 
 Puckland = """
@@ -3152,7 +3199,7 @@ Puckland = """
     ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
     ││()┌──────┐()┌────────┐()│  │()┌────────┐()┌──────┐()││
     ││()└───┐  │()└────────┘()└──┘()└────────┘()│  ┌───┘()││
-    ││@@()()│  │()()()()()()()<>()()()()()()()()│  │()()@@││
+    ││@@()()│  │()()()()()()()██()()()()()()()()│  │()()@@││
     │└───┐()│  │()┌──┐()┌──────────────┐()┌──┐()│  │()┌───┘│
     │┌───┘()└──┘()│  │()└─────┐  ┌─────┘()│  │()└──┘()└───┐│
     ││()()()()()()│  │()()()()│  │()()()()│  │()()()()()()││
@@ -3163,6 +3210,8 @@ Puckland = """
     └──────────────────────────────────────────────────────┘
 
 """
+
+assert "█" == unicodedata.lookup("Full Block")
 
 
 #
