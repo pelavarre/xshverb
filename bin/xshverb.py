@@ -325,6 +325,8 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
             eprint(f"xshverb: command not found: |pq {vb}")  # a la Bash & Zsh vs New Verbs
             sys.exit(2)  # exits 2 for bad Shell Verb Hint
 
+            # todo: report more than first meaningless undefined Verb
+
         # Find the Doc
 
         assert __main__.__doc__, (__main__.__doc__,)
@@ -3288,8 +3290,9 @@ def do_xshverb(argv: list[str]) -> None:  # def do_pq  # def do_p
     ns = parser.parse_args_if(args)  # often prints help & exits zero
 
     if ns.hints:
-        parser.parser.print_usage()
-        eprint(f"|pq: {ns.hints!r}: no such Shell Pipe Filters yet")
+        hint = ns.hints[0]  # todo: report more than first meaningless undefined Verb
+        # parser.parser.print_usage()
+        eprint(f"xshverb: command not found: |pq {hint}")
         sys.exit(2)  # exits 2 for bad Args
 
     # Dedent and strip
