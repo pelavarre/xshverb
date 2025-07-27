@@ -108,11 +108,14 @@ UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond
 
 AppPathname = "__pycache__/p.pbpaste"  # traces the last Pipe
 
+OsCopyPasteClipboardBuffer = bool(shutil.which("pbpaste") and shutil.which("pbcopy"))
+# OsCopyPasteClipboardBuffer = False  # tests as if Clipboard not found
+
 OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
+
 PidPathname = f"__pycache__/{OsGetPid}.pbpaste"
 
-GotOsCopyPasteClipboardBuffer = bool(shutil.which("pbpaste") and shutil.which("pbcopy"))
-# GotOsCopyPasteClipboardBuffer = False  # runs as if Clipboard not found
+TurtleScreenPathname = "__pycache__/s.screen"
 
 
 #
@@ -457,7 +460,7 @@ class ShellPump:  # much like a Shell Pipe Filter when coded as a Linux Process
 def str_is_identifier_ish(text: str) -> bool:
     """Guess when a Str is an Identifier, or close enough"""
 
-    if text == ".":
+    if text in (".", "@"):  # for def do_dot, do_turtling
         return True
 
     splits = text.split(".")
@@ -544,7 +547,7 @@ class ShellFile:
         if not sys.stdin.isatty():
             self.tprint("fill_from_stdin")
             self.fill_from_stdin()
-        elif GotOsCopyPasteClipboardBuffer:
+        elif OsCopyPasteClipboardBuffer:
             self.tprint("fill_from_clipboard")
             self.fill_from_clipboard()
         elif app_path.exists():
@@ -656,7 +659,7 @@ class ShellFile:
         if not sys.stdout.isatty():
             self.tprint("drain_to_stdout")
             self.drain_to_stdout()
-        elif GotOsCopyPasteClipboardBuffer:
+        elif OsCopyPasteClipboardBuffer:
             self.tprint("drain_to_clipboard")  # , iobytes)
             self.drain_to_clipboard()
         else:
@@ -2335,7 +2338,7 @@ def do_python(argv: list[str]) -> None:
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     parser.parse_args_if(args)  # often prints help & exits zero
 
-    globals_add_python_import_names()
+    globals_add_do_python_names()  # todo: move to Namespace without XShVerb Globals?
 
     # Don't disturb Pipe and Os Copy/Paste Buffer
 
@@ -2345,8 +2348,10 @@ def do_python(argv: list[str]) -> None:
 
     os.environ["PYTHONINSPECT"] = str(True)
 
+    # todo: sync .do_python with .do_turtling
 
-def globals_add_python_import_names() -> None:
+
+def globals_add_do_python_names() -> None:
 
     g = globals()
     for name in PYTHON_IMPORTS:
@@ -2979,6 +2984,183 @@ def do_title(argv: list[str]) -> None:
     itext = alt.stdin.read_text()
     otext = itext.title()
     alt.stdout.write_text(otext)
+
+
+#
+# Launch a chat with Python
+#
+
+
+TURTLING_DOC = r"""
+
+    usage: turtling
+
+    launch a chat with Python Turtles
+
+    comparable to:
+      python3 -i -c 'from turtling import *; ...'
+
+    examples:
+      @
+
+"""
+
+
+def do_turtling(argv: list[str]) -> None:
+    """Launch a chat with Python Turtles"""
+
+    # Form Shell Args Parser
+
+    doc = TURTLING_DOC
+    parser = ArgDocParser(doc, add_help=False)
+
+    # Take up Shell Args
+
+    args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
+    parser.parse_args_if(args)  # often prints help & exits zero
+
+    globals_add_do_turtling_names()  # todo: move to Namespace without XShVerb Globals?
+
+    # Resume (or start persisting) the Turtle Screen
+
+    turtling._window_resume()
+
+    # Don't disturb Pipe and Os Copy/Paste Buffer
+
+    alt.stdout.fill_and_drain()
+
+    # Schedule a chat with Python to happen after Return from Def Main
+
+    os.environ["PYTHONINSPECT"] = str(True)
+
+    # todo: sync .do_turtling with .do_python
+
+
+def globals_add_do_turtling_names() -> None:
+
+    g = globals()
+
+    g["turtling"] = turtling
+
+
+class turtling:  # todo: duck out of giving this Class a lowercase name
+
+    _tty_fileno: int = -1
+
+    @staticmethod
+    def _find_tty_fileno_once() -> int:
+        """Open /dev/tty at most once, and never sooner than needed"""
+
+        fileno = turtling._tty_fileno
+        if fileno >= 0:
+            return fileno
+
+        assert sys.__stderr__, (sys.__stderr__,)
+        fileno_ = sys.__stderr__.fileno()
+        assert fileno_ >= 0, (fileno_,)
+
+        turtling._tty_fileno = fileno_
+
+        return fileno_
+
+        # may raise OSError: [Errno 6] No such device or address: '/dev/tty'
+
+    @staticmethod
+    def window_width() -> int:
+        """Count Terminal Screen Pane Columns"""
+
+        fileno = turtling._find_tty_fileno_once()
+        size = os.get_terminal_size(fileno)
+
+        return size.columns  # 80
+
+        # todo: listen for environ["COLUMNS"] a la shutil.get_terminal_size
+
+    @staticmethod
+    def window_height() -> int:
+        """Count Terminal Screen Pane Rows"""
+
+        fileno = turtling._find_tty_fileno_once()
+        size = os.get_terminal_size(fileno)
+
+        return size.lines  # 24
+
+        # todo: listen for environ["LINES"] a la shutil.get_terminal_size
+
+    @staticmethod
+    def _window_resume() -> None:
+        """Resume (or start persisting) the Turtle Screen Pane"""
+
+        puckland_text = textwrap.dedent(Puckland).strip()
+        width = turtling.window_width()
+
+        screen_path = pathlib.Path(TurtleScreenPathname)
+        assert not screen_path.exists()  # text = screen_path.read_text()
+
+        puckland_width = max(len(_) for _ in puckland_text.splitlines())
+        rows = ["", ""] + puckland_text.splitlines() + ["", ""]
+        rows = list(_.ljust(puckland_width) for _ in rows)
+        rows = list(_.center(width) for _ in rows)
+        text = "\n".join(rows) + "\n"
+
+        turtling.cchars_write("\x1b[H")
+        turtling.schars_write(text)
+        turtling.cchars_write("\x1b[J")
+
+        # todo: br() to scroll the Chat Pane
+        # todo: frame & color the Puckland, its Dots & Pellets and Puckman
+
+    @staticmethod
+    def cchars_write(text: str) -> None:
+        """Write Terminal Screen Controls"""
+
+        turtling.schars_write(text)
+
+    @staticmethod
+    def schars_write(text: str) -> None:
+        """Write Terminal Screen Text, at the Cursor, in the present Style"""
+
+        fileno = turtling._find_tty_fileno_once()
+        os.write(fileno, text.encode())
+
+
+Puckland = """
+
+    ┌──────────────────────────────────────────────────────┐
+    │┌────────────────────────┐  ┌────────────────────────┐│
+    ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
+    ││()┌──────┐()┌────────┐()│  │()┌────────┐()┌──────┐()││
+    ││@@│      │()│        │()│  │()│        │()│      │@@││
+    ││()└──────┘()└────────┘()└──┘()└────────┘()└──────┘()││
+    ││()()()()()()()()()()()()()()()()()()()()()()()()()()││
+    ││()┌──────┐()┌──┐()┌──────────────┐()┌──┐()┌──────┐()││
+    ││()└──────┘()│  │()└─────┐  ┌─────┘()│  │()└──────┘()││
+    ││()()()()()()│  │()()()()│  │()()()()│  │()()()()()()││
+    │└─────────┐()│  └─────┐  │  │  ┌─────┘  │()┌─────────┘│
+    └─────────┐│()│  ┌─────┘  └──┘  └─────┐  │()│┌─────────┘
+              ││()│  │                    │  │()││
+    ──────────┘│()│  │  ┌─────----─────┐  │  │()│└──────────
+    ───────────┘()└──┘  │┌────----────┐│  └──┘()└───────────
+                ()      ││            ││      ()
+    ───────────┐()┌──┐  │└────────────┘│  ┌──┐()┌───────────
+    ──────────┐│()│  │  └──────────────┘  │  │()│┌──────────
+              ││()│  │                    │  │()││
+    ┌─────────┘│()│  │  ┌──────────────┐  │  │()│└─────────┐
+    │┌─────────┘()└──┘  └─────┐  ┌─────┘  └──┘()└─────────┐│
+    ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
+    ││()┌──────┐()┌────────┐()│  │()┌────────┐()┌──────┐()││
+    ││()└───┐  │()└────────┘()└──┘()└────────┘()│  ┌───┘()││
+    ││@@()()│  │()()()()()()()<>()()()()()()()()│  │()()@@││
+    │└───┐()│  │()┌──┐()┌──────────────┐()┌──┐()│  │()┌───┘│
+    │┌───┘()└──┘()│  │()└─────┐  ┌─────┘()│  │()└──┘()└───┐│
+    ││()()()()()()│  │()()()()│  │()()()()│  │()()()()()()││
+    ││()┌─────────┘  └─────┐()│  │()┌─────┘  └─────────┐()││
+    ││()└──────────────────┘()└──┘()└──────────────────┘()││
+    ││()()()()()()()()()()()()()()()()()()()()()()()()()()││
+    │└────────────────────────────────────────────────────┘│
+    └──────────────────────────────────────────────────────┘
+
+"""
 
 
 #
@@ -3761,6 +3943,7 @@ DOC_BY_VERB = dict(
     strip=STRIP_DOC,
     tail=TAIL_DOC,
     title=TITLE_DOC,
+    turtling=TURTLING_DOC,
     upper=UPPER_DOC,
     urllib=URLLIB_DOC,
     vi=VI_DOC,
@@ -3803,6 +3986,7 @@ FUNC_BY_VERB = dict(
     strip=do_strip,
     tail=do_tail,
     title=do_title,
+    turtling=do_turtling,
     upper=do_upper,
     urllib=do_urllib,
     vi=do_vi,
@@ -3814,6 +3998,7 @@ FUNC_BY_VERB = dict(
 
 VERB_BY_VB = {  # lists the abbreviated or unabbreviated Aliases of each Shell Verb
     ".": "dot",
+    "@": "turtling",
     "a": "awk",
     "c": "cat",
     "d": "diff",
