@@ -106,10 +106,10 @@ PacificLaunch = dt.datetime.now(Pacific)
 UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
-AppPathname = "xshverb.pbpaste"  # traces the last Pipe
+AppPathname = "__pycache__/p.pbpaste"  # traces the last Pipe
 
 OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
-PidPathname = f"__pycache__/{OsGetPid}-xshverb.pbpaste"
+PidPathname = f"__pycache__/{OsGetPid}.pbpaste"
 
 GotOsCopyPasteClipboardBuffer = bool(shutil.which("pbpaste") and shutil.which("pbcopy"))
 # GotOsCopyPasteClipboardBuffer = False  # runs as if Clipboard not found
@@ -530,7 +530,7 @@ class ShellFile:
     def fill_if(self) -> None:
         """Read Bytes from Stdin, else from Os Copy/Paste Buffer, at most once"""
 
-        assert AppPathname == "xshverb.pbpaste"
+        assert AppPathname == "__pycache__/p.pbpaste"
         app_path = pathlib.Path(AppPathname)
 
         assert not self.drained, (self.drained,)
@@ -666,7 +666,7 @@ class ShellFile:
     def write_to_path_etc(self, iobytes: bytes) -> pathlib.Path:
         """Write Bytes to Pid Path and then App Path and then return App Path"""
 
-        assert AppPathname == "xshverb.pbpaste"
+        assert AppPathname == "__pycache__/p.pbpaste"
         app_path = pathlib.Path(AppPathname)
         pid_path = pathlib.Path(PidPathname)  # adds next revision of Paste Buffer
 
@@ -679,6 +679,7 @@ class ShellFile:
         # Push a File into the next XShVerb Process  # todo: same Date/Time Stamp as Pid Path
 
         self.tprint("write shadow copy to", app_path)
+        app_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
         app_path.write_bytes(iobytes)  # traces Date/ Time/ Bytes of PbCopy
 
         return app_path
