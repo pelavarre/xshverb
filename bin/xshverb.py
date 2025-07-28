@@ -3032,9 +3032,9 @@ def do_turtling(argv: list[str]) -> None:
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     parser.parse_args_if(args)  # often prints help & exits zero
 
-    # Resume (or start persisting) the Turtle Screen
+    # Resume (or start persisting) the Turtle Screen Pane
 
-    ts._window_resume()
+    ts.pane_resume()
 
     # Don't disturb Pipe and Os Copy/Paste Buffer
 
@@ -3047,8 +3047,8 @@ def do_turtling(argv: list[str]) -> None:
     atexit.register(lambda: ts.write_control("\x1b[32100H"))
 
     d: dict[str, object] = dict()
-    d["br"] = ts._top_panel_line_break
-    d["cls"] = ts._top_panel_clear
+    d["br"] = ts.chat_line_break
+    d["cls"] = ts.chat_clear
     d["turtling"] = ts  # as if 'import turtling'
 
     choice = 1
@@ -3130,7 +3130,7 @@ class TurtleConsole(code.InteractiveConsole):
 
         (y0, x0) = ts.row_y_column_x_read()
         if y0 > top_panel_height:
-            ts._top_panel_line_break()
+            ts.chat_line_break()
 
         stdio.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
         stdio.flush()  # before .raw_input
@@ -3145,7 +3145,7 @@ class TurtleConsole(code.InteractiveConsole):
 
         (y1, x1) = ts.row_y_column_x_read()  # replaces
         if y1 > top_panel_height:  # '>' not '>='
-            ts._top_panel_line_break()
+            ts.chat_line_break()
 
         return raw_input
 
@@ -3203,12 +3203,14 @@ class TurtleScreen:
 
         # todo: listen for environ["LINES"] a la shutil.get_terminal_size
 
-    def _window_resume(self) -> None:
+    def pane_resume(self) -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
-        self._top_panel_clear()
+        self.chat_clear()
 
-    def _top_panel_clear(self) -> None:
+        # our 'Turtle Screen Pane' rhymes with the Python Turtle Graphics Window
+
+    def chat_clear(self) -> None:
         """Clear the Top Panel"""
 
         stdio = self.stdio
@@ -3229,7 +3231,7 @@ class TurtleScreen:
             stdio.write("\n")  # skips down a Row
 
         self.write_control(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
-        self._puck_rows_write()
+        self.puck_rows_write()
         stdio.write(width * " ")
 
         stdio.write("\x1b[H")  # warps to Upper Left
@@ -3238,7 +3240,7 @@ class TurtleScreen:
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
-    def _top_panel_line_break(self) -> None:
+    def chat_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
 
         stdio = self.stdio
@@ -3261,7 +3263,7 @@ class TurtleScreen:
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
-    def _puck_rows_write(self) -> None:
+    def puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
 
         assert LF == "\n"
@@ -3290,11 +3292,11 @@ class TurtleScreen:
 
         for row in rows:
             self.write_control(f"\x1b[{1 + dent_width}G")  # Warp to Column
-            self._puck_one_row_write(row)
+            self.puck_one_row_write(row)
 
         self.write_control("\x1b[m")  # Plain Style
 
-    def _puck_one_row_write(self, text: str) -> None:
+    def puck_one_row_write(self, text: str) -> None:
         """Write a Row of the Puckland"""
 
         assert LF == "\n"
@@ -3360,7 +3362,6 @@ class TurtleScreen:
 
         ScreenWriteLog.write(text)  # todo: Flush only where Flushing is quick
 
-        # FIXME: stop with the 'def _'
         # FIXME: move the Puckman to its own top layer
 
         # todo: Stream vs File Descriptor vs Flush
