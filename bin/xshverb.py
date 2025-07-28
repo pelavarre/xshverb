@@ -3074,16 +3074,16 @@ class TurtlingConsole(code.InteractiveConsole):
         Turtling.os_write_encode("\x1b[35m" + prompt + "\x1b[m")
         yx0 = Turtling.row_y_column_x_read()
         raw_input = super().raw_input(prompt="")
-        yx1 = Turtling.row_y_column_x_read()
+        # yx1 = Turtling.row_y_column_x_read()
 
         (y, x) = yx0
         Turtling.control_write(f"\x1b[{y};{x}H")
-        yx3 = Turtling.row_y_column_x_read()
-        assert yx0 == yx3, (yx0, yx3)
+        # yx3 = Turtling.row_y_column_x_read()
+        # assert yx0 == yx3, (yx0, yx3)
 
         Turtling.os_write_encode("\x1b[1m" + raw_input + "\x1b[m" + "\n")
-        yx4 = Turtling.row_y_column_x_read()
-        assert yx1 == yx4, (yx1, yx4)
+        # yx4 = Turtling.row_y_column_x_read()
+        # assert yx1 == yx4, (yx1, yx4)
 
         return raw_input
 
@@ -3245,9 +3245,10 @@ class Turtling:
 
         assert sys.__stderr__, (sys.__stderr__,)
         sys.__stderr__.write(text)
-        sys.__stderr__.flush()  # todo: Flush via File Descriptor (FD) 2
 
         TurtleScreenLog.write(text)  # todo: Flush only where Flushing is quick
+
+        # todo: Stream vs File Descriptor vs Flush
 
     @staticmethod
     def row_y_column_x_read() -> tuple[int, int]:
@@ -3257,6 +3258,8 @@ class Turtling:
         fileno = sys.__stderr__.fileno()
 
         # Ask for Y X
+
+        sys.__stderr__.flush()
 
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno)
