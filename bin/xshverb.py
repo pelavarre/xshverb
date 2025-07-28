@@ -132,8 +132,9 @@ TurtleScreenLog = TurtleScreenLogPath.open("a")
 #
 
 
-with_hook = sys.excepthook
-assert (with_hook.__module__, with_hook.__name__) == ("sys", "excepthook"), (with_hook,)
+with_sys_except_hook = sys.excepthook
+assert with_sys_except_hook.__module__ == "sys", (with_sys_except_hook.__module__,)
+assert with_sys_except_hook.__name__ == "excepthook", (with_sys_except_hook.__name__,)
 
 
 assert int(0x80 + signal.SIGINT) == 130  # 'mypy --strict' needs the int() here
@@ -149,7 +150,7 @@ def excepthook(
         sys.stderr.write("\n")
         sys.exit(130)  # 0x80 + signal.SIGINT
 
-    with_hook(exc_type, exc_value, exc_traceback)
+    with_sys_except_hook(exc_type, exc_value, exc_traceback)
 
     print(">>> pdb.pm()", file=sys.stderr)
     pdb.pm()
@@ -2353,6 +2354,7 @@ def do_python(argv: list[str]) -> None:
 
     # Schedule a chat with Python to happen after Return from Def Main
 
+    sys.excepthook = with_sys_except_hook
     os.environ["PYTHONINSPECT"] = str(True)
 
     # todo: sync .do_python with .do_turtling
@@ -3036,10 +3038,12 @@ def do_turtling(argv: list[str]) -> None:
 
     # Chat with Python
 
+    sys.excepthook = with_sys_except_hook
+
     d: dict[str, object] = dict()
     d["turtling"] = Turtling  # changes case
 
-    # tc = code.InteractiveConsole(locals=d)
+    # tc = code.InteractiveConsole(locals=d)  # bypasses Class Turtling to write Input Echo
     tc = TurtlingConsole(locals=d)
     tw = TurtlingWriter()
 
@@ -3097,6 +3101,8 @@ class TurtlingWriter:
     def write(self, text: str) -> int:
         length = len(text)
         Turtling.os_write_encode(text)
+        # assert sys.__stderr__, (sys.__stderr__,)
+        # sys.__stderr__.flush()  # needed if TurtlingConsole doesn't flush
         return length
 
 
