@@ -3041,6 +3041,15 @@ def globals_add_do_turtling_names() -> None:
     g["turtling"] = turtling
 
 
+LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
+
+CHA_X = "\x1b" "[" "{}G"  # CSI 04/07 Cursor Character Absolute  # \r is Pn 1
+CUP_Y_X = "\x1b" "[" "{};{}H"  # CSI 04/08 Cursor Position
+ED_P = "\x1b" "[" "{}J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
+
+SGR = "\x1b" "[" "{}m"  # CSI 06/13 Select Graphic Rendition [Text Style]
+
+
 class turtling:  # todo: duck out of giving this Class a lowercase name
 
     _fileno: int = -1
@@ -3096,58 +3105,67 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
         screen_path = pathlib.Path(TurtleScreenPathname)
         assert not screen_path.exists()  # text = screen_path.read_text()
 
-        # todo: assert "\x1b[{}G" == ...
-        # todo: assert "\x1b[H" == ...
-        # todo: assert "\x1b[J" == ...
-        # todo: assert "\x1b[{}m" == ...
+        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+        assert ED_P == "\x1b" "[" "{}J"
+
+        turtling.control_write("\x1b[H")  # Warp to Upper Left
+        turtling._puck_rows_write()
+        turtling.control_write("\n")  # Skip down a Row
+        turtling.control_write("\x1b[J")  # Erase to Right and Below
+
+        # todo: overwrite the Python Chat with colored Prompt and bold Input Echo
+        # todo: record the Stdout & Stderr of the Python Chat
+        # todo: and then br() to scroll the Chat Pane
+
+    @staticmethod
+    def _puck_rows_write() -> None:
+        """Write the Rows of the Puckland"""
+
+        assert LF == "\n"
+        assert CHA_X == "\x1b" "[" "{}G"
+        assert SGR == "\x1b" "[" "{}m"
+
+        # Pull the Rows from the Puckland Plain Text and frame them on all 4 Sides
 
         text = textwrap.dedent(Puckland).strip()
         split_width = max(len(_) for _ in text.splitlines())
 
         width = turtling.window_width()
         puck_width = 4 + split_width + 4
-        dent_width = ((width - puck_width) // 2) + 1
+
+        center = (puck_width * "*").center(width)
+        dent_width = len(center) - len(center.lstrip())  # biased left for an even-width middle
 
         rows = ["", ""] + text.splitlines() + ["", ""]
         rows = list(_.ljust(split_width) for _ in rows)
         rows = list(("    " + _ + "    ") for _ in rows)
 
-        turtling.cchars_write("\x1b[H")  # Warp to Upper Left
-
-        for row in rows:
-            turtling.cchars_write(f"\x1b[{dent_width}G")
-            turtling.puck_chars_write(row)
-            turtling.cchars_write("\n")
-
-        turtling.cchars_write("\x1b[m")  # Plain Style
-        turtling.cchars_write("\n")
-        turtling.cchars_write("\x1b[J")  # Erase to Right and Below
-
-        # todo: br() to scroll the Chat Pane
-        # todo: frame & color the Puckland, its Dots & Pellets and Puckman
-        # todo: don't overwrite the Chars outside the Frame
-
-    @staticmethod
-    def cchars_write(text: str) -> None:
-        """Write Terminal Screen Controls"""
-
-        fileno = turtling._find_fileno_once()
-        os.write(fileno, text.encode())
-
-    @staticmethod
-    def puck_chars_write(text: str) -> None:
-        """Write Terminal Screen Text, at the Cursor, in the present Style"""
-
-        fileno = turtling._find_fileno_once()
-
-        #
+        # Write Framed Rows on a Colored Background
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
+        turtling.control_write(OnBlack)
 
-        Dot = "\x1b[38;5;214m"  # setPenColor "ff8000" 8  # 0o20 + int("530", base=6)
-        Pellet = Dot
+        for row in rows:
+            turtling.control_write(f"\x1b[{1 + dent_width}G")  # Warp to Column
+            turtling._puck_one_row_write(row)
+
+        turtling.control_write("\x1b[m")  # Plain Style
+
+        # todo: str.center
+
+    @staticmethod
+    def _puck_one_row_write(text: str) -> None:
+        """Write a Row of the Puckland"""
+
+        assert LF == "\n"
+        assert SGR == "\x1b" "[" "{}m"
+
+        # Choose Foreground Colors
+
+        Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
+        Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        Wall = "\x1b[38;5;39m"  # setPenColor "0080ff" 8  # 0o20 + int("035", base=6)
+        Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
 
@@ -3158,19 +3176,47 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
             FullBlock: Puckman,
         }
 
-        #
+        # Mix Colors into Text
 
-        colored = OnBlack
+        with_penscape = ""
+        pentext = ""
+
         for ch in text:
             if ch != " ":
-                default_eq_str = ""
-                penscape = penscape_by_ch.get(ch, default_eq_str)
-                colored += penscape if penscape else Wall
-            colored += ch
+                default_eq_Wall = Wall
+                penscape = penscape_by_ch.get(ch, default_eq_Wall)
+                if penscape != with_penscape:
+                    assert pentext, (pentext,)  # because begun by " " Space's
+                    turtling.text_write(pentext)
+                    turtling.control_write(penscape)
 
-        #
+                    with_penscape = penscape
+                    pentext = ""
 
-        os.write(fileno, colored.encode())
+            pentext += ch
+
+        assert pentext, (pentext,)  # because last visited Char not yet written
+        turtling.text_write(pentext)
+
+        turtling.control_write("\n")
+
+    @staticmethod
+    def control_write(text: str) -> None:
+        """Write Terminal Screen Controls"""
+
+        assert any((not _.isprintable()) for _ in text), (text,)
+
+        fileno = turtling._find_fileno_once()
+        os.write(fileno, text.encode())
+
+    @staticmethod
+    def text_write(text: str) -> None:
+        """Write Terminal Screen Text, at the Cursor, in the present Style"""
+
+        assert all(_.isprintable() for _ in text), (text,)
+
+        fileno = turtling._find_fileno_once()
+        os.write(fileno, text.encode())
 
 
 Puckland = """
