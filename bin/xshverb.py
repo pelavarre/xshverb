@@ -3021,7 +3021,7 @@ def do_turtling(argv: list[str]) -> None:
 
     # Resume (or start persisting) the Turtle Screen
 
-    turtling._window_resume()
+    Turtling._window_resume()
 
     # Don't disturb Pipe and Os Copy/Paste Buffer
 
@@ -3038,7 +3038,7 @@ def globals_add_do_turtling_names() -> None:
 
     g = globals()
 
-    g["turtling"] = turtling
+    g["turtling"] = Turtling  # changes case
 
 
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
@@ -3050,7 +3050,7 @@ ED_P = "\x1b" "[" "{}J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Row
 SGR = "\x1b" "[" "{}m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
 
-class turtling:  # todo: duck out of giving this Class a lowercase name
+class Turtling:  # todo: duck out of giving this Class a lowercase name
 
     _fileno: int = -1
 
@@ -3058,7 +3058,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
     def _find_fileno_once() -> int:
         """Open Dev Tty at most once, and never sooner than needed"""
 
-        fileno = turtling._fileno
+        fileno = Turtling._fileno
         if fileno >= 0:
             return fileno
 
@@ -3066,7 +3066,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
         stderr_fileno = sys.__stderr__.fileno()
         assert stderr_fileno >= 0, (stderr_fileno,)
 
-        turtling._fileno = stderr_fileno
+        Turtling._fileno = stderr_fileno
 
         return stderr_fileno
 
@@ -3080,7 +3080,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
     def window_width() -> int:
         """Count Terminal Screen Pane Columns"""
 
-        fileno = turtling._find_fileno_once()
+        fileno = Turtling._find_fileno_once()
         size = os.get_terminal_size(fileno)
 
         return size.columns  # 80
@@ -3091,7 +3091,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
     def window_height() -> int:
         """Count Terminal Screen Pane Rows"""
 
-        fileno = turtling._find_fileno_once()
+        fileno = Turtling._find_fileno_once()
         size = os.get_terminal_size(fileno)
 
         return size.lines  # 24
@@ -3108,10 +3108,10 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert ED_P == "\x1b" "[" "{}J"
 
-        turtling.control_write("\x1b[H")  # Warp to Upper Left
-        turtling._puck_rows_write()
-        turtling.control_write("\n")  # Skip down a Row
-        turtling.control_write("\x1b[J")  # Erase to Right and Below
+        Turtling.control_write("\x1b[H")  # Warp to Upper Left
+        Turtling._puck_rows_write()
+        Turtling.control_write("\n")  # Skip down a Row
+        Turtling.control_write("\x1b[J")  # Erase to Right and Below
 
         # todo: overwrite the Python Chat with colored Prompt and bold Input Echo
         # todo: record the Stdout & Stderr of the Python Chat
@@ -3130,7 +3130,7 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
         text = textwrap.dedent(Puckland).strip()
         split_width = max(len(_) for _ in text.splitlines())
 
-        width = turtling.window_width()
+        width = Turtling.window_width()
         puck_width = 4 + split_width + 4
 
         center = (puck_width * "*").center(width)
@@ -3143,13 +3143,13 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
         # Write Framed Rows on a Colored Background
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        turtling.control_write(OnBlack)
+        Turtling.control_write(OnBlack)
 
         for row in rows:
-            turtling.control_write(f"\x1b[{1 + dent_width}G")  # Warp to Column
-            turtling._puck_one_row_write(row)
+            Turtling.control_write(f"\x1b[{1 + dent_width}G")  # Warp to Column
+            Turtling._puck_one_row_write(row)
 
-        turtling.control_write("\x1b[m")  # Plain Style
+        Turtling.control_write("\x1b[m")  # Plain Style
 
         # todo: str.center
 
@@ -3187,8 +3187,8 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
                 penscape = penscape_by_ch.get(ch, default_eq_Wall)
                 if penscape != with_penscape:
                     assert pentext, (pentext,)  # because begun by " " Space's
-                    turtling.text_write(pentext)
-                    turtling.control_write(penscape)
+                    Turtling.text_write(pentext)
+                    Turtling.control_write(penscape)
 
                     with_penscape = penscape
                     pentext = ""
@@ -3196,26 +3196,29 @@ class turtling:  # todo: duck out of giving this Class a lowercase name
             pentext += ch
 
         assert pentext, (pentext,)  # because last visited Char not yet written
-        turtling.text_write(pentext)
+        Turtling.text_write(pentext)
 
-        turtling.control_write("\n")
+        Turtling.control_write("\n")
 
     @staticmethod
     def control_write(text: str) -> None:
         """Write Terminal Screen Controls"""
 
         assert any((not _.isprintable()) for _ in text), (text,)
-
-        fileno = turtling._find_fileno_once()
-        os.write(fileno, text.encode())
+        Turtling.os_write_encode(text)
 
     @staticmethod
     def text_write(text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
         assert all(_.isprintable() for _ in text), (text,)
+        Turtling.os_write_encode(text)
 
-        fileno = turtling._find_fileno_once()
+    @staticmethod
+    def os_write_encode(text: str) -> None:
+        """Write Bytes to Terminal Screen"""
+
+        fileno = Turtling._find_fileno_once()
         os.write(fileno, text.encode())
 
 
