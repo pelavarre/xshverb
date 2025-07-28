@@ -3086,15 +3086,24 @@ def do_turtling(argv: list[str]) -> None:
 
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
 
+DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
+DECRC = "\x1b" "8"  # ESC 03/08 Restore Cursor [Revert] (DECRC)
+
+CUU_Y = "\x1b" "[" "{}A"  # CSI 04/01 Cursor Up
 CHA_X = "\x1b" "[" "{}G"  # CSI 04/07 Cursor Character Absolute  # \r is Pn 1
 CUP_Y_X = "\x1b" "[" "{};{}H"  # CSI 04/08 Cursor Position
 ED_P = "\x1b" "[" "{}J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
+IL_Y = "\x1b" "[" "{}L"  # CSI 04/12 Insert Line [Row]
 
 SGR = "\x1b" "[" "{}m"  # CSI 06/13 Select Graphic Rendition [Text Style]
+DSR_6 = "\x1b" "[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
+
+# CSI 05/02 Active [Cursor] Position Report (CPR) In because DSR_6 Out
+CPR_Y_X_REGEX = r"\x1B\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
 
 
 class TurtleConsole(code.InteractiveConsole):
-    """Run a Python Chat a la 'python3 -i', but write Input Echo through the TurtleScreen"""
+    """Run a Chat a la 'python3 -i', but write Input Echo through the TurtleScreen"""
 
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
@@ -3161,59 +3170,56 @@ class TurtleScreen:
     def _window_resume(self) -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
-        assert PucklandHeight == 37
-
-        assert CUP_Y_X == "\x1b" "[" "{};{}H"
-        assert ED_P == "\x1b" "[" "{}J"
-
-        width = self.window_width()
-        height = self.window_height()
-        top_panel_height = height - 37 - 1
-
-        choice = 2
-        if choice == 1:
-            self.control_write(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
-            self._puck_rows_write()
-            self.text_write(width * " ")
-
         self._top_panel_clear()
-
-        # todo: overwrite the Python Chat with colored Prompt and bold Input Echo
-        # todo: record the Stdout & Stderr of the Python Chat
-        # todo: and then br() to scroll the Chat Pane
 
     def _top_panel_clear(self) -> None:
         """Clear the Top Panel"""
 
         assert PucklandHeight == 37
 
+        assert LF == "\n"
+        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+        assert ED_P == "\x1b" "[" "{}J"
+
         height = self.window_height()
         width = self.window_width()
         top_panel_height = height - 37 - 1
 
-        self.control_write("\x1b[H")  # warps to Upper Left
-
+        with_sys_stderr.write("\x1b[H")  # warps to Upper Left
         for _ in range(top_panel_height):
-            self.text_write(width * " ")
-            self.control_write("\n")  # skips down a Row
+            with_sys_stderr.write(width * " ")
+            with_sys_stderr.write("\n")  # skips down a Row
 
+        self.control_write(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
         self._puck_rows_write()
-        self.text_write(width * " ")
+        with_sys_stderr.write(width * " ")
 
-        self.control_write("\x1b[H")  # warps to Upper Left
+        with_sys_stderr.write("\x1b[H")  # warps to Upper Left
 
-        with_sys_stderr.flush()
+        with_sys_stderr.flush()  # before Python Chat places its Prompt
+
+        # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
     def _top_panel_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
 
-        (y, x) = self.row_y_column_x_read()  # drops a pin
-        self.control_write("\x1b[32100H")  # warps to Lower Left
-        self.control_write("\n")  # scrolls Screen up a Row and skips down a Row
-        self.control_write(f"\x1b[{y - 1}H")  # bounces back to Row of pin
-        self.control_write("\x1b[L")  # inserts a Row
+        assert LF == "\n"
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+        assert CUU_Y == "\x1b" "[" "{}A"
+        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+        assert IL_Y == "\x1b" "[" "{}L"
 
-        with_sys_stderr.flush()
+        with_sys_stderr.write("\x1b7")  # bounces back to Row of pin
+        with_sys_stderr.write("\x1b[32100H")  # warps to Lower Left
+        with_sys_stderr.write("\n")  # scrolls Screen up a Row and skips down a Row
+        with_sys_stderr.write("\x1b8")  # bounces back to Row of pin
+        with_sys_stderr.write("\x1b[A")  # warps up into the Row that was at pin
+        with_sys_stderr.write("\x1b[L")  # inserts a Row
+
+        with_sys_stderr.flush()  # before Python Chat places its Prompt
+
+        # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
     def _puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
@@ -3319,20 +3325,23 @@ class TurtleScreen:
     def row_y_column_x_read(self) -> tuple[int, int]:
         """Sample Cursor Row & Column"""
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        fileno = sys.__stderr__.fileno()
+        assert DSR_6 == "\x1b" "[" "6n"
+        assert CPR_Y_X_REGEX == r"\x1B\[([0-9]+);([0-9]+)R"
+
+        fileno = with_sys_stderr_fileno
 
         # Ask for Y X
 
-        sys.__stderr__.flush()
+        with_sys_stderr.flush()
 
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
-        sys.__stderr__.write("\x1b[6n")
-        sys.__stderr__.flush()
+        with_sys_stderr.write("\x1b[6n")
 
-        # Read Y X
+        # Flush and block to read Y X
+
+        with_sys_stderr.flush()
 
         byte0 = os.read(fileno, 1)
         assert byte0 == b"\x1b", (byte0,)
