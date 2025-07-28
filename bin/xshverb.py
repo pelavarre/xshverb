@@ -3053,7 +3053,7 @@ def do_turtling(argv: list[str]) -> None:
     d["cls"] = turtle_screen._top_panel_clear
     d["turtling"] = turtle_screen  # as if 'import turtling'
 
-    choice = 3
+    choice = 1
 
     if choice == 1:
 
@@ -3336,6 +3336,9 @@ class TurtleScreen:
         with_sys_stderr.write(text)
         ScreenWriteLog.write(text)  # todo: Flush only where Flushing is quick
 
+        # FIXME: stop with the 'def _'
+        # FIXME: move the Puckman to its own top layer
+
         # todo: Stream vs File Descriptor vs Flush
 
     def row_y_column_x_read(self) -> tuple[int, int]:
@@ -3400,7 +3403,7 @@ class TurtleScreen:
         # termios.TCSAFLUSH drops Queued Input, and blocks till Queued Output gone
         # termios.TCSANOW doesn't block and doesn't drop (by agreement, but not much tested?)
 
-        # todo: cope when Mouse or Paste work disrupts os.read(fileno)
+        # FIXME: cope when Mouse or Paste work disrupts os.read(fileno)
 
     # todo: run happy at /dev/tty, like by sending ⎋[18t call for reply ⎋[{rows};{columns}t
     # todo: thus duck out of needing the calling Process to leave Stderr connected with /dev/tty
