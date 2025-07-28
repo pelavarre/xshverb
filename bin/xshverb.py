@@ -118,7 +118,13 @@ OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
 
 PidPathname = f"__pycache__/{OsGetPid}.pbpaste"
 
-TurtleScreenPathname = "__pycache__/s.screen"
+TurtleScreenLogPathname = "__pycache__/s.screen"
+
+TurtleScreenLogPath = pathlib.Path(TurtleScreenLogPathname)
+TurtleScreenLogPath.parent.mkdir(exist_ok=True)  # implicit .parents=False
+TurtleScreenLogPath.unlink(missing_ok=True)
+
+TurtleScreenLog = TurtleScreenLogPath.open("a")
 
 
 #
@@ -3030,17 +3036,20 @@ def do_turtling(argv: list[str]) -> None:
 
     # Chat with Python
 
-    tw = TurtlingWriter()
-    sys.stdout = tw
-    sys.stderr = tw
-
     d: dict[str, object] = dict()
     d["turtling"] = Turtling  # changes case
 
     # tc = code.InteractiveConsole(locals=d)
     tc = TurtlingConsole(locals=d)
+    tw = TurtlingWriter()
 
-    tc.interact(banner="", exitmsg="")
+    sys.stdout = tw
+    sys.stderr = tw
+    try:
+        tc.interact(banner="", exitmsg="")
+    finally:
+        sys.stderr = sys.__stderr__
+        sys.stdout = sys.__stdout__
 
     # todo: dent the Input, a la 'python3 -i'
     # todo: edit Input history in Process and across Processes, a la import readline
@@ -3123,10 +3132,6 @@ class Turtling:
 
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert ED_P == "\x1b" "[" "{}J"
-
-        screen_path = pathlib.Path(TurtleScreenPathname)
-        screen_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
-        screen_path.unlink(missing_ok=True)
 
         Turtling.control_write("\x1b[H")  # Warp to Upper Left
         Turtling._puck_rows_write()
@@ -3242,8 +3247,7 @@ class Turtling:
         sys.__stderr__.write(text)
         sys.__stderr__.flush()  # todo: Flush via File Descriptor (FD) 2
 
-        with open(TurtleScreenPathname, "a") as a:
-            a.write(text)
+        TurtleScreenLog.write(text)  # todo: Flush only where Flushing is quick
 
     @staticmethod
     def row_y_column_x_read() -> tuple[int, int]:
