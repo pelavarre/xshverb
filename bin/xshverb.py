@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import __main__
 import argparse
+import atexit
 import code
 import collections.abc
 import dataclasses
@@ -3041,19 +3042,37 @@ def do_turtling(argv: list[str]) -> None:
     sys.excepthook = with_sys_except_hook
 
     d: dict[str, object] = dict()
+    d["br"] = Turtling._top_panel_line_break
+    d["cls"] = Turtling._top_panel_clear
     d["turtling"] = Turtling  # changes case
 
-    # tc = code.InteractiveConsole(locals=d)  # bypasses Class Turtling to write Input Echo
-    tc = TurtlingConsole(locals=d)
-    tw = TurtlingWriter()
+    choice = 1
 
-    sys.stdout = tw
-    sys.stderr = tw
-    try:
+    if choice == 1:
+
+        globals()["br"] = Turtling._top_panel_line_break
+        globals()["cls"] = Turtling._top_panel_clear
+        os.environ["PYTHONINSPECT"] = str(True)
+
+        atexit.register(lambda: Turtling.control_write("\x1b[32100H"))
+
+    if choice == 2:
+
+        tc = code.InteractiveConsole(locals=d)  # bypasses Class Turtling to write Input Echo
         tc.interact(banner="", exitmsg="")
-    finally:
-        sys.stderr = sys.__stderr__
-        sys.stdout = sys.__stdout__
+
+    if choice == 3:
+
+        tc = TurtlingConsole(locals=d)
+        tw = TurtlingWriter()
+
+        sys.stdout = tw
+        sys.stderr = tw
+        try:
+            tc.interact(banner="", exitmsg="")
+        finally:
+            sys.stderr = sys.__stderr__
+            sys.stdout = sys.__stdout__
 
     # todo: dent the Input, a la 'python3 -i'
     # todo: edit Input history in Process and across Processes, a la import readline
@@ -3136,17 +3155,63 @@ class Turtling:
     def _window_resume() -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
+        assert PucklandHeight == 37
+
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert ED_P == "\x1b" "[" "{}J"
 
-        Turtling.control_write("\x1b[H")  # Warp to Upper Left
-        Turtling._puck_rows_write()
-        Turtling.control_write("\n")  # Skip down a Row
-        Turtling.control_write("\x1b[J")  # Erase to Right and Below
+        width = Turtling.window_width()
+        height = Turtling.window_height()
+        top_panel_height = height - 37 - 1
+
+        choice = 2
+        if choice == 1:
+            Turtling.control_write(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
+            Turtling._puck_rows_write()
+            Turtling.text_write(width * " ")
+
+        Turtling._top_panel_clear()
 
         # todo: overwrite the Python Chat with colored Prompt and bold Input Echo
         # todo: record the Stdout & Stderr of the Python Chat
         # todo: and then br() to scroll the Chat Pane
+
+    @staticmethod
+    def _top_panel_clear() -> None:
+        """Clear the Top Panel"""
+
+        assert PucklandHeight == 37
+
+        height = Turtling.window_height()
+        width = Turtling.window_width()
+        top_panel_height = height - 37 - 1
+
+        Turtling.control_write("\x1b[H")  # warps to Upper Left
+
+        for _ in range(top_panel_height):
+            Turtling.text_write(width * " ")
+            Turtling.control_write("\n")  # skips down a Row
+
+        Turtling._puck_rows_write()
+        Turtling.text_write(width * " ")
+
+        Turtling.control_write("\x1b[H")  # warps to Upper Left
+
+        assert sys.__stderr__, (sys.__stderr__,)
+        sys.__stderr__.flush()
+
+    @staticmethod
+    def _top_panel_line_break() -> None:
+        """Scroll up the Top Panel by one Row"""
+
+        (y, x) = Turtling.row_y_column_x_read()  # drops a pin
+        Turtling.control_write("\x1b[32100H")  # warps to Lower Left
+        Turtling.control_write("\n")  # scrolls Screen up a Row and skips down a Row
+        Turtling.control_write(f"\x1b[{y - 1}H")  # bounces back to Row of pin
+        Turtling.control_write("\x1b[L")  # inserts a Row
+
+        assert sys.__stderr__, (sys.__stderr__,)
+        sys.__stderr__.flush()
 
     @staticmethod
     def _puck_rows_write() -> None:
@@ -3353,6 +3418,11 @@ Puckland = """
 """
 
 assert "█" == unicodedata.lookup("Full Block")
+
+PucklandWidth = 8 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitlines())
+PucklandHeight = 4 + len(textwrap.dedent(Puckland).strip().splitlines())
+
+assert (PucklandWidth, PucklandHeight) == (64, 37), (PucklandWidth, PucklandHeight)
 
 
 #
