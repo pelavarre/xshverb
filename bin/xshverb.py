@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import __main__
 import argparse
+import code
 import collections.abc
 import dataclasses
 import datetime as dt
@@ -75,7 +76,9 @@ import socket
 import string
 import subprocess
 import sys
+import termios
 import textwrap
+import tty
 import types
 import unicodedata
 import urllib.parse
@@ -3017,8 +3020,6 @@ def do_turtling(argv: list[str]) -> None:
     args = argv[1:] if argv[1:] else ["--"]  # ducks sending [] to ask to print Closing
     parser.parse_args_if(args)  # often prints help & exits zero
 
-    globals_add_do_turtling_names()  # todo: move to Namespace without XShVerb Globals?
-
     # Resume (or start persisting) the Turtle Screen
 
     Turtling._window_resume()
@@ -3027,18 +3028,22 @@ def do_turtling(argv: list[str]) -> None:
 
     alt.stdout.fill_and_drain()
 
-    # Schedule a chat with Python to happen after Return from Def Main
+    # Chat with Python
 
-    os.environ["PYTHONINSPECT"] = str(True)
+    tw = TurtlingWriter()
+    sys.stdout = tw
+    sys.stderr = tw
 
-    # todo: sync .do_turtling with .do_python
+    d: dict[str, object] = dict()
+    d["turtling"] = Turtling  # changes case
 
+    # tc = code.InteractiveConsole(locals=d)
+    tc = TurtlingConsole(locals=d)
 
-def globals_add_do_turtling_names() -> None:
+    tc.interact(banner="", exitmsg="")
 
-    g = globals()
-
-    g["turtling"] = Turtling  # changes case
+    # todo: dent the Input, a la 'python3 -i'
+    # todo: edit Input history in Process and across Processes, a la import readline
 
 
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
@@ -3050,37 +3055,50 @@ ED_P = "\x1b" "[" "{}J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Row
 SGR = "\x1b" "[" "{}m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
 
-class Turtling:  # todo: duck out of giving this Class a lowercase name
+class TurtlingConsole(code.InteractiveConsole):
 
-    _fileno: int = -1
+    def __init__(self, locals: dict[str, object]) -> None:
+        super().__init__(locals=locals)
 
-    @staticmethod
-    def _find_fileno_once() -> int:
-        """Open Dev Tty at most once, and never sooner than needed"""
+    def raw_input(self, prompt: str = "") -> str:
 
-        fileno = Turtling._fileno
-        if fileno >= 0:
-            return fileno
+        Turtling.os_write_encode("\x1b[35m" + prompt + "\x1b[m")
+        yx0 = Turtling.row_y_column_x_read()
+        raw_input = super().raw_input(prompt="")
+        yx1 = Turtling.row_y_column_x_read()
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        stderr_fileno = sys.__stderr__.fileno()
-        assert stderr_fileno >= 0, (stderr_fileno,)
+        (y, x) = yx0
+        Turtling.control_write(f"\x1b[{y};{x}H")
+        yx3 = Turtling.row_y_column_x_read()
+        assert yx0 == yx3, (yx0, yx3)
 
-        Turtling._fileno = stderr_fileno
+        Turtling.os_write_encode("\x1b[1m" + raw_input + "\x1b[m" + "\n")
+        yx4 = Turtling.row_y_column_x_read()
+        assert yx1 == yx4, (yx1, yx4)
 
-        return stderr_fileno
+        return raw_input
 
-        # open("/dev/tty") may raise OSError: [Errno 6] No such device or address: '/dev/tty'
 
-        # todo: failover to ⎋[18t call for reply ⎋[{rows};{columns}t
-        # when os.get_terminal_size() rejects open("/dev/tty").fileno()
-        # like by raising OSError: [Errno 9] Bad file descriptor
+class TurtlingWriter:
+    """Write Chars to the Terminal Screen, in place of Stdout/ Stderr"""
+
+    def flush(self) -> None:
+        pass
+
+    def write(self, text: str) -> int:
+        length = len(text)
+        Turtling.os_write_encode(text)
+        return length
+
+
+class Turtling:
 
     @staticmethod
     def window_width() -> int:
         """Count Terminal Screen Pane Columns"""
 
-        fileno = Turtling._find_fileno_once()
+        assert sys.__stderr__, (sys.__stderr__,)
+        fileno = sys.__stderr__.fileno()
         size = os.get_terminal_size(fileno)
 
         return size.columns  # 80
@@ -3091,7 +3109,8 @@ class Turtling:  # todo: duck out of giving this Class a lowercase name
     def window_height() -> int:
         """Count Terminal Screen Pane Rows"""
 
-        fileno = Turtling._find_fileno_once()
+        assert sys.__stderr__, (sys.__stderr__,)
+        fileno = sys.__stderr__.fileno()
         size = os.get_terminal_size(fileno)
 
         return size.lines  # 24
@@ -3102,11 +3121,12 @@ class Turtling:  # todo: duck out of giving this Class a lowercase name
     def _window_resume() -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
-        screen_path = pathlib.Path(TurtleScreenPathname)
-        assert not screen_path.exists()  # text = screen_path.read_text()
-
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert ED_P == "\x1b" "[" "{}J"
+
+        screen_path = pathlib.Path(TurtleScreenPathname)
+        screen_path.parent.mkdir(exist_ok=True)  # implicit .parents=False
+        screen_path.unlink(missing_ok=True)
 
         Turtling.control_write("\x1b[H")  # Warp to Upper Left
         Turtling._puck_rows_write()
@@ -3218,8 +3238,67 @@ class Turtling:  # todo: duck out of giving this Class a lowercase name
     def os_write_encode(text: str) -> None:
         """Write Bytes to Terminal Screen"""
 
-        fileno = Turtling._find_fileno_once()
-        os.write(fileno, text.encode())
+        assert sys.__stderr__, (sys.__stderr__,)
+        sys.__stderr__.write(text)
+        sys.__stderr__.flush()  # todo: Flush via File Descriptor (FD) 2
+
+        with open(TurtleScreenPathname, "a") as a:
+            a.write(text)
+
+    @staticmethod
+    def row_y_column_x_read() -> tuple[int, int]:
+        """Sample Cursor Row & Column"""
+
+        assert sys.__stderr__, (sys.__stderr__,)
+        fileno = sys.__stderr__.fileno()
+
+        # Ask for Y X
+
+        with_tcgetattr = termios.tcgetattr(fileno)
+        tty.setraw(fileno)
+
+        sys.__stderr__.write("\x1b[6n")
+        sys.__stderr__.flush()
+
+        # Read Y X
+
+        byte0 = os.read(fileno, 1)
+        assert byte0 == b"\x1b", (byte0,)
+
+        byte1 = os.read(fileno, 1)
+        assert byte1 == b"[", (byte1,)
+
+        ybytes = bytearray()
+        while True:
+            ybyte = os.read(fileno, 1)
+            if ybyte in b"0123456789":
+                ybytes += ybyte
+                continue
+            assert ybyte == b";", (ybyte,)
+            break
+
+        xbytes = bytearray()
+        while True:
+            xbyte = os.read(fileno, 1)
+            if xbyte in b"0123456789":
+                xbytes += xbyte
+                continue
+            assert xbyte == b"R", (xbyte,)
+            break
+
+        termios.tcsetattr(fileno, termios.TCSADRAIN, with_tcgetattr)
+
+        # Succeed
+
+        y = int(ybytes)
+        x = int(xbytes)
+
+        return (y, x)
+
+        # todo: cope when Mouse or Paste work disrupts os.read(fileno)
+
+    # todo: run happy at /dev/tty, like by sending ⎋[18t call for reply ⎋[{rows};{columns}t
+    # todo: thus duck out of needing the calling Process to leave Stderr connected with /dev/tty
 
 
 Puckland = """
