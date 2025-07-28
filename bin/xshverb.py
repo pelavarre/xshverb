@@ -64,6 +64,7 @@ import decimal
 import difflib
 import hashlib
 import importlib
+import io
 import json
 import math
 import os
@@ -90,11 +91,6 @@ _: dict[str, int] | None  # new since Oct/2021 Python 3.10
 
 if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
-
-
-assert sys.__stderr__, (sys.__stderr__,)
-with_sys_stderr = sys.__stderr__
-with_sys_stderr_fileno = sys.__stderr__.fileno()
 
 
 #
@@ -3024,6 +3020,8 @@ TURTLING_DOC = r"""
 def do_turtling(argv: list[str]) -> None:
     """Launch a chat with Python Turtles"""
 
+    ts = turtle_screen
+
     # Form Shell Args Parser
 
     doc = TURTLING_DOC
@@ -3036,7 +3034,7 @@ def do_turtling(argv: list[str]) -> None:
 
     # Resume (or start persisting) the Turtle Screen
 
-    turtle_screen._window_resume()
+    ts._window_resume()
 
     # Don't disturb Pipe and Os Copy/Paste Buffer
 
@@ -3046,12 +3044,12 @@ def do_turtling(argv: list[str]) -> None:
 
     sys.excepthook = with_sys_except_hook
 
-    atexit.register(lambda: turtle_screen.control_write("\x1b[32100H"))
+    atexit.register(lambda: ts.write_control("\x1b[32100H"))
 
     d: dict[str, object] = dict()
-    d["br"] = turtle_screen._top_panel_line_break
-    d["cls"] = turtle_screen._top_panel_clear
-    d["turtling"] = turtle_screen  # as if 'import turtling'
+    d["br"] = ts._top_panel_line_break
+    d["cls"] = ts._top_panel_clear
+    d["turtling"] = ts  # as if 'import turtling'
 
     choice = 1
 
@@ -3059,8 +3057,6 @@ def do_turtling(argv: list[str]) -> None:
 
         globals().update(d)
         os.environ["PYTHONINSPECT"] = str(True)
-
-        atexit.register(lambda: turtle_screen.control_write("\x1b[32100H"))
 
     if choice == 2:
 
@@ -3074,8 +3070,8 @@ def do_turtling(argv: list[str]) -> None:
         assert sys.stdout is sys.__stdout__, (sys.stdout, sys.__stdout__)
         assert sys.stderr is sys.__stderr__, (sys.stderr, sys.__stderr__)
 
-        sys.stdout = turtle_screen
-        sys.stderr = turtle_screen
+        sys.stdout = ts
+        sys.stderr = ts
         try:
             tc.interact(banner="", exitmsg="")
         finally:
@@ -3107,42 +3103,53 @@ CPR_Y_X_REGEX = r"\x1B\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep
 class TurtleConsole(code.InteractiveConsole):
     """Run a Chat a la 'python3 -i', but write Input Echo through the TurtleScreen"""
 
+    stdio: io.TextIOWrapper
+
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
 
-        assert PucklandHeight == 37
+        ts = turtle_screen
 
-        height = turtle_screen.window_height()
+        assert PucklandHeight == 37
+        assert sys.__stderr__, (sys.__stderr__,)
+
+        height = ts.window_height()
         top_panel_height = height - 37 - 1
 
+        self.stdio = sys.__stderr__
         self.top_panel_height = top_panel_height
 
     def raw_input(self, prompt: str = "") -> str:
 
+        stdio = self.stdio
         top_panel_height = self.top_panel_height
+
+        ts = turtle_screen
 
         # Scroll up to make room for Prompt
 
-        (y0, x0) = turtle_screen.row_y_column_x_read()
+        (y0, x0) = ts.row_y_column_x_read()
         if y0 > top_panel_height:
-            turtle_screen._top_panel_line_break()
+            ts._top_panel_line_break()
 
-        with_sys_stderr.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
-        with_sys_stderr.flush()  # before .raw_input
+        stdio.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
+        stdio.flush()  # before .raw_input
 
         # Write the Prompt, then flush and block to read & echo the Input
 
         raw_input = super().raw_input(prompt="")
 
-        with_sys_stderr.write("\x1b[m")
+        stdio.write("\x1b[m")
 
         # Scroll up to make room for Output
 
-        (y1, x1) = turtle_screen.row_y_column_x_read()  # replaces
+        (y1, x1) = ts.row_y_column_x_read()  # replaces
         if y1 > top_panel_height:  # '>' not '>='
-            turtle_screen._top_panel_line_break()
+            ts._top_panel_line_break()
 
         return raw_input
+
+        # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
 
 class TurtleScreen:
@@ -3150,10 +3157,19 @@ class TurtleScreen:
 
     # runs partly, not wholly, like io.TextIOWrapper(io.BytesIO())
 
+    stdio: io.TextIOWrapper
+
+    def __init__(self) -> None:
+        assert sys.__stderr__, (sys.__stderr__,)
+        stdio = sys.__stderr__
+
+        self.stdio = stdio
+        self.fileno = stdio.fileno()
+
     def flush(self) -> None:
         """Run in place of Flush by Sys Stdout/Stderr"""
 
-        with_sys_stderr.flush()
+        self.stdio.flush()
 
         # runs in place of io.TextIOWrapper.flush
         # might could run for a FileNo or FD, on termios.tcflush termios.TCOFLUSH
@@ -3162,7 +3178,7 @@ class TurtleScreen:
         """Run in place of Write by Sys Stdout/Stderr"""
 
         length = len(text)
-        turtle_screen.os_write_encode(text)
+        self.shadow_and_write(text)
 
         return length
 
@@ -3172,7 +3188,8 @@ class TurtleScreen:
     def window_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
-        size = os.get_terminal_size(with_sys_stderr_fileno)
+        fileno = self.fileno
+        size = os.get_terminal_size(fileno)
         return size.columns  # 80
 
         # todo: listen for environ["COLUMNS"] a la shutil.get_terminal_size
@@ -3180,7 +3197,8 @@ class TurtleScreen:
     def window_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
-        size = os.get_terminal_size(with_sys_stderr_fileno)
+        fileno = self.fileno
+        size = os.get_terminal_size(fileno)
         return size.lines  # 24
 
         # todo: listen for environ["LINES"] a la shutil.get_terminal_size
@@ -3193,6 +3211,8 @@ class TurtleScreen:
     def _top_panel_clear(self) -> None:
         """Clear the Top Panel"""
 
+        stdio = self.stdio
+
         assert PucklandHeight == 37
 
         assert LF == "\n"
@@ -3203,23 +3223,25 @@ class TurtleScreen:
         width = self.window_width()
         top_panel_height = height - 37 - 1
 
-        with_sys_stderr.write("\x1b[H")  # warps to Upper Left
+        stdio.write("\x1b[H")  # warps to Upper Left
         for _ in range(top_panel_height):
-            with_sys_stderr.write(width * " ")
-            with_sys_stderr.write("\n")  # skips down a Row
+            stdio.write(width * " ")
+            stdio.write("\n")  # skips down a Row
 
-        self.control_write(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
+        self.write_control(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
         self._puck_rows_write()
-        with_sys_stderr.write(width * " ")
+        stdio.write(width * " ")
 
-        with_sys_stderr.write("\x1b[H")  # warps to Upper Left
+        stdio.write("\x1b[H")  # warps to Upper Left
 
-        with_sys_stderr.flush()  # before Python Chat places its Prompt
+        stdio.flush()  # before Python Chat places its Prompt
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
     def _top_panel_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
+
+        stdio = self.stdio
 
         assert LF == "\n"
         assert DECSC == "\x1b" "7"
@@ -3228,14 +3250,14 @@ class TurtleScreen:
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert IL_Y == "\x1b" "[" "{}L"
 
-        with_sys_stderr.write("\x1b7")  # bounces back to Row of pin
-        with_sys_stderr.write("\x1b[32100H")  # warps to Lower Left
-        with_sys_stderr.write("\n")  # scrolls Screen up a Row and skips down a Row
-        with_sys_stderr.write("\x1b8")  # bounces back to Row of pin
-        with_sys_stderr.write("\x1b[A")  # warps up into the Row that was at pin
-        with_sys_stderr.write("\x1b[L")  # inserts a Row
+        stdio.write("\x1b7")  # bounces back to Row of pin
+        stdio.write("\x1b[32100H")  # warps to Lower Left
+        stdio.write("\n")  # scrolls Screen up a Row and skips down a Row
+        stdio.write("\x1b8")  # bounces back to Row of pin
+        stdio.write("\x1b[A")  # warps up into the Row that was at pin
+        stdio.write("\x1b[L")  # inserts a Row
 
-        with_sys_stderr.flush()  # before Python Chat places its Prompt
+        stdio.flush()  # before Python Chat places its Prompt
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
@@ -3264,13 +3286,13 @@ class TurtleScreen:
         # Write Framed Rows on a Colored Background
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        self.control_write(OnBlack)
+        self.write_control(OnBlack)
 
         for row in rows:
-            self.control_write(f"\x1b[{1 + dent_width}G")  # Warp to Column
+            self.write_control(f"\x1b[{1 + dent_width}G")  # Warp to Column
             self._puck_one_row_write(row)
 
-        self.control_write("\x1b[m")  # Plain Style
+        self.write_control("\x1b[m")  # Plain Style
 
     def _puck_one_row_write(self, text: str) -> None:
         """Write a Row of the Puckland"""
@@ -3305,8 +3327,8 @@ class TurtleScreen:
                 penscape = penscape_by_ch.get(ch, default_eq_Wall)
                 if penscape != with_penscape:
                     assert pentext, (pentext,)  # because begun by " " Space's
-                    self.text_write(pentext)
-                    self.control_write(penscape)
+                    self.write_text(pentext)
+                    self.write_control(penscape)
 
                     with_penscape = penscape
                     pentext = ""
@@ -3314,26 +3336,28 @@ class TurtleScreen:
             pentext += ch
 
         assert pentext, (pentext,)  # because last visited Char not yet written
-        self.text_write(pentext)
+        self.write_text(pentext)
 
-        self.control_write("\n")
+        self.write_control("\n")
 
-    def control_write(self, text: str) -> None:
+    def write_control(self, text: str) -> None:
         """Write Terminal Screen Controls"""
 
         assert any((not _.isprintable()) for _ in text), (text,)
-        self.os_write_encode(text)
+        self.shadow_and_write(text)
 
-    def text_write(self, text: str) -> None:
+    def write_text(self, text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
         assert all(_.isprintable() for _ in text), (text,)
-        self.os_write_encode(text)
+        self.shadow_and_write(text)
 
-    def os_write_encode(self, text: str) -> None:
-        """Write Bytes to Terminal Screen"""
+    def shadow_and_write(self, text: str) -> None:
+        """Write Bytes to the Terminal Screen and its Shadows"""
 
-        with_sys_stderr.write(text)
+        stdio = self.stdio
+        stdio.write(text)
+
         ScreenWriteLog.write(text)  # todo: Flush only where Flushing is quick
 
         # FIXME: stop with the 'def _'
@@ -3344,23 +3368,25 @@ class TurtleScreen:
     def row_y_column_x_read(self) -> tuple[int, int]:
         """Sample Cursor Row & Column"""
 
+        stdio = self.stdio
+
         assert DSR_6 == "\x1b" "[" "6n"
         assert CPR_Y_X_REGEX == r"\x1B\[([0-9]+);([0-9]+)R"
 
-        fileno = with_sys_stderr_fileno
+        fileno = self.fileno
 
         # Ask for Y X
 
-        with_sys_stderr.flush()
+        stdio.flush()
 
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
-        with_sys_stderr.write("\x1b[6n")
+        stdio.write("\x1b[6n")
 
         # Flush and block to read Y X
 
-        with_sys_stderr.flush()
+        stdio.flush()
 
         byte0 = os.read(fileno, 1)
         assert byte0 == b"\x1b", (byte0,)
