@@ -92,6 +92,11 @@ if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
 
 
+assert sys.__stderr__, (sys.__stderr__,)
+with_sys_stderr = sys.__stderr__
+with_sys_stderr_fileno = sys.__stderr__.fileno()
+
+
 #
 # Name a few things
 #
@@ -119,13 +124,13 @@ OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
 
 PidPathname = f"__pycache__/{OsGetPid}.pbpaste"
 
-TurtleScreenLogPathname = "__pycache__/s.screen"
+ScreenWriteLogPathname = "__pycache__/s.screen"  # yes, a ScreenLog
 
-TurtleScreenLogPath = pathlib.Path(TurtleScreenLogPathname)
-TurtleScreenLogPath.parent.mkdir(exist_ok=True)  # implicit .parents=False
-TurtleScreenLogPath.unlink(missing_ok=True)
+ScreenWriteLogPath = pathlib.Path(ScreenWriteLogPathname)
+ScreenWriteLogPath.parent.mkdir(exist_ok=True)  # implicit .parents=False
+ScreenWriteLogPath.unlink(missing_ok=True)
 
-TurtleScreenLog = TurtleScreenLogPath.open("a")
+ScreenWriteLog = ScreenWriteLogPath.open("a")
 
 
 #
@@ -3113,25 +3118,18 @@ class TurtleConsole(code.InteractiveConsole):
         return raw_input
 
 
-class TurtleScreen:  # (io.TextIOWrapper):
+class TurtleScreen:
     """Amp up writes to the Terminal Screen"""
 
-    # termios.TCSADRAIN doesn't drop Queued Input, but blocks till Queued Output gone
-    # termios.TCSAFLUSH drops Queued Input, and blocks till Queued Output gone
-
-    # def __init__(self) -> None:  # comment in this __init__ to test derivation from io.TextIOWrapper
-    #     super().__init__(buffer=io.BytesIO())
-
-    # derivation from io.TextIOWrapper checks contracts of .flush .write
-    # but requires a .buffer is not None
+    # runs partly, not wholly, like io.TextIOWrapper(io.BytesIO())
 
     def flush(self) -> None:
         """Run in place of Flush by Sys Stdout/Stderr"""
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        sys.__stderr__.flush()
+        with_sys_stderr.flush()
 
-        # overrides io.TextIOWrapper.flush
+        # runs in place of io.TextIOWrapper.flush
+        # might could run for a FileNo or FD, on termios.tcflush termios.TCOFLUSH
 
     def write(self, text: str) -> int:
         """Run in place of Write by Sys Stdout/Stderr"""
@@ -3141,16 +3139,13 @@ class TurtleScreen:  # (io.TextIOWrapper):
 
         return length
 
-        # overrides io.TextIOWrapper.write
+        # runs in place of io.TextIOWrapper.write
         # doesn't .flush
 
     def window_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        fileno = sys.__stderr__.fileno()
-        size = os.get_terminal_size(fileno)
-
+        size = os.get_terminal_size(with_sys_stderr_fileno)
         return size.columns  # 80
 
         # todo: listen for environ["COLUMNS"] a la shutil.get_terminal_size
@@ -3158,10 +3153,7 @@ class TurtleScreen:  # (io.TextIOWrapper):
     def window_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        fileno = sys.__stderr__.fileno()
-        size = os.get_terminal_size(fileno)
-
+        size = os.get_terminal_size(with_sys_stderr_fileno)
         return size.lines  # 24
 
         # todo: listen for environ["LINES"] a la shutil.get_terminal_size
@@ -3210,8 +3202,7 @@ class TurtleScreen:  # (io.TextIOWrapper):
 
         self.control_write("\x1b[H")  # warps to Upper Left
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        sys.__stderr__.flush()
+        with_sys_stderr.flush()
 
     def _top_panel_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
@@ -3222,8 +3213,7 @@ class TurtleScreen:  # (io.TextIOWrapper):
         self.control_write(f"\x1b[{y - 1}H")  # bounces back to Row of pin
         self.control_write("\x1b[L")  # inserts a Row
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        sys.__stderr__.flush()
+        with_sys_stderr.flush()
 
     def _puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
@@ -3321,10 +3311,8 @@ class TurtleScreen:  # (io.TextIOWrapper):
     def os_write_encode(self, text: str) -> None:
         """Write Bytes to Terminal Screen"""
 
-        assert sys.__stderr__, (sys.__stderr__,)
-        sys.__stderr__.write(text)
-
-        TurtleScreenLog.write(text)  # todo: Flush only where Flushing is quick
+        with_sys_stderr.write(text)
+        ScreenWriteLog.write(text)  # todo: Flush only where Flushing is quick
 
         # todo: Stream vs File Descriptor vs Flush
 
@@ -3339,7 +3327,7 @@ class TurtleScreen:  # (io.TextIOWrapper):
         sys.__stderr__.flush()
 
         with_tcgetattr = termios.tcgetattr(fileno)
-        tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=TcsAFlush
+        tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
         sys.__stderr__.write("\x1b[6n")
         sys.__stderr__.flush()
@@ -3357,6 +3345,7 @@ class TurtleScreen:  # (io.TextIOWrapper):
             ybyte = os.read(fileno, 1)
             if ybyte in b"0123456789":
                 ybytes += ybyte
+                assert len(ybytes) <= len("32100"), (len(ybytes), ybytes)
                 continue
             assert ybyte == b";", (ybyte,)
             break
@@ -3366,11 +3355,14 @@ class TurtleScreen:  # (io.TextIOWrapper):
             xbyte = os.read(fileno, 1)
             if xbyte in b"0123456789":
                 xbytes += xbyte
+                assert len(xbytes) <= len("32100"), (len(xbytes), ybytes)
                 continue
             assert xbyte == b"R", (xbyte,)
             break
 
-        termios.tcsetattr(fileno, termios.TCSADRAIN, with_tcgetattr)
+        when = termios.TCSADRAIN
+        attributes = with_tcgetattr
+        termios.tcsetattr(fileno, when, attributes)
 
         # Succeed
 
@@ -3378,6 +3370,10 @@ class TurtleScreen:  # (io.TextIOWrapper):
         x = int(xbytes)
 
         return (y, x)
+
+        # termios.TCSADRAIN doesn't drop Queued Input, but blocks till Queued Output gone
+        # termios.TCSAFLUSH drops Queued Input, and blocks till Queued Output gone
+        # termios.TCSANOW doesn't block and doesn't drop (by agreement, but not much tested?)
 
         # todo: cope when Mouse or Paste work disrupts os.read(fileno)
 
