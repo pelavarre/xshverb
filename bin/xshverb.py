@@ -3042,16 +3042,18 @@ def do_turtling(argv: list[str]) -> None:
 
     alt.stdout.fill_and_drain()
 
-    # Chat with Python
+    # Launch a Chat
 
     sys.excepthook = with_sys_except_hook
+
+    atexit.register(lambda: turtle_screen.control_write("\x1b[32100H"))
 
     d: dict[str, object] = dict()
     d["br"] = turtle_screen._top_panel_line_break
     d["cls"] = turtle_screen._top_panel_clear
     d["turtling"] = turtle_screen  # as if 'import turtling'
 
-    choice = 1
+    choice = 3
 
     if choice == 1:
 
@@ -3108,21 +3110,37 @@ class TurtleConsole(code.InteractiveConsole):
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
 
+        assert PucklandHeight == 37
+
+        height = turtle_screen.window_height()
+        top_panel_height = height - 37 - 1
+
+        self.top_panel_height = top_panel_height
+
     def raw_input(self, prompt: str = "") -> str:
 
-        turtle_screen.os_write_encode("\x1b[35m" + prompt + "\x1b[m")
-        yx0 = turtle_screen.row_y_column_x_read()  # flushes before .raw_input
+        top_panel_height = self.top_panel_height
+
+        # Scroll up to make room for Prompt
+
+        (y0, x0) = turtle_screen.row_y_column_x_read()
+        if y0 > top_panel_height:
+            turtle_screen._top_panel_line_break()
+
+        with_sys_stderr.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
+        with_sys_stderr.flush()  # before .raw_input
+
+        # Write the Prompt, then flush and block to read & echo the Input
+
         raw_input = super().raw_input(prompt="")
-        # yx1 = turtle_screen.row_y_column_x_read()
 
-        (y, x) = yx0
-        turtle_screen.control_write(f"\x1b[{y};{x}H")
-        # yx3 = turtle_screen.row_y_column_x_read()
-        # assert yx0 == yx3, (yx0, yx3)
+        with_sys_stderr.write("\x1b[m")
 
-        turtle_screen.os_write_encode("\x1b[1m" + raw_input + "\x1b[m" + "\n")
-        # yx4 = turtle_screen.row_y_column_x_read()
-        # assert yx1 == yx4, (yx1, yx4)
+        # Scroll up to make room for Output
+
+        (y1, x1) = turtle_screen.row_y_column_x_read()  # replaces
+        if y1 > top_panel_height:  # '>' not '>='
+            turtle_screen._top_panel_line_break()
 
         return raw_input
 
@@ -3253,8 +3271,6 @@ class TurtleScreen:
             self._puck_one_row_write(row)
 
         self.control_write("\x1b[m")  # Plain Style
-
-        # todo: str.center
 
     def _puck_one_row_write(self, text: str) -> None:
         """Write a Row of the Puckland"""
