@@ -3050,8 +3050,7 @@ def do_turtling(argv: list[str]) -> None:
 
     if choice == 1:
 
-        globals()["br"] = turtle_screen._top_panel_line_break
-        globals()["cls"] = turtle_screen._top_panel_clear
+        globals().update(d)
         os.environ["PYTHONINSPECT"] = str(True)
 
         atexit.register(lambda: turtle_screen.control_write("\x1b[32100H"))
@@ -3064,10 +3063,12 @@ def do_turtling(argv: list[str]) -> None:
     if choice == 3:
 
         tc = TurtleConsole(locals=d)
-        tw = TurtleWriter()
 
-        sys.stdout = tw
-        sys.stderr = tw
+        assert sys.stdout is sys.__stdout__, (sys.stdout, sys.__stdout__)
+        assert sys.stderr is sys.__stderr__, (sys.stderr, sys.__stderr__)
+
+        sys.stdout = turtle_screen
+        sys.stderr = turtle_screen
         try:
             tc.interact(banner="", exitmsg="")
         finally:
@@ -3088,6 +3089,7 @@ SGR = "\x1b" "[" "{}m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
 
 class TurtleConsole(code.InteractiveConsole):
+    """Run a Python Chat a la 'python3 -i', but write Input Echo through the TurtleScreen"""
 
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
@@ -3111,20 +3113,36 @@ class TurtleConsole(code.InteractiveConsole):
         return raw_input
 
 
-class TurtleWriter:
+class TurtleScreen:  # (io.TextIOWrapper):
+    """Amp up writes to the Terminal Screen"""
+
+    # termios.TCSADRAIN doesn't drop Queued Input, but blocks till Queued Output gone
+    # termios.TCSAFLUSH drops Queued Input, and blocks till Queued Output gone
+
+    # def __init__(self) -> None:  # comment in this __init__ to test derivation from io.TextIOWrapper
+    #     super().__init__(buffer=io.BytesIO())
+
+    # derivation from io.TextIOWrapper checks contracts of .flush .write
+    # but requires a .buffer is not None
 
     def flush(self) -> None:
-        pass
+        """Run in place of Flush by Sys Stdout/Stderr"""
+
+        assert sys.__stderr__, (sys.__stderr__,)
+        sys.__stderr__.flush()
+
+        # overrides io.TextIOWrapper.flush
 
     def write(self, text: str) -> int:
+        """Run in place of Write by Sys Stdout/Stderr"""
+
         length = len(text)
         turtle_screen.os_write_encode(text)
-        # assert sys.__stderr__, (sys.__stderr__,)
-        # sys.__stderr__.flush()  # needed if TurtlingConsole doesn't flush
+
         return length
 
-
-class TurtleScreen:
+        # overrides io.TextIOWrapper.write
+        # doesn't .flush
 
     def window_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
@@ -3321,7 +3339,7 @@ class TurtleScreen:
         sys.__stderr__.flush()
 
         with_tcgetattr = termios.tcgetattr(fileno)
-        tty.setraw(fileno)
+        tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=TcsAFlush
 
         sys.__stderr__.write("\x1b[6n")
         sys.__stderr__.flush()
