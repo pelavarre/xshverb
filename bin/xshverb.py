@@ -3031,7 +3031,7 @@ def do_turtling(argv: list[str]) -> None:
 
     # Resume (or start persisting) the Turtle Screen
 
-    Turtling._window_resume()
+    turtle_screen._window_resume()
 
     # Don't disturb Pipe and Os Copy/Paste Buffer
 
@@ -3042,29 +3042,29 @@ def do_turtling(argv: list[str]) -> None:
     sys.excepthook = with_sys_except_hook
 
     d: dict[str, object] = dict()
-    d["br"] = Turtling._top_panel_line_break
-    d["cls"] = Turtling._top_panel_clear
-    d["turtling"] = Turtling  # changes case
+    d["br"] = turtle_screen._top_panel_line_break
+    d["cls"] = turtle_screen._top_panel_clear
+    d["turtling"] = turtle_screen  # as if 'import turtling'
 
     choice = 1
 
     if choice == 1:
 
-        globals()["br"] = Turtling._top_panel_line_break
-        globals()["cls"] = Turtling._top_panel_clear
+        globals()["br"] = turtle_screen._top_panel_line_break
+        globals()["cls"] = turtle_screen._top_panel_clear
         os.environ["PYTHONINSPECT"] = str(True)
 
-        atexit.register(lambda: Turtling.control_write("\x1b[32100H"))
+        atexit.register(lambda: turtle_screen.control_write("\x1b[32100H"))
 
     if choice == 2:
 
-        tc = code.InteractiveConsole(locals=d)  # bypasses Class Turtling to write Input Echo
+        tc = code.InteractiveConsole(locals=d)  # bypasses Class TurtleScreen to write Input Echo
         tc.interact(banner="", exitmsg="")
 
     if choice == 3:
 
-        tc = TurtlingConsole(locals=d)
-        tw = TurtlingWriter()
+        tc = TurtleConsole(locals=d)
+        tw = TurtleWriter()
 
         sys.stdout = tw
         sys.stderr = tw
@@ -3087,48 +3087,46 @@ ED_P = "\x1b" "[" "{}J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Row
 SGR = "\x1b" "[" "{}m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
 
-class TurtlingConsole(code.InteractiveConsole):
+class TurtleConsole(code.InteractiveConsole):
 
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
 
     def raw_input(self, prompt: str = "") -> str:
 
-        Turtling.os_write_encode("\x1b[35m" + prompt + "\x1b[m")
-        yx0 = Turtling.row_y_column_x_read()
+        turtle_screen.os_write_encode("\x1b[35m" + prompt + "\x1b[m")
+        yx0 = turtle_screen.row_y_column_x_read()  # flushes before .raw_input
         raw_input = super().raw_input(prompt="")
-        # yx1 = Turtling.row_y_column_x_read()
+        # yx1 = turtle_screen.row_y_column_x_read()
 
         (y, x) = yx0
-        Turtling.control_write(f"\x1b[{y};{x}H")
-        # yx3 = Turtling.row_y_column_x_read()
+        turtle_screen.control_write(f"\x1b[{y};{x}H")
+        # yx3 = turtle_screen.row_y_column_x_read()
         # assert yx0 == yx3, (yx0, yx3)
 
-        Turtling.os_write_encode("\x1b[1m" + raw_input + "\x1b[m" + "\n")
-        # yx4 = Turtling.row_y_column_x_read()
+        turtle_screen.os_write_encode("\x1b[1m" + raw_input + "\x1b[m" + "\n")
+        # yx4 = turtle_screen.row_y_column_x_read()
         # assert yx1 == yx4, (yx1, yx4)
 
         return raw_input
 
 
-class TurtlingWriter:
-    """Write Chars to the Terminal Screen, in place of Stdout/ Stderr"""
+class TurtleWriter:
 
     def flush(self) -> None:
         pass
 
     def write(self, text: str) -> int:
         length = len(text)
-        Turtling.os_write_encode(text)
+        turtle_screen.os_write_encode(text)
         # assert sys.__stderr__, (sys.__stderr__,)
         # sys.__stderr__.flush()  # needed if TurtlingConsole doesn't flush
         return length
 
 
-class Turtling:
+class TurtleScreen:
 
-    @staticmethod
-    def window_width() -> int:
+    def window_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
         assert sys.__stderr__, (sys.__stderr__,)
@@ -3139,8 +3137,7 @@ class Turtling:
 
         # todo: listen for environ["COLUMNS"] a la shutil.get_terminal_size
 
-    @staticmethod
-    def window_height() -> int:
+    def window_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
         assert sys.__stderr__, (sys.__stderr__,)
@@ -3151,8 +3148,7 @@ class Turtling:
 
         # todo: listen for environ["LINES"] a la shutil.get_terminal_size
 
-    @staticmethod
-    def _window_resume() -> None:
+    def _window_resume(self) -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
         assert PucklandHeight == 37
@@ -3160,61 +3156,58 @@ class Turtling:
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert ED_P == "\x1b" "[" "{}J"
 
-        width = Turtling.window_width()
-        height = Turtling.window_height()
+        width = self.window_width()
+        height = self.window_height()
         top_panel_height = height - 37 - 1
 
         choice = 2
         if choice == 1:
-            Turtling.control_write(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
-            Turtling._puck_rows_write()
-            Turtling.text_write(width * " ")
+            self.control_write(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
+            self._puck_rows_write()
+            self.text_write(width * " ")
 
-        Turtling._top_panel_clear()
+        self._top_panel_clear()
 
         # todo: overwrite the Python Chat with colored Prompt and bold Input Echo
         # todo: record the Stdout & Stderr of the Python Chat
         # todo: and then br() to scroll the Chat Pane
 
-    @staticmethod
-    def _top_panel_clear() -> None:
+    def _top_panel_clear(self) -> None:
         """Clear the Top Panel"""
 
         assert PucklandHeight == 37
 
-        height = Turtling.window_height()
-        width = Turtling.window_width()
+        height = self.window_height()
+        width = self.window_width()
         top_panel_height = height - 37 - 1
 
-        Turtling.control_write("\x1b[H")  # warps to Upper Left
+        self.control_write("\x1b[H")  # warps to Upper Left
 
         for _ in range(top_panel_height):
-            Turtling.text_write(width * " ")
-            Turtling.control_write("\n")  # skips down a Row
+            self.text_write(width * " ")
+            self.control_write("\n")  # skips down a Row
 
-        Turtling._puck_rows_write()
-        Turtling.text_write(width * " ")
+        self._puck_rows_write()
+        self.text_write(width * " ")
 
-        Turtling.control_write("\x1b[H")  # warps to Upper Left
+        self.control_write("\x1b[H")  # warps to Upper Left
 
         assert sys.__stderr__, (sys.__stderr__,)
         sys.__stderr__.flush()
 
-    @staticmethod
-    def _top_panel_line_break() -> None:
+    def _top_panel_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
 
-        (y, x) = Turtling.row_y_column_x_read()  # drops a pin
-        Turtling.control_write("\x1b[32100H")  # warps to Lower Left
-        Turtling.control_write("\n")  # scrolls Screen up a Row and skips down a Row
-        Turtling.control_write(f"\x1b[{y - 1}H")  # bounces back to Row of pin
-        Turtling.control_write("\x1b[L")  # inserts a Row
+        (y, x) = self.row_y_column_x_read()  # drops a pin
+        self.control_write("\x1b[32100H")  # warps to Lower Left
+        self.control_write("\n")  # scrolls Screen up a Row and skips down a Row
+        self.control_write(f"\x1b[{y - 1}H")  # bounces back to Row of pin
+        self.control_write("\x1b[L")  # inserts a Row
 
         assert sys.__stderr__, (sys.__stderr__,)
         sys.__stderr__.flush()
 
-    @staticmethod
-    def _puck_rows_write() -> None:
+    def _puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
 
         assert LF == "\n"
@@ -3226,7 +3219,7 @@ class Turtling:
         text = textwrap.dedent(Puckland).strip()
         split_width = max(len(_) for _ in text.splitlines())
 
-        width = Turtling.window_width()
+        width = self.window_width()
         puck_width = 4 + split_width + 4
 
         center = (puck_width * "*").center(width)
@@ -3239,18 +3232,17 @@ class Turtling:
         # Write Framed Rows on a Colored Background
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        Turtling.control_write(OnBlack)
+        self.control_write(OnBlack)
 
         for row in rows:
-            Turtling.control_write(f"\x1b[{1 + dent_width}G")  # Warp to Column
-            Turtling._puck_one_row_write(row)
+            self.control_write(f"\x1b[{1 + dent_width}G")  # Warp to Column
+            self._puck_one_row_write(row)
 
-        Turtling.control_write("\x1b[m")  # Plain Style
+        self.control_write("\x1b[m")  # Plain Style
 
         # todo: str.center
 
-    @staticmethod
-    def _puck_one_row_write(text: str) -> None:
+    def _puck_one_row_write(self, text: str) -> None:
         """Write a Row of the Puckland"""
 
         assert LF == "\n"
@@ -3283,8 +3275,8 @@ class Turtling:
                 penscape = penscape_by_ch.get(ch, default_eq_Wall)
                 if penscape != with_penscape:
                     assert pentext, (pentext,)  # because begun by " " Space's
-                    Turtling.text_write(pentext)
-                    Turtling.control_write(penscape)
+                    self.text_write(pentext)
+                    self.control_write(penscape)
 
                     with_penscape = penscape
                     pentext = ""
@@ -3292,26 +3284,23 @@ class Turtling:
             pentext += ch
 
         assert pentext, (pentext,)  # because last visited Char not yet written
-        Turtling.text_write(pentext)
+        self.text_write(pentext)
 
-        Turtling.control_write("\n")
+        self.control_write("\n")
 
-    @staticmethod
-    def control_write(text: str) -> None:
+    def control_write(self, text: str) -> None:
         """Write Terminal Screen Controls"""
 
         assert any((not _.isprintable()) for _ in text), (text,)
-        Turtling.os_write_encode(text)
+        self.os_write_encode(text)
 
-    @staticmethod
-    def text_write(text: str) -> None:
+    def text_write(self, text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
         assert all(_.isprintable() for _ in text), (text,)
-        Turtling.os_write_encode(text)
+        self.os_write_encode(text)
 
-    @staticmethod
-    def os_write_encode(text: str) -> None:
+    def os_write_encode(self, text: str) -> None:
         """Write Bytes to Terminal Screen"""
 
         assert sys.__stderr__, (sys.__stderr__,)
@@ -3321,8 +3310,7 @@ class Turtling:
 
         # todo: Stream vs File Descriptor vs Flush
 
-    @staticmethod
-    def row_y_column_x_read() -> tuple[int, int]:
+    def row_y_column_x_read(self) -> tuple[int, int]:
         """Sample Cursor Row & Column"""
 
         assert sys.__stderr__, (sys.__stderr__,)
@@ -3377,6 +3365,9 @@ class Turtling:
 
     # todo: run happy at /dev/tty, like by sending ⎋[18t call for reply ⎋[{rows};{columns}t
     # todo: thus duck out of needing the calling Process to leave Stderr connected with /dev/tty
+
+
+turtle_screen = TurtleScreen()
 
 
 Puckland = """
