@@ -3049,6 +3049,7 @@ def do_turtling(argv: list[str]) -> None:
     d: dict[str, object] = dict()
     d["br"] = ts.chat_line_break
     d["cls"] = ts.chat_clear
+    d["play"] = ts.puck_play
     d["ts"] = ts
     d["turtling"] = ts  # as if 'import turtling'
 
@@ -3447,6 +3448,61 @@ class TurtleScreen:
     # Play Puckman, a la Pac-Man®
     #
 
+    def puck_play(self) -> None:
+        """Reply to Keyboard Chords till Return pressed"""
+
+        fileno = self.fileno
+        stdio = self.stdio
+
+        stdio.write("Press Return to stop play, else Spacebar and the ← ↑ → ↓ Arrows to play\n")
+        stdio.flush()
+
+        with_tcgetattr = termios.tcgetattr(fileno)
+        tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
+
+        try:
+            while True:
+                self.puck_try_play()
+        except SystemExit:
+            pass
+        finally:
+
+            when = termios.TCSADRAIN
+            attributes = with_tcgetattr
+            termios.tcsetattr(fileno, when, attributes)
+
+        print("Thank you")
+
+    def puck_try_play(self) -> None:
+        """Reply to Keyboard Chords till Return pressed"""
+
+        fileno = self.fileno
+        stdio = self.stdio
+
+        byte0 = os.read(fileno, 1)
+        if byte0 == b"\r":
+            sys.exit()
+
+        if byte0 == b"\x1b":
+            byte1 = os.read(fileno, 1)  # FIXME: blocks after Esc
+            if byte1 == b"[":
+                byte2 = os.read(fileno, 1)  # FIXME: blocks after Esc [
+                if byte2 == b"B":  # Down
+                    self.puck_step_down()
+                    return
+                elif byte2 == b"D":  # Left
+                    self.puck_step_left()
+                    return
+                elif byte2 == b"C":  # Right
+                    self.puck_step_right()
+                    return
+                elif byte2 == b"A":  # Up
+                    self.puck_step_up()
+                    return
+
+        stdio.write("\a")
+        stdio.flush()  # sounds the Bell immediately
+
     def puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
 
@@ -3686,10 +3742,9 @@ class TurtleScreen:
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
         stdio.write("\x1b[6n")  # bypass the in-memory Shadow
+        stdio.flush()
 
         # Flush and block to read Y X
-
-        stdio.flush()
 
         byte0 = os.read(fileno, 1)
         assert byte0 == b"\x1b", (byte0,)
