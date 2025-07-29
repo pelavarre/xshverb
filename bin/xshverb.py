@@ -3049,6 +3049,7 @@ def do_turtling(argv: list[str]) -> None:
     d: dict[str, object] = dict()
     d["br"] = ts.chat_line_break
     d["cls"] = ts.chat_clear
+    d["ts"] = ts
     d["turtling"] = ts  # as if 'import turtling'
 
     choice = 1
@@ -3082,6 +3083,12 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
+# FIXME: define play() to mean run Keys as bound else Beep but quit at Return
+# FIXME: teach Spacebar to coast the Puckman as → till turned by ← ↑ → ↓
+# FIXME: teach Spacebar to eat Pellets and Dots
+# FIXME: teach Spacebar to bounce off of Walls
+
+
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
 
 DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
@@ -3098,6 +3105,8 @@ DSR_6 = "\x1b" "[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for 
 
 # CSI 05/02 Active [Cursor] Position Report (CPR) In because DSR_6 Out
 CPR_Y_X_REGEX = r"\x1B\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
+
+CSI_PIF_REGEX = r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
 
 class TurtleConsole(code.InteractiveConsole):
@@ -3157,13 +3166,28 @@ class TurtleScreen:
 
     # runs partly, not wholly, like io.TextIOWrapper(io.BytesIO())
 
+    fileno: int = -1
     stdio: io.TextIOWrapper
+
+    char_by_y_x: dict[int, dict[int, str]] = dict()
+    column_x: int = -1
+    penscapes: list[str] = list()
+    penscapes_by_y_x: dict[int, dict[int, list[str]]] = dict()
+    row_y: int = -1
+
+    pin_x: int = +1
+    pin_y: int = +1
+
+    puck_y: int = -1
+    puck_x: int = -1
+    puck_before: tuple[tuple[str, list[str]], tuple[str, list[str]]]
 
     def __init__(self) -> None:
         assert sys.__stderr__, (sys.__stderr__,)
-        stdio = sys.__stderr__
 
+        stdio = sys.__stderr__
         self.stdio = stdio
+
         self.fileno = stdio.fileno()
 
     def flush(self) -> None:
@@ -3219,7 +3243,6 @@ class TurtleScreen:
 
         assert LF == "\n"
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
-        assert ED_P == "\x1b" "[" "{}J"
 
         height = self.window_height()
         width = self.window_width()
@@ -3239,6 +3262,8 @@ class TurtleScreen:
         stdio.flush()  # before Python Chat places its Prompt
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
+
+        # FIXME: cls() with and without homing the Puckman
 
     def chat_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
@@ -3266,10 +3291,6 @@ class TurtleScreen:
     def puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
 
-        assert LF == "\n"
-        assert CHA_X == "\x1b" "[" "{}G"
-        assert SGR == "\x1b" "[" "{}m"
-
         # Pull the Rows from the Puckland Plain Text and frame them on all 4 Sides
 
         text = textwrap.dedent(Puckland).strip()
@@ -3285,19 +3306,52 @@ class TurtleScreen:
         rows = list(_.ljust(split_width) for _ in rows)
         rows = list(("    " + _ + "    ") for _ in rows)
 
-        # Write Framed Rows on a Colored Background
+        # Write Framed Rows on a Colored Background, and find the Puck
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+        assert CHA_X == "\x1b" "[" "{}G"
+        assert SGR == "\x1b" "[" "{}m"
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
         self.write_control(OnBlack)
+
+        self.puck_y = -1
+        self.puck_x = -1
 
         for row in rows:
             self.write_control(f"\x1b[{1 + dent_width}G")  # Warp to Column
             self.puck_one_row_write(row)
 
-        self.write_control("\x1b[m")  # Plain Style
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+
+        assert puck_y >= 0, (puck_y,)
+        assert puck_x >= 0, (puck_x,)
+
+        # Write the Puck into a Z Layer above the Puckland
+
+        FullBlock = unicodedata.lookup("Full Block")  # '█'
+        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
+        puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+
+        puck_before = self.puck_read()
+        self.puck_before = puck_before
+
+        self.write_control("\x1b7")
+        self.puck_write(puck_here)
+        self.write_control("\x1b8")
+
+        # Close out the last Write of Style
+
+        Plain = "\x1b[m"
+        self.write_control(Plain)
 
     def puck_one_row_write(self, text: str) -> None:
         """Write a Row of the Puckland"""
+
+        column_x = self.column_x
+        row_y = self.row_y
 
         assert LF == "\n"
         assert SGR == "\x1b" "[" "{}m"
@@ -3323,12 +3377,28 @@ class TurtleScreen:
         with_penscape = ""
         pentext = ""
 
-        for ch in text:
+        pentexts = list()
+        for i, ch_ in enumerate(text):
+            x = column_x + i
+
+            ch = ch_
+            if ch_ == FullBlock:
+                if self.puck_x == -1:
+                    self.puck_x = x
+                    ch = "("
+                elif self.puck_y == -1:
+                    self.puck_y = row_y
+                    ch = ")"
+                else:
+                    assert False, (row_y, x, self.puck_y, self.puck_x)
+
             if ch != " ":
                 default_eq_Wall = Wall
                 penscape = penscape_by_ch.get(ch, default_eq_Wall)
                 if penscape != with_penscape:
                     assert pentext, (pentext,)  # because begun by " " Space's
+                    pentexts.append(pentext)
+
                     self.write_text(pentext)
                     self.write_control(penscape)
 
@@ -3338,21 +3408,231 @@ class TurtleScreen:
             pentext += ch
 
         assert pentext, (pentext,)  # because last visited Char not yet written
+        pentexts.append(pentext)
         self.write_text(pentext)
+
+        assert PucklandWidth == 64
+        assert sum(len(_) for _ in pentexts) == len(text) == 64, (pentexts, text)
+
+        # self.stdio.write("\x1b[m" "\n")
+        # breakpoint()
 
         self.write_control("\n")
 
     def write_control(self, text: str) -> None:
         """Write Terminal Screen Controls"""
 
+        column_x = self.column_x
+        penscapes = self.penscapes
+        pin_x = self.pin_x
+        pin_y = self.pin_y
+        row_y = self.row_y
+
+        #
+
         assert any((not _.isprintable()) for _ in text), (text,)
         self.shadow_and_write(text)
+
+        #
+
+        assert LF == "\n"
+
+        if text == "\n":
+            self.row_y = row_y + 1
+            self.column_x = 1
+            return
+
+        #
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+
+        if text == "\x1b7":
+            self.pin_y = row_y
+            self.pin_x = column_x
+            return
+
+        if text == "\x1b8":
+            self.row_y = pin_y
+            self.column_x = pin_x
+            return
+
+        #
+
+        assert CSI_PIF_REGEX == r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
+
+        m = re.fullmatch(r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)", string=text)
+        assert m, (m, text)
+
+        p = m.group(2)
+        i = m.group(3)
+        f = m.group(4)
+
+        assert f in "GHm", (p, i, f, text)
+
+        #
+
+        assert CHA_X == "\x1b" "[" "{}G"
+
+        if f == "G":
+            assert not i, (p, i, f, text)
+            assert re.fullmatch(r"[0-9]+", string=p), (p, text)
+
+            x = int(p)
+            self.column_x = x
+
+            return
+
+        #
+
+        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+
+        if f == "H":
+            assert not i, (p, i, f, text)
+            assert re.fullmatch(r"[0-9;]+", string=p), (p, text)
+            splits = p.split(";")
+            assert len(splits) in (0, 1, 2), (splits, p, text)
+
+            y = 1
+            x = 1
+            if splits and not splits[1:]:
+                y = int(splits[0])
+            else:
+                y = int(splits[0])
+                x = int(splits[1])
+
+            self.row_y = y
+            self.column_x = x
+
+            return
+
+        #
+
+        assert SGR == "\x1b" "[" "{}m"
+
+        Plain = "\x1b[m"
+
+        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
+
+        Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
+        Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
+        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
+        Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
+
+        assert text in (Plain, OnBlack, Dot, Pellet, Puckman, Wall), (text,)
+
+        penscapes.clear()
+        if text != Plain:
+            if text != OnBlack:
+                penscapes.append(text)
 
     def write_text(self, text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
+        char_by_y_x = self.char_by_y_x
+        column_x = self.column_x
+        penscapes = self.penscapes
+        penscapes_by_y_x = self.penscapes_by_y_x
+        row_y = self.row_y
+
         assert all(_.isprintable() for _ in text), (text,)
         self.shadow_and_write(text)
+
+        self.column_x += len(text)
+
+        y = row_y
+        for i in range(len(text)):
+            x = column_x + i
+
+            if y not in char_by_y_x.keys():
+                char_by_y_x[y] = {}
+                penscapes_by_y_x[y] = {}
+
+            if x not in char_by_y_x[y].keys():
+                char_by_y_x[y][x] = ""
+                penscapes_by_y_x[y][x] = list()
+
+            char_by_y_x[y][x] = text[i]  # replaces
+
+            yx_penscapes = penscapes_by_y_x[y][x]
+            yx_penscapes.clear()
+            yx_penscapes.extend(penscapes)
+
+    def puck_step_down(self) -> None:
+        self.puck_step_dy_dx(1, dx=0)
+
+    def puck_step_left(self) -> None:
+        self.puck_step_dy_dx(0, dx=-2)
+
+    def puck_step_right(self) -> None:
+        self.puck_step_dy_dx(0, dx=2)
+
+    def puck_step_up(self) -> None:
+        self.puck_step_dy_dx(-1, dx=0)
+
+    def puck_step_dy_dx(self, dy: int, dx: int) -> None:
+        """Move the Puck by 1 Whole Step"""
+
+        puck_before = self.puck_before
+        stdio = self.stdio
+
+        FullBlock = unicodedata.lookup("Full Block")  # '█'
+        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
+        puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+
+        self.write_control("\x1b7")
+
+        self.puck_y += dy
+        self.puck_x += dx
+        next_puck_before = self.puck_read()
+        self.puck_write(puck_here)
+
+        self.puck_y -= dy
+        self.puck_x -= dx
+        self.puck_write(puck_before)
+
+        self.puck_y += dy
+        self.puck_x += dx
+        self.puck_before = next_puck_before
+
+        self.write_control("\x1b8")
+        stdio.flush()
+
+        # FIXME: solve overlapping moves, such as:  ts.puck_step_dy_dx(dy=0, dx=1)
+
+    def puck_read(self) -> tuple[tuple[str, list[str]], tuple[str, list[str]]]:
+        """Read the Puck from the Terminal Screen"""
+
+        y = self.puck_y
+        x = self.puck_x
+        char_by_y_x = self.char_by_y_x
+        penscapes_by_y_x = self.penscapes_by_y_x
+
+        ch0 = char_by_y_x[y][x + 0]
+        penscapes_0 = list(penscapes_by_y_x[y][x + 0])
+
+        ch1 = char_by_y_x[y][x + 1]
+        penscapes_1 = list(penscapes_by_y_x[y][x + 1])
+
+        return ((ch0, penscapes_0), (ch1, penscapes_1))
+
+    def puck_write(self, puck: tuple[tuple[str, list[str]], tuple[str, list[str]]]) -> None:
+        """Write the Puck to the Terminal Screen"""
+
+        y = self.puck_y
+        x = self.puck_x
+
+        ((ch0, penscapes_0), (ch1, penscapes_1)) = puck
+        assert len(penscapes_0) == len(penscapes_1) == 1, (penscapes_0, penscapes_1)
+
+        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
+        self.write_control(OnBlack)
+
+        self.write_control(f"\x1b[{y};{x + 0}H")
+        self.write_control(penscapes_0[-1])
+        self.write_text(ch0)
+        self.write_control(penscapes_1[-1])
+        self.write_text(ch1)
 
     def shadow_and_write(self, text: str) -> None:
         """Write Bytes to the Terminal Screen and its Shadows"""
@@ -3361,8 +3641,6 @@ class TurtleScreen:
         stdio.write(text)
 
         ScreenWriteLog.write(text)  # todo: Flush only where Flushing is quick
-
-        # FIXME: move the Puckman to its own top layer
 
         # todo: Stream vs File Descriptor vs Flush
 
