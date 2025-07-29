@@ -120,7 +120,7 @@ OsGetPid = os.getpid()  # traces each Pipe separately, till Os recycles Pid's
 
 PidPathname = f"__pycache__/{OsGetPid}.pbpaste"
 
-ScreenWriteLogPathname = "__pycache__/s.screen"  # yes, a ScreenLog
+ScreenWriteLogPathname = "__pycache__/s.screen"  # yes, a ScreenLog  # yes, a Screen Log
 
 ScreenWriteLogPath = pathlib.Path(ScreenWriteLogPathname)
 ScreenWriteLogPath.parent.mkdir(exist_ok=True)  # implicit .parents=False
@@ -3190,6 +3190,10 @@ class TurtleScreen:
 
         self.fileno = stdio.fileno()
 
+    #
+    # Run in place of Sys Stdout/Stderr
+    #
+
     def flush(self) -> None:
         """Run in place of Flush by Sys Stdout/Stderr"""
 
@@ -3209,6 +3213,10 @@ class TurtleScreen:
         # runs in place of io.TextIOWrapper.write
         # doesn't .flush
 
+    #
+    # Run in place of Python's turtle.Screen()
+    #
+
     def window_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
@@ -3226,6 +3234,10 @@ class TurtleScreen:
         return size.lines  # 24
 
         # todo: listen for environ["LINES"] a la shutil.get_terminal_size
+
+    #
+    # Serve 1 Chat Panel
+    #
 
     def pane_resume(self) -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
@@ -3287,6 +3299,10 @@ class TurtleScreen:
         stdio.flush()  # before Python Chat places its Prompt
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
+
+    #
+    # Play Puckman, a la Pac-Man®
+    #
 
     def puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
@@ -3418,6 +3434,10 @@ class TurtleScreen:
         # breakpoint()
 
         self.write_control("\n")
+
+    #
+    # Write to the Terminal Screen, to an in-memory Shadow, and to a Screen Log
+    #
 
     def write_control(self, text: str) -> None:
         """Write Terminal Screen Controls"""
@@ -3558,6 +3578,10 @@ class TurtleScreen:
             yx_penscapes.clear()
             yx_penscapes.extend(penscapes)
 
+    #
+    # More of  # Play Puckman, a la Pac-Man®
+    #
+
     def puck_step_down(self) -> None:
         self.puck_step_dy_dx(1, dx=0)
 
@@ -3644,6 +3668,10 @@ class TurtleScreen:
 
         # todo: Stream vs File Descriptor vs Flush
 
+    #
+    # Chat with the Terminal, and update its in-memory Shadow
+    #
+
     def row_y_column_x_read(self) -> tuple[int, int]:
         """Sample Cursor Row & Column"""
 
@@ -3661,7 +3689,7 @@ class TurtleScreen:
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
-        stdio.write("\x1b[6n")
+        stdio.write("\x1b[6n")  # bypass the in-memory Shadow
 
         # Flush and block to read Y X
 
@@ -3701,6 +3729,9 @@ class TurtleScreen:
 
         y = int(ybytes)
         x = int(xbytes)
+
+        self.row_y = y
+        self.column_x = x
 
         return (y, x)
 
