@@ -3301,141 +3301,6 @@ class TurtleScreen:
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
     #
-    # Play Puckman, a la Pac-Man®
-    #
-
-    def puck_rows_write(self) -> None:
-        """Write the Rows of the Puckland"""
-
-        # Pull the Rows from the Puckland Plain Text and frame them on all 4 Sides
-
-        text = textwrap.dedent(Puckland).strip()
-        split_width = max(len(_) for _ in text.splitlines())
-
-        width = self.window_width()
-        puck_width = 4 + split_width + 4
-
-        center = (puck_width * "*").center(width)
-        dent_width = len(center) - len(center.lstrip())  # biased left for an even-width middle
-
-        rows = ["", ""] + text.splitlines() + ["", ""]
-        rows = list(_.ljust(split_width) for _ in rows)
-        rows = list(("    " + _ + "    ") for _ in rows)
-
-        # Write Framed Rows on a Colored Background, and find the Puck
-
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
-        assert CHA_X == "\x1b" "[" "{}G"
-        assert SGR == "\x1b" "[" "{}m"
-
-        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        self.write_control(OnBlack)
-
-        self.puck_y = -1
-        self.puck_x = -1
-
-        for row in rows:
-            self.write_control(f"\x1b[{1 + dent_width}G")  # Warp to Column
-            self.puck_one_row_write(row)
-
-        puck_y = self.puck_y
-        puck_x = self.puck_x
-
-        assert puck_y >= 0, (puck_y,)
-        assert puck_x >= 0, (puck_x,)
-
-        # Write the Puck into a Z Layer above the Puckland
-
-        FullBlock = unicodedata.lookup("Full Block")  # '█'
-        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
-
-        puck_before = self.puck_read()
-        self.puck_before = puck_before
-
-        self.write_control("\x1b7")
-        self.puck_write(puck_here)
-        self.write_control("\x1b8")
-
-        # Close out the last Write of Style
-
-        Plain = "\x1b[m"
-        self.write_control(Plain)
-
-    def puck_one_row_write(self, text: str) -> None:
-        """Write a Row of the Puckland"""
-
-        column_x = self.column_x
-        row_y = self.row_y
-
-        assert LF == "\n"
-        assert SGR == "\x1b" "[" "{}m"
-
-        # Choose Foreground Colors
-
-        Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
-        Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
-        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
-
-        FullBlock = unicodedata.lookup("Full Block")  # '█'
-
-        penscape_by_ch = {
-            "(": Pellet,
-            ")": Pellet,
-            "@": Dot,
-            FullBlock: Puckman,
-        }
-
-        # Mix Colors into Text
-
-        with_penscape = ""
-        pentext = ""
-
-        pentexts = list()
-        for i, ch_ in enumerate(text):
-            x = column_x + i
-
-            ch = ch_
-            if ch_ == FullBlock:
-                if self.puck_x == -1:
-                    self.puck_x = x
-                    ch = "("
-                elif self.puck_y == -1:
-                    self.puck_y = row_y
-                    ch = ")"
-                else:
-                    assert False, (row_y, x, self.puck_y, self.puck_x)
-
-            if ch != " ":
-                default_eq_Wall = Wall
-                penscape = penscape_by_ch.get(ch, default_eq_Wall)
-                if penscape != with_penscape:
-                    assert pentext, (pentext,)  # because begun by " " Space's
-                    pentexts.append(pentext)
-
-                    self.write_text(pentext)
-                    self.write_control(penscape)
-
-                    with_penscape = penscape
-                    pentext = ""
-
-            pentext += ch
-
-        assert pentext, (pentext,)  # because last visited Char not yet written
-        pentexts.append(pentext)
-        self.write_text(pentext)
-
-        assert PucklandWidth == 64
-        assert sum(len(_) for _ in pentexts) == len(text) == 64, (pentexts, text)
-
-        # self.stdio.write("\x1b[m" "\n")
-        # breakpoint()
-
-        self.write_control("\n")
-
-    #
     # Write to the Terminal Screen, to an in-memory Shadow, and to a Screen Log
     #
 
@@ -3579,8 +3444,139 @@ class TurtleScreen:
             yx_penscapes.extend(penscapes)
 
     #
-    # More of  # Play Puckman, a la Pac-Man®
+    # Play Puckman, a la Pac-Man®
     #
+
+    def puck_rows_write(self) -> None:
+        """Write the Rows of the Puckland"""
+
+        # Pull the Rows from the Puckland Plain Text and frame them on all 4 Sides
+
+        text = textwrap.dedent(Puckland).strip()
+        split_width = max(len(_) for _ in text.splitlines())
+
+        width = self.window_width()
+        puck_width = 4 + split_width + 4
+
+        center = (puck_width * "*").center(width)
+        dent_width = len(center) - len(center.lstrip())  # biased left for an even-width middle
+
+        rows = ["", ""] + text.splitlines() + ["", ""]
+        rows = list(_.ljust(split_width) for _ in rows)
+        rows = list(("    " + _ + "    ") for _ in rows)
+
+        # Write Framed Rows on a Colored Background, and find the Puck
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+        assert CHA_X == "\x1b" "[" "{}G"
+        assert SGR == "\x1b" "[" "{}m"
+
+        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
+        self.write_control(OnBlack)
+
+        self.puck_y = -1
+        self.puck_x = -1
+
+        for row in rows:
+            self.write_control(f"\x1b[{1 + dent_width}G")  # Warp to Column
+            self.puck_one_row_write(row)
+
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+
+        assert puck_y >= 0, (puck_y,)
+        assert puck_x >= 0, (puck_x,)
+
+        # Write the Puck into a Z Layer above the Puckland
+
+        FullBlock = unicodedata.lookup("Full Block")  # '█'
+        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
+        puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+
+        puck_before = self.puck_read()
+        self.puck_before = puck_before
+
+        self.write_control("\x1b7")
+        self.puck_write(puck_here)
+        self.write_control("\x1b8")
+
+        # Close out the last Write of Style
+
+        Plain = "\x1b[m"
+        self.write_control(Plain)
+
+    def puck_one_row_write(self, text: str) -> None:
+        """Write a Row of the Puckland"""
+
+        column_x = self.column_x
+        row_y = self.row_y
+
+        assert LF == "\n"
+        assert SGR == "\x1b" "[" "{}m"
+
+        # Choose Foreground Colors
+
+        Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
+        Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
+        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
+        Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
+
+        FullBlock = unicodedata.lookup("Full Block")  # '█'
+
+        penscape_by_ch = {
+            "(": Pellet,
+            ")": Pellet,
+            "@": Dot,
+            FullBlock: Puckman,
+        }
+
+        # Mix Colors into Text
+
+        with_penscape = ""
+        pentext = ""
+
+        pentexts = list()
+        for i, ch_ in enumerate(text):
+            x = column_x + i
+
+            ch = ch_
+            if ch_ == FullBlock:
+                if self.puck_x == -1:
+                    self.puck_x = x
+                    ch = "("
+                elif self.puck_y == -1:
+                    self.puck_y = row_y
+                    ch = ")"
+                else:
+                    assert False, (row_y, x, self.puck_y, self.puck_x)
+
+            if ch != " ":
+                default_eq_Wall = Wall
+                penscape = penscape_by_ch.get(ch, default_eq_Wall)
+                if penscape != with_penscape:
+                    assert pentext, (pentext,)  # because begun by " " Space's
+                    pentexts.append(pentext)
+
+                    self.write_text(pentext)
+                    self.write_control(penscape)
+
+                    with_penscape = penscape
+                    pentext = ""
+
+            pentext += ch
+
+        assert pentext, (pentext,)  # because last visited Char not yet written
+        pentexts.append(pentext)
+        self.write_text(pentext)
+
+        assert PucklandWidth == 64
+        assert sum(len(_) for _ in pentexts) == len(text) == 64, (pentexts, text)
+
+        # self.stdio.write("\x1b[m" "\n")
+        # breakpoint()
+
+        self.write_control("\n")
 
     def puck_step_down(self) -> None:
         self.puck_step_dy_dx(1, dx=0)
