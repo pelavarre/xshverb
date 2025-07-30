@@ -127,3 +127,9 @@ later
 
 
     'uptime.py --' for uptime.py --pretty
+
+    > order by name, date or size
+        I felt computing went through some kind of shift here, as we crossed into this new century?
+        Once storage became so cheap for me, then >> Order by Date Added
+        << became the default I nearly always want as I work inside the
+        Terminal, as if macOS 'ls -ltrU ' or Linux 'ls -ltr --time=birth'

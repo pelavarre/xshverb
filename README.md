@@ -3,6 +3,7 @@
 
 Contents
 
+- [Game First](#game-first)
 - [Highlights](#highlights)
 - [Installation](#installation)
 - [First Look](#first-look)
@@ -34,6 +35,35 @@ Contents
 
 <!-- I fear people need the Headings numbered -->
 <!-- but VsCode autogenerates this unnumbered Table-of-Contents. Maybe people will cope -->
+
+
+## Game First
+
+🎮 👾 🟡 
+
+My latest Pacman-lite demo of my game engine is presently up for macOS/ Linux Terminals
+
+3 steps to launch it
+
+    rm -fr xshverb/
+
+    git clone https'://'github'.'com/pelavarre/xshverb'.'git
+
+    ./xshverb/bin/xshverb.py turtling
+
+That work drops you into a Python Repl Session. So next you send the command:
+
+    play()
+
+It prints correct help
+> Press Return to stop play, else Spacebar and the ← ↑ → ↓ Arrows to play
+
+The Git Log outside reveals the two newest Easter Eggs
+> Play 3X Faster at ⌃Spacebar, and 25X Faster at ⌥Spacebar
+
+It doesn't need a display server. It runs entirely inside the Terminal, even an Ssh Session into a Headless Linux
+
+🟡 👾 🎮
 
 
 ## Highlights

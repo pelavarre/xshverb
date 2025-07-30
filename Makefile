@@ -79,6 +79,10 @@ pips requirements.txt:
 #
 
 
+push: smoke
+	git push
+
+
 smoke: black flake8 mypy
 	:
 

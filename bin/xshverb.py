@@ -3101,8 +3101,13 @@ def do_turtling(argv: list[str]) -> None:
 
 # FIXME: lay out two Rows of South at exit, for no scroll when restarting
 # FIXME: let the Spacebar wrap the Puckman
+# FIXME: ⌃Z or Backspace to undo the Spacebar - craft and list the undo actions, and
+# FIXME: Tab and ⇧Tab for 8X Spacebar and 8x Backspace
+# FIXME: show convincingly that our stack can't reply to ⌘Z
+
 # FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
 # FIXME: score the Dots and Pellets eaten
+# FIXME: Ghosts!
 
 # FIXME: factor the Puckman Game out of the Class TurtleScreen
 
