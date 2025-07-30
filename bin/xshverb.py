@@ -3191,7 +3191,7 @@ class TurtleScreen:
 
     puck_y: int = -1
     puck_x: int = -1
-    puck_before: tuple[tuple[str, list[str]], tuple[str, list[str]]]
+    puck_below: tuple[tuple[str, list[str]], tuple[str, list[str]]]
 
     def __init__(self) -> None:
 
@@ -3529,16 +3529,16 @@ class TurtleScreen:
             if byte1 == b"[":
                 byte2 = os.read(fileno, 1)  # FIXME: blocks after Esc [
                 if byte2 == b"B":  # Down
-                    self.puck_step_down()
+                    self.puck_step_down_else_wrap()
                     return
                 elif byte2 == b"D":  # Left
-                    self.puck_step_left()
+                    self.puck_step_left_else_wrap()
                     return
                 elif byte2 == b"C":  # Right
-                    self.puck_step_right()
+                    self.puck_step_right_else_wrap()
                     return
                 elif byte2 == b"A":  # Up
-                    self.puck_step_up()
+                    self.puck_step_up_else_wrap()
                     return
 
         stdio.write("\a")
@@ -3589,8 +3589,8 @@ class TurtleScreen:
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
         puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
 
-        puck_before = self.puck_read()
-        self.puck_before = puck_before
+        puck_below = self.puck_read()
+        self.puck_below = puck_below
 
         self.write_control("\x1b7")
         self.puck_write(puck_here)
@@ -3673,54 +3673,54 @@ class TurtleScreen:
 
         self.write_control("\n")
 
-    def puck_step_down(self) -> None:
+    def puck_step_down_else_wrap(self) -> None:
 
         puck_y = self.puck_y
         puck_y_min = self.puck_y_min
         puck_y_max = self.puck_y_max
 
         if (puck_y + 1) > puck_y_max:
-            self.puck_step_dy_dx(puck_y_min - puck_y, dx=0)
+            self.puck_warp_to_dy_dx(puck_y_min - puck_y, dx=0)
         else:
-            self.puck_step_dy_dx(+1, dx=0)
+            self.puck_warp_to_dy_dx(+1, dx=0)
 
-    def puck_step_left(self) -> None:
+    def puck_step_left_else_wrap(self) -> None:
 
         puck_x = self.puck_x
         puck_x_min = self.puck_x_min
         puck_x_max = self.puck_x_max
 
         if (puck_x - 2) < puck_x_min:
-            self.puck_step_dy_dx(0, dx=(puck_x_max - 1 - puck_x))
+            self.puck_warp_to_dy_dx(0, dx=(puck_x_max - 1 - puck_x))
         else:
-            self.puck_step_dy_dx(0, dx=-2)
+            self.puck_warp_to_dy_dx(0, dx=-2)
 
-    def puck_step_right(self) -> None:
+    def puck_step_right_else_wrap(self) -> None:
 
         puck_x = self.puck_x
         puck_x_min = self.puck_x_min
         puck_x_max = self.puck_x_max
 
         if (puck_x + 2 + 1) > puck_x_max:
-            self.puck_step_dy_dx(0, dx=(puck_x_min - puck_x))
+            self.puck_warp_to_dy_dx(0, dx=(puck_x_min - puck_x))
         else:
-            self.puck_step_dy_dx(0, dx=+2)
+            self.puck_warp_to_dy_dx(0, dx=+2)
 
-    def puck_step_up(self) -> None:
+    def puck_step_up_else_wrap(self) -> None:
 
         puck_y = self.puck_y
         puck_y_min = self.puck_y_min
         puck_y_max = self.puck_y_max
 
         if (puck_y - 1) < puck_y_min:
-            self.puck_step_dy_dx(puck_y_max - puck_y, dx=0)
+            self.puck_warp_to_dy_dx(puck_y_max - puck_y, dx=0)
         else:
-            self.puck_step_dy_dx(-1, dx=0)
+            self.puck_warp_to_dy_dx(-1, dx=0)
 
-    def puck_step_dy_dx(self, dy: int, dx: int) -> None:
-        """Move the Puck by 1 Whole Step"""
+    def puck_warp_to_dy_dx(self, dy: int, dx: int) -> None:
+        """Leap the Puck from spot to spot"""
 
-        puck_before = self.puck_before
+        puck_below = self.puck_below
         stdio = self.stdio
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
@@ -3731,21 +3731,21 @@ class TurtleScreen:
 
         self.puck_y += dy
         self.puck_x += dx
-        next_puck_before = self.puck_read()
+        next_puck_below = self.puck_read()
         self.puck_write(puck_here)
 
         self.puck_y -= dy
         self.puck_x -= dx
-        self.puck_write(puck_before)
+        self.puck_write(puck_below)
 
         self.puck_y += dy
         self.puck_x += dx
-        self.puck_before = next_puck_before
+        self.puck_below = next_puck_below
 
         self.write_control("\x1b8")
         stdio.flush()
 
-        # FIXME: solve overlapping moves, such as:  ts.puck_step_dy_dx(dy=0, dx=1)
+        # FIXME: solve overlapping moves, such as:  ts.puck_warp_to_dy_dx(dy=0, dx=1)
 
     def puck_read(self) -> tuple[tuple[str, list[str]], tuple[str, list[str]]]:
         """Read the Puck from the Terminal Screen"""
