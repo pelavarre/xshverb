@@ -3061,12 +3061,24 @@ def do_turtling(argv: list[str]) -> None:
         globals().update(d)
         os.environ["PYTHONINSPECT"] = str(True)
 
+        return
+
     if choice == 2:
+
+        ts.chat_clear()
+        for _ in range(25):
+            ts.puck_move()
+
+        return
+
+    if choice == 3:
 
         tc = code.InteractiveConsole(locals=d)  # bypasses Class TurtleScreen to write Input Echo
         tc.interact(banner="", exitmsg="")
 
-    if choice == 3:
+        return
+
+    if choice == 4:
 
         tc = TurtleConsole(locals=d)
 
@@ -3081,17 +3093,21 @@ def do_turtling(argv: list[str]) -> None:
             sys.stderr = sys.__stderr__
             sys.stdout = sys.__stdout__
 
+        return
+
     # todo: dent the Input, a la 'python3 -i'
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
+# FIXME: lay out two Rows of South at exit, for no scroll when restarting
 # FIXME: let the Spacebar wrap the Puckman
-# FIXME: more rapid play of Puckman, like multiple moves per ⌃Spacebar or ⌥Spacebar
+# FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
 # FIXME: score the Dots and Pellets eaten
-# FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥←
 
 # FIXME: factor the Puckman Game out of the Class TurtleScreen
+
 # FIXME: deploy Class TerminalBytePacket into XShVerb Py
+# FIXME: option to debug with not raw except during input
 
 
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
@@ -3511,7 +3527,7 @@ class TurtleScreen:
 
         try:
             while True:
-                self.puck_try_play()
+                self.puck_try_play(with_tcgetattr)
         except SystemExit:
             pass
         finally:
@@ -3523,7 +3539,7 @@ class TurtleScreen:
         print("Thank you")
         self.chat_line_break()
 
-    def puck_try_play(self) -> None:
+    def puck_try_play(self, with_tcgetattr: list[int]) -> None:
         """Reply to Keyboard Chords till Return pressed"""
 
         fileno = self.fileno
@@ -3534,8 +3550,30 @@ class TurtleScreen:
             sys.exit()
 
         if byte0 == b" ":  # Spacebar
+
+            # when = termios.TCSADRAIN
+            # attributes = with_tcgetattr
+            # termios.tcsetattr(fileno, when, attributes)
+
             self.puck_move()
+
+            # with_tcgetattr_ = termios.tcgetattr(fileno)
+            # tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
+            # assert with_tcgetattr_ == with_tcgetattr, (with_tcgetattr_, with_tcgetattr)
+
             return
+
+        if byte0 == b"\x00":  # ⌃Spacebar
+            for _ in range(3):
+                self.puck_move()
+            return
+
+        if byte0 == b"\xc2":
+            byte1 = os.read(fileno, 1)  # FIXME: blocks after Utf-8 Prefix
+            if byte1 == b"\xa0":  # ⌥Spacebar
+                for _ in range(25):
+                    self.puck_move()
+                return
 
         if byte0 == b"\x1b":
             byte1 = os.read(fileno, 1)  # FIXME: blocks after Esc
@@ -3773,9 +3811,19 @@ class TurtleScreen:
         if puck_dydx in pairs_by_dydx.keys():
             warp_dydx = puck_dydx
 
+        # if not hasattr(TurtleScreen, "once"):
+        #     TurtleScreen.once = True
+        #
+        #     print(puck_dydx, warp_dydx, list(pairs_by_dydx.keys()), end="\r\n")
+        #     self.chat_line_break()
+
         # Move & eat
 
         (dy, dx) = warp_dydx
+
+        # print("warp_dydx", warp_dydx, end="\r\n")
+        # self.chat_line_break()
+
         self.puck_warp_to_dy_dx(dy, dx=dx)
 
         paint_eaten: tuple[Paint, Paint] = ((" ", []), (" ", []))
