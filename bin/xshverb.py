@@ -3042,7 +3042,7 @@ def do_turtling(argv: list[str]) -> None:
 
     # Launch a Chat
 
-    sys.excepthook = with_sys_except_hook
+    # sys.excepthook = with_sys_except_hook  # todo: when to except-hook & when not
 
     atexit.register(lambda: ts.write_control("\x1b[32100H"))
 
@@ -3084,7 +3084,9 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: define play() to mean run Keys as bound else Beep but quit at Return
+# FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥←
+# FIXME: deploy Class TerminalBytePacket into XShVerb Py
+
 # FIXME: teach Spacebar to coast the Puckman as → till turned by ← ↑ → ↓
 # FIXME: teach Spacebar to eat Pellets and Dots
 # FIXME: teach Spacebar to bounce off of Walls
@@ -3115,31 +3117,34 @@ class TurtleConsole(code.InteractiveConsole):
 
     stdio: io.TextIOWrapper
 
+    top_panel_y_max: int
+
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
 
         ts = turtle_screen
 
-        assert PucklandHeight == 37
         assert sys.__stderr__, (sys.__stderr__,)
+        stdio = sys.__stderr__
 
+        assert PucklandHeight == 37
         height = ts.window_height()
-        top_panel_height = height - 37 - 1
+        top_panel_y_max = height - 37 - 1
 
-        self.stdio = sys.__stderr__
-        self.top_panel_height = top_panel_height
+        self.stdio = stdio
+        self.top_panel_y_max = top_panel_y_max
 
     def raw_input(self, prompt: str = "") -> str:
 
         stdio = self.stdio
-        top_panel_height = self.top_panel_height
+        top_panel_y_max = self.top_panel_y_max
 
         ts = turtle_screen
 
         # Scroll up to make room for Prompt
 
         (y0, x0) = ts.row_y_column_x_read()
-        if y0 > top_panel_height:
+        if y0 > top_panel_y_max:
             ts.chat_line_break()
 
         stdio.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
@@ -3154,7 +3159,7 @@ class TurtleConsole(code.InteractiveConsole):
         # Scroll up to make room for Output
 
         (y1, x1) = ts.row_y_column_x_read()  # replaces
-        if y1 > top_panel_height:  # '>' not '>='
+        if y1 > top_panel_y_max:  # '>' not '>='
             ts.chat_line_break()
 
         return raw_input
@@ -3179,17 +3184,47 @@ class TurtleScreen:
     pin_x: int = +1
     pin_y: int = +1
 
+    puck_y_min: int = -1
+    puck_y_max: int = -1
+    puck_x_min: int = -1
+    puck_x_max: int = -1
+
     puck_y: int = -1
     puck_x: int = -1
     puck_before: tuple[tuple[str, list[str]], tuple[str, list[str]]]
 
     def __init__(self) -> None:
+
+        #
+
         assert sys.__stderr__, (sys.__stderr__,)
-
         stdio = sys.__stderr__
-        self.stdio = stdio
+        fileno = stdio.fileno()
 
-        self.fileno = stdio.fileno()
+        self.stdio = stdio
+        self.fileno = fileno
+
+        #
+
+        assert PucklandHeight == 37
+        assert PucklandWidth == 64
+
+        height = self.window_height()
+        top_panel_y_max = height - 37 - 1
+
+        width = self.window_width()
+        center = (PucklandWidth * "+").center(width)
+        puck_x_min = 1 + len(center) - len(center.lstrip())  # biased left for an even-width middle
+
+        puck_y_min = top_panel_y_max + 1
+        puck_y_max = puck_y_min + 37 - 1
+        puck_x_min = puck_x_min
+        puck_x_max = puck_x_min + 64 - 1
+
+        self.puck_y_min = puck_y_min
+        self.puck_y_max = puck_y_max
+        self.puck_x_min = puck_x_min
+        self.puck_x_max = puck_x_max
 
     #
     # Run in place of Sys Stdout/Stderr
@@ -3259,14 +3294,14 @@ class TurtleScreen:
 
         height = self.window_height()
         width = self.window_width()
-        top_panel_height = height - 37 - 1
+        top_panel_y_max = height - 37 - 1
 
         stdio.write("\x1b[H")  # warps to Upper Left
-        for _ in range(top_panel_height):
+        for _ in range(top_panel_y_max):
             stdio.write(width * " ")
             stdio.write("\n")  # skips down a Row
 
-        self.write_control(f"\x1b[{top_panel_height + 1}H")  # warps to Top of Puckland
+        self.write_control(f"\x1b[{top_panel_y_max + 1}H")  # warps to Top of Puckland
         self.puck_rows_write()
         stdio.write(width * " ")
 
@@ -3307,6 +3342,9 @@ class TurtleScreen:
 
     def write_control(self, text: str) -> None:
         """Write Terminal Screen Controls"""
+
+        if not text:
+            return
 
         column_x = self.column_x
         penscapes = self.penscapes
@@ -3415,6 +3453,9 @@ class TurtleScreen:
     def write_text(self, text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
 
+        if not text:
+            return
+
         char_by_y_x = self.char_by_y_x
         column_x = self.column_x
         penscapes = self.penscapes
@@ -3506,16 +3547,14 @@ class TurtleScreen:
     def puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
 
+        puck_x_min = self.puck_x_min
+
         # Pull the Rows from the Puckland Plain Text and frame them on all 4 Sides
 
         text = textwrap.dedent(Puckland).strip()
-        split_width = max(len(_) for _ in text.splitlines())
 
-        width = self.window_width()
-        puck_width = 4 + split_width + 4
-
-        center = (puck_width * "*").center(width)
-        dent_width = len(center) - len(center.lstrip())  # biased left for an even-width middle
+        assert PucklandWidth == 64
+        split_width = 64 - 4 - 4
 
         rows = ["", ""] + text.splitlines() + ["", ""]
         rows = list(_.ljust(split_width) for _ in rows)
@@ -3535,7 +3574,7 @@ class TurtleScreen:
         self.puck_x = -1
 
         for row in rows:
-            self.write_control(f"\x1b[{1 + dent_width}G")  # Warp to Column
+            self.write_control(f"\x1b[{puck_x_min}G")  # Warp to Column
             self.puck_one_row_write(row)
 
         puck_y = self.puck_y
@@ -3635,16 +3674,48 @@ class TurtleScreen:
         self.write_control("\n")
 
     def puck_step_down(self) -> None:
-        self.puck_step_dy_dx(1, dx=0)
+
+        puck_y = self.puck_y
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+
+        if (puck_y + 1) > puck_y_max:
+            self.puck_step_dy_dx(puck_y_min - puck_y, dx=0)
+        else:
+            self.puck_step_dy_dx(+1, dx=0)
 
     def puck_step_left(self) -> None:
-        self.puck_step_dy_dx(0, dx=-2)
+
+        puck_x = self.puck_x
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        if (puck_x - 2) < puck_x_min:
+            self.puck_step_dy_dx(0, dx=(puck_x_max - 1 - puck_x))
+        else:
+            self.puck_step_dy_dx(0, dx=-2)
 
     def puck_step_right(self) -> None:
-        self.puck_step_dy_dx(0, dx=2)
+
+        puck_x = self.puck_x
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        if (puck_x + 2 + 1) > puck_x_max:
+            self.puck_step_dy_dx(0, dx=(puck_x_min - puck_x))
+        else:
+            self.puck_step_dy_dx(0, dx=+2)
 
     def puck_step_up(self) -> None:
-        self.puck_step_dy_dx(-1, dx=0)
+
+        puck_y = self.puck_y
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+
+        if (puck_y - 1) < puck_y_min:
+            self.puck_step_dy_dx(puck_y_max - puck_y, dx=0)
+        else:
+            self.puck_step_dy_dx(-1, dx=0)
 
     def puck_step_dy_dx(self, dy: int, dx: int) -> None:
         """Move the Puck by 1 Whole Step"""
@@ -3699,16 +3770,22 @@ class TurtleScreen:
         x = self.puck_x
 
         ((ch0, penscapes_0), (ch1, penscapes_1)) = puck
-        assert len(penscapes_0) == len(penscapes_1) == 1, (penscapes_0, penscapes_1)
+        assert len(penscapes_0) <= 1, (penscapes_0,)
+        assert len(penscapes_1) <= 1, (penscapes_1,)
+
+        ps0 = penscapes_0[-1] if penscapes_0 else ""
+        ps1 = penscapes_1[-1] if penscapes_1 else ""
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
         self.write_control(OnBlack)
 
         self.write_control(f"\x1b[{y};{x + 0}H")
-        self.write_control(penscapes_0[-1])
+        self.write_control(ps0)
         self.write_text(ch0)
-        self.write_control(penscapes_1[-1])
+        self.write_control(ps1)
         self.write_text(ch1)
+
+        # todo: work harder to compress ps0 + OnBlack + p1 + OnBlack
 
     def shadow_and_write(self, text: str) -> None:
         """Write Bytes to the Terminal Screen and its Shadows"""
@@ -3796,9 +3873,6 @@ class TurtleScreen:
     # todo: thus duck out of needing the calling Process to leave Stderr connected with /dev/tty
 
 
-turtle_screen = TurtleScreen()
-
-
 Puckland = """
 
     ┌──────────────────────────────────────────────────────┐
@@ -3843,6 +3917,9 @@ PucklandWidth = 8 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitl
 PucklandHeight = 4 + len(textwrap.dedent(Puckland).strip().splitlines())
 
 assert (PucklandWidth, PucklandHeight) == (64, 37), (PucklandWidth, PucklandHeight)
+
+
+turtle_screen = TurtleScreen()
 
 
 #
