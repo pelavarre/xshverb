@@ -70,6 +70,7 @@ import math
 import os
 import pathlib
 import pdb
+import random
 import re
 import shlex
 import shutil
@@ -3084,12 +3085,13 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
+# FIXME: let the Spacebar wrap the Puckman
+# FIXME: more rapid play of Puckman, like multiple moves per ⌃Spacebar or ⌥Spacebar
+# FIXME: score the Dots and Pellets eaten
 # FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥←
-# FIXME: deploy Class TerminalBytePacket into XShVerb Py
 
-# FIXME: teach Spacebar to coast the Puckman as → till turned by ← ↑ → ↓
-# FIXME: teach Spacebar to eat Pellets and Dots
-# FIXME: teach Spacebar to bounce off of Walls
+# FIXME: factor the Puckman Game out of the Class TurtleScreen
+# FIXME: deploy Class TerminalBytePacket into XShVerb Py
 
 
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
@@ -3167,6 +3169,9 @@ class TurtleConsole(code.InteractiveConsole):
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
 
+Paint = tuple[str, list[str]]
+
+
 class TurtleScreen:
     """Amp up writes to the Terminal Screen"""
 
@@ -3181,8 +3186,8 @@ class TurtleScreen:
     penscapes_by_y_x: dict[int, dict[int, list[str]]] = dict()
     row_y: int = -1
 
-    pin_x: int = +1
     pin_y: int = +1
+    pin_x: int = +1
 
     puck_y_min: int = -1
     puck_y_max: int = -1
@@ -3191,7 +3196,10 @@ class TurtleScreen:
 
     puck_y: int = -1
     puck_x: int = -1
-    puck_below: tuple[tuple[str, list[str]], tuple[str, list[str]]]
+    paints_below: tuple[Paint, Paint]
+
+    puck_dy: int = 0  # initially (0, +2) Right
+    puck_dx: int = +2
 
     def __init__(self) -> None:
 
@@ -3513,6 +3521,7 @@ class TurtleScreen:
             termios.tcsetattr(fileno, when, attributes)
 
         print("Thank you")
+        self.chat_line_break()
 
     def puck_try_play(self) -> None:
         """Reply to Keyboard Chords till Return pressed"""
@@ -3524,10 +3533,15 @@ class TurtleScreen:
         if byte0 == b"\r":
             sys.exit()
 
+        if byte0 == b" ":  # Spacebar
+            self.puck_move()
+            return
+
         if byte0 == b"\x1b":
             byte1 = os.read(fileno, 1)  # FIXME: blocks after Esc
             if byte1 == b"[":
                 byte2 = os.read(fileno, 1)  # FIXME: blocks after Esc [
+
                 if byte2 == b"B":  # Down
                     self.puck_step_down_else_wrap()
                     return
@@ -3587,13 +3601,14 @@ class TurtleScreen:
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+        puckman_paints = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
 
-        puck_below = self.puck_read()
-        self.puck_below = puck_below
+        # paints_below = self.puck_read_paints()
+        paint_eaten: tuple[Paint, Paint] = ((" ", []), (" ", []))
+        self.paints_below = paint_eaten
 
         self.write_control("\x1b7")
-        self.puck_write(puck_here)
+        self.puck_write(puckman_paints)
         self.write_control("\x1b8")
 
         # Close out the last Write of Style
@@ -3717,37 +3732,148 @@ class TurtleScreen:
         else:
             self.puck_warp_to_dy_dx(-1, dx=0)
 
+    def puck_move(self) -> None:
+        """Move the Puck to a new Spot"""
+
+        puck_dy = self.puck_dy
+        puck_dx = self.puck_dx
+        puck_dydx = (puck_dy, puck_dx)
+
+        # List the Moves
+
+        paints_by_dy_dx = self.find_puck_moves()
+
+        if not paints_by_dy_dx.keys():
+            return
+
+        pairs_by_dydx = dict()
+        empty_dydx_list = list()
+
+        for dy, paints_by_dx in paints_by_dy_dx.items():
+            for dx, paints in paints_by_dx.items():
+                dydx = (dy, dx)
+
+                ((ch0, penscapes_0), (ch1, penscapes_1)) = paints
+                pair = ch0 + ch1
+
+                pairs_by_dydx[dydx] = pair
+                if pair == "  ":
+                    empty_dydx_list.append(dydx)
+
+        # Drop the Moves into Empty when other Moves available
+
+        pairs_set = set(pairs_by_dydx.values())
+        if pairs_set != set(["  "]):
+            for dydx in empty_dydx_list:
+                del pairs_by_dydx[dydx]
+
+        # Prefer to repeat the same Move
+
+        warp_dydx = random.choice(list(pairs_by_dydx.keys()))
+        if puck_dydx in pairs_by_dydx.keys():
+            warp_dydx = puck_dydx
+
+        # Move & eat
+
+        (dy, dx) = warp_dydx
+        self.puck_warp_to_dy_dx(dy, dx=dx)
+
+        paint_eaten: tuple[Paint, Paint] = ((" ", []), (" ", []))
+        self.paints_below = paint_eaten  # maybe no change
+
+    def find_puck_moves(self) -> dict[int, dict[int, tuple[Paint, Paint]]]:
+        """List how the Puck can move"""
+
+        char_by_y_x = self.char_by_y_x
+        penscapes_by_y_x = self.penscapes_by_y_x
+
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        # Look down, left, right, & up
+
+        paints_by_dy_dx: dict[int, dict[int, tuple[Paint, Paint]]] = dict()
+
+        dydx_list = ((+1, 0), (0, -2), (0, +2), (-1, 0))
+        for dy, dx in dydx_list:
+            y = puck_y + dy
+            x = puck_x + dx
+
+            # Only let the Puckman move across the Puckland
+
+            inside = False
+            if (puck_y_min + 2) <= y <= (puck_y_max - 2):
+                if (puck_x_min + 4) <= x <= x + 1 <= (puck_x_max - 4):
+                    inside = True
+
+            if not inside:
+                continue
+
+            # Let the Puckman move onto Dots, Pellets, and Spaces (but not Walls)
+
+            ch0 = char_by_y_x[y][x + 0]
+            penscapes_0 = list(penscapes_by_y_x[y][x + 0])
+            ch1 = char_by_y_x[y][x + 1]
+            penscapes_1 = list(penscapes_by_y_x[y][x + 1])
+
+            paints = ((ch0, penscapes_0), (ch1, penscapes_1))
+
+            if ch0 not in "()" "@@" "  ":
+                continue
+            if ch1 not in "()" "@@" "  ":
+                continue
+
+            # Offer the Move
+
+            if dy not in paints_by_dy_dx.keys():
+                paints_by_dy_dx[dy] = dict()
+
+            dy_paints_by_dy_dx = paints_by_dy_dx[dy]
+
+            assert dx not in dy_paints_by_dy_dx.keys(), (dy, dx, dy_paints_by_dy_dx.keys())
+            dy_paints_by_dy_dx[dx] = paints
+
+        return paints_by_dy_dx
+
     def puck_warp_to_dy_dx(self, dy: int, dx: int) -> None:
         """Leap the Puck from spot to spot"""
 
-        puck_below = self.puck_below
+        self.puck_dy = dy
+        self.puck_dx = dx
+
+        paints_below = self.paints_below
         stdio = self.stdio
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        puck_here = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+        puckman_paints = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
 
         self.write_control("\x1b7")
 
         self.puck_y += dy
         self.puck_x += dx
-        next_puck_below = self.puck_read()
-        self.puck_write(puck_here)
+        next_paints_below = self.puck_read_paints()
+        self.puck_write(puckman_paints)
 
         self.puck_y -= dy
         self.puck_x -= dx
-        self.puck_write(puck_below)
+        self.puck_write(paints_below)
 
         self.puck_y += dy
         self.puck_x += dx
-        self.puck_below = next_puck_below
+        self.paints_below = next_paints_below
 
         self.write_control("\x1b8")
         stdio.flush()
 
         # FIXME: solve overlapping moves, such as:  ts.puck_warp_to_dy_dx(dy=0, dx=1)
 
-    def puck_read(self) -> tuple[tuple[str, list[str]], tuple[str, list[str]]]:
+    def puck_read_paints(self) -> tuple[Paint, Paint]:
         """Read the Puck from the Terminal Screen"""
 
         y = self.puck_y
@@ -3763,23 +3889,28 @@ class TurtleScreen:
 
         return ((ch0, penscapes_0), (ch1, penscapes_1))
 
-    def puck_write(self, puck: tuple[tuple[str, list[str]], tuple[str, list[str]]]) -> None:
+    def puck_write(self, paints: tuple[Paint, Paint]) -> None:
         """Write the Puck to the Terminal Screen"""
 
         y = self.puck_y
         x = self.puck_x
 
-        ((ch0, penscapes_0), (ch1, penscapes_1)) = puck
+        #
+
+        ((ch0, penscapes_0), (ch1, penscapes_1)) = paints
         assert len(penscapes_0) <= 1, (penscapes_0,)
         assert len(penscapes_1) <= 1, (penscapes_1,)
 
         ps0 = penscapes_0[-1] if penscapes_0 else ""
         ps1 = penscapes_1[-1] if penscapes_1 else ""
 
+        #
+
+        self.write_control(f"\x1b[{y};{x}H")
+
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
         self.write_control(OnBlack)
 
-        self.write_control(f"\x1b[{y};{x + 0}H")
         self.write_control(ps0)
         self.write_text(ch0)
         self.write_control(ps1)
