@@ -79,7 +79,7 @@ pips requirements.txt:
 #
 
 
-push: smoke
+push:  # as in do push now, without rerunning any tests
 	git push
 
 
