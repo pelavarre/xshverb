@@ -3072,7 +3072,7 @@ def do_turtling(argv: list[str]) -> None:
     if choice == 2:
 
         ts.chat_clear()
-        for _ in range(25):
+        for _ in range(4):
             ts.puck_move()
 
         return
@@ -3105,15 +3105,18 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: teach .puck_stomp_if to stomp in a corridor, but not over other " " Space marks
+# FIXME: don't randomly choose to undo a warp, after doing a warp for Spacebar or Tab
+# FIXME: teach .puck_stomp_if to stomp in a Corridor, but not over other " " Space marks
 
+# FIXME: score the Dots and Pellets eaten
+# FIXME: declare a win when all Corridor Spots stomped
+
+# FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
+
+# FIXME: Backspace or ⌃Z to undo the Spacebar - craft and list the undo actions
 # FIXME: ⇧Tab for 8x Backspace
 # FIXME: show convincingly that our stack can't reply to ⌘Z
 
-# FIXME: ⌃Z or Backspace to undo the Spacebar - craft and list the undo actions, and
-
-# FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
-# FIXME: score the Dots and Pellets eaten
 # FIXME: Ghosts!
 # FIXME: Moar Levels!!
 
@@ -3322,6 +3325,7 @@ class TurtleScreen:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
         self.chat_clear()
+        print("To get started, try:  cls(); play()")
 
         # our 'Turtle Screen Pane' rhymes with the Python Turtle Graphics Window
 
@@ -3580,7 +3584,9 @@ class TurtleScreen:
         fileno = self.fileno
         stdio = self.stdio
 
-        stdio.write("Press Return to stop play, else Spacebar and the ← ↑ → ↓ Arrows to play\n")
+        text = "Press Return to stop play,"
+        text += " else Spacebar or Tab and the ← ↑ → ↓ Arrows to play\n"
+        stdio.write(text)
         stdio.flush()
 
         with_tcgetattr = termios.tcgetattr(fileno)
