@@ -3045,7 +3045,13 @@ def do_turtling(argv: list[str]) -> None:
 
     # sys.excepthook = with_sys_except_hook  # todo: when to except-hook & when not
 
-    atexit.register(lambda: ts.write_control("\x1b[32100H"))
+    assert CUU_Y == "\x1b" "[" "{}A"
+    assert CUP_Y_X == "\x1b" "[" "{};{}H"
+
+    assert MAX_PN_32100 == 32100
+    assert SouthPanelHeight == 2  # so just 1 \e[A after our \e[32100H
+
+    atexit.register(lambda: ts.write_some_controls(["\x1b[32100H", "\x1b[A"]))
 
     d: dict[str, object] = dict()
     d["br"] = ts.chat_line_break
@@ -3099,11 +3105,11 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: lay out two Rows of South at exit, for no scroll when restarting
-# FIXME: let the Spacebar wrap the Puckman
-# FIXME: ⌃Z or Backspace to undo the Spacebar - craft and list the undo actions, and
 # FIXME: Tab and ⇧Tab for 8X Spacebar and 8x Backspace
+# FIXME: let the Spacebar wrap the Puckman
 # FIXME: show convincingly that our stack can't reply to ⌘Z
+
+# FIXME: ⌃Z or Backspace to undo the Spacebar - craft and list the undo actions, and
 
 # FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
 # FIXME: score the Dots and Pellets eaten
@@ -3111,7 +3117,6 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: Moar Levels!!
 
 # FIXME: factor the Puckman Game out of the Class TurtleScreen
-
 # FIXME: deploy Class TerminalBytePacket into XShVerb Py
 # FIXME: option to debug with not raw except during input
 
@@ -3135,13 +3140,16 @@ CPR_Y_X_REGEX = r"\x1B\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep
 
 CSI_PIF_REGEX = r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
+MAX_PN_32100 = 32100  # an Int picked to exceed the Counts of Rows & Columns at any Terminal
+assert 80 <= MAX_PN_32100 <= 0x7FFF == 32767
+
 
 class TurtleConsole(code.InteractiveConsole):
     """Run a Chat a la 'python3 -i', but write Input Echo through the TurtleScreen"""
 
     stdio: io.TextIOWrapper
 
-    top_panel_y_max: int
+    north_panel_y_max: int
 
     def __init__(self, locals: dict[str, object]) -> None:
         super().__init__(locals=locals)
@@ -3152,23 +3160,25 @@ class TurtleConsole(code.InteractiveConsole):
         stdio = sys.__stderr__
 
         assert PucklandHeight == 37
+        assert SouthPanelHeight == 2
+
         height = ts.window_height()
-        top_panel_y_max = height - 37 - 1
+        north_panel_y_max = height - 37 - 2
 
         self.stdio = stdio
-        self.top_panel_y_max = top_panel_y_max
+        self.north_panel_y_max = north_panel_y_max
 
     def raw_input(self, prompt: str = "") -> str:
 
         stdio = self.stdio
-        top_panel_y_max = self.top_panel_y_max
+        north_panel_y_max = self.north_panel_y_max
 
         ts = turtle_screen
 
         # Scroll up to make room for Prompt
 
         (y0, x0) = ts.row_y_column_x_read()
-        if y0 > top_panel_y_max:
+        if y0 > north_panel_y_max:
             ts.chat_line_break()
 
         stdio.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
@@ -3183,7 +3193,7 @@ class TurtleConsole(code.InteractiveConsole):
         # Scroll up to make room for Output
 
         (y1, x1) = ts.row_y_column_x_read()  # replaces
-        if y1 > top_panel_y_max:  # '>' not '>='
+        if y1 > north_panel_y_max:  # '>' not '>='
             ts.chat_line_break()
 
         return raw_input
@@ -3237,16 +3247,18 @@ class TurtleScreen:
         #
 
         assert PucklandHeight == 37
-        assert PucklandWidth == 64
+        assert SouthPanelHeight == 2
 
         height = self.window_height()
-        top_panel_y_max = height - 37 - 1
+        north_panel_y_max = height - 37 - 2
 
         width = self.window_width()
         center = (PucklandWidth * "+").center(width)
         puck_x_min = 1 + len(center) - len(center.lstrip())  # biased left for an even-width middle
 
-        puck_y_min = top_panel_y_max + 1
+        assert PucklandWidth == 64
+
+        puck_y_min = north_panel_y_max + 1
         puck_y_max = puck_y_min + 37 - 1
         puck_x_min = puck_x_min
         puck_x_max = puck_x_min + 64 - 1
@@ -3318,20 +3330,24 @@ class TurtleScreen:
         stdio = self.stdio
 
         assert PucklandHeight == 37
+        assert SouthPanelHeight == 2
+
+        height = self.window_height()
+        width = self.window_width()
+        north_panel_y_max = height - 37 - 2
+        puck_panel_y_min = north_panel_y_max + 1
 
         assert LF == "\n"
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
 
-        height = self.window_height()
-        width = self.window_width()
-        top_panel_y_max = height - 37 - 1
-
         stdio.write("\x1b[H")  # warps to Upper Left
-        for _ in range(top_panel_y_max):
+        for _ in range(north_panel_y_max):
             stdio.write(width * " ")
             stdio.write("\n")  # skips down a Row
 
-        self.write_control(f"\x1b[{top_panel_y_max + 1}H")  # warps to Top of Puckland
+        (read_y, read_x) = self.row_y_column_x_read()
+        assert read_y == puck_panel_y_min, (read_y, puck_panel_y_min)
+
         self.puck_rows_write()
         stdio.write(width * " ")
 
@@ -3355,6 +3371,8 @@ class TurtleScreen:
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert IL_Y == "\x1b" "[" "{}L"
 
+        assert MAX_PN_32100 == 32100
+
         stdio.write("\x1b7")  # bounces back to Row of pin
         stdio.write("\x1b[32100H")  # warps to Lower Left
         stdio.write("\n")  # scrolls Screen up a Row and skips down a Row
@@ -3370,8 +3388,14 @@ class TurtleScreen:
     # Write to the Terminal Screen, to an in-memory Shadow, and to a Screen Log
     #
 
+    def write_some_controls(self, texts: list[str]) -> None:
+        """Write >= 0 Terminal Screen Control Sequence"""
+
+        for text in texts:
+            self.write_control(text)
+
     def write_control(self, text: str) -> None:
-        """Write Terminal Screen Controls"""
+        """Write 1 Terminal Screen Control Sequence"""
 
         if not text:
             return
@@ -3418,11 +3442,28 @@ class TurtleScreen:
         m = re.fullmatch(r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)", string=text)
         assert m, (m, text)
 
-        p = m.group(2)
-        i = m.group(3)
+        p = m.group(2)  # matches r'[0123456789:;<=>?]*'
+        i = m.group(3)  # matches r'[ !"#$%&'()*+,-./]*'
         f = m.group(4)
 
-        assert f in "GHm", (p, i, f, text)
+        assert f in "AGHm", (p, i, f, text)
+
+        def int_(text: str) -> int:
+            i = self.to_int_positive(text, default=1)
+            return i
+
+        #
+
+        assert CUU_Y == "\x1b" "[" "{}A"
+
+        if f == "A":
+            assert not i, (p, i, f, text)
+            pn = int_(p)
+
+            y = row_y - pn
+            self.row_y = y
+
+            return
 
         #
 
@@ -3430,9 +3471,9 @@ class TurtleScreen:
 
         if f == "G":
             assert not i, (p, i, f, text)
-            assert re.fullmatch(r"[0-9]+", string=p), (p, text)
+            pn = int_(p)
 
-            x = int(p)
+            x = pn
             self.column_x = x
 
             return
@@ -3445,15 +3486,16 @@ class TurtleScreen:
             assert not i, (p, i, f, text)
             assert re.fullmatch(r"[0-9;]+", string=p), (p, text)
             splits = p.split(";")
-            assert len(splits) in (0, 1, 2), (splits, p, text)
 
-            y = 1
-            x = 1
-            if splits and not splits[1:]:
-                y = int(splits[0])
-            else:
-                y = int(splits[0])
-                x = int(splits[1])
+            if not splits:
+                y = 1
+                x = 1
+            elif not splits[1:]:
+                y = int_(splits[0])
+                x = 1
+            else:  # silently drop splits[2] and following, if they exist
+                y = int_(splits[0])
+                x = int_(splits[1])
 
             self.row_y = y
             self.column_x = x
@@ -3479,6 +3521,17 @@ class TurtleScreen:
         if text != Plain:
             if text != OnBlack:
                 penscapes.append(text)
+
+    def to_int_positive(self, text: str, default: int) -> int:
+        """Convert >= 0 Decimal Digits to Positive Int >= 1, else return Default"""
+
+        i = int(text) if text else default
+        i = i if i > 0 else default
+
+        return i
+
+        # raises ValueError when given Chars from r'[:;<=>?]'
+        # even while macOS Terminal doesn't simply ignore all such Chars
 
     def write_text(self, text: str) -> None:
         """Write Terminal Screen Text, at the Cursor, in the present Style"""
@@ -4008,6 +4061,8 @@ class TurtleScreen:
 
         # Flush and block to read Y X
 
+        assert MAX_PN_32100 == 32100
+
         byte0 = os.read(fileno, 1)
         assert byte0 == b"\x1b", (byte0,)
 
@@ -4102,6 +4157,8 @@ PucklandWidth = 8 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitl
 PucklandHeight = 4 + len(textwrap.dedent(Puckland).strip().splitlines())
 
 assert (PucklandWidth, PucklandHeight) == (64, 37), (PucklandWidth, PucklandHeight)
+
+SouthPanelHeight = 2
 
 
 turtle_screen = TurtleScreen()
