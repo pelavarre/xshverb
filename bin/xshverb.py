@@ -3105,7 +3105,7 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: Tab and ⇧Tab for 8X Spacebar and 8x Backspace
+# FIXME: ⇧Tab for 8x Backspace
 # FIXME: let the Spacebar wrap the Puckman
 # FIXME: show convincingly that our stack can't reply to ⌘Z
 
@@ -3620,6 +3620,11 @@ class TurtleScreen:
             # tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
             # assert with_tcgetattr_ == with_tcgetattr, (with_tcgetattr_, with_tcgetattr)
 
+            return
+
+        if byte0 == b"\x09":  # Tab
+            for _ in range(8):  # 8 is classic str.expandtabs.tabsize
+                self.puck_move()
             return
 
         if byte0 == b"\x00":  # ⌃Spacebar
