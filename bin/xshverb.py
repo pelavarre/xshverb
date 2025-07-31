@@ -3054,7 +3054,7 @@ def do_turtling(argv: list[str]) -> None:
     atexit.register(lambda: ts.write_some_controls(["\x1b[32100H", "\x1b[A"]))
 
     d: dict[str, object] = dict()
-    d["br"] = ts.chat_line_break
+    d["br"] = ts.chat_line_break  # such as:  br();br();br();br();br()
     d["cls"] = ts.chat_clear
     d["play"] = ts.puck_play
     d["ts"] = ts
@@ -3105,8 +3105,9 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
+# FIXME: teach .puck_stomp_if to stomp in a corridor, but not over other " " Space marks
+
 # FIXME: ⇧Tab for 8x Backspace
-# FIXME: let the Spacebar wrap the Puckman
 # FIXME: show convincingly that our stack can't reply to ⌘Z
 
 # FIXME: ⌃Z or Backspace to undo the Spacebar - craft and list the undo actions, and
@@ -3509,13 +3510,14 @@ class TurtleScreen:
         Plain = "\x1b[m"
 
         OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
+        OnStomped = "\x1b[48;5;240m"
 
         Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
         Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
         Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
 
-        assert text in (Plain, OnBlack, Dot, Pellet, Puckman, Wall), (text,)
+        assert text in (Plain, OnBlack, OnStomped, Dot, Pellet, Puckman, Wall), (text,)
 
         penscapes.clear()
         if text != Plain:
@@ -3598,7 +3600,7 @@ class TurtleScreen:
         print("Thank you")
         self.chat_line_break()
 
-    def puck_try_play(self, with_tcgetattr: list[int]) -> None:
+    def puck_try_play(self, with_tcgetattr: list[int]) -> None:  # FIXME  # noqa C901
         """Reply to Keyboard Chords till Return pressed"""
 
         fileno = self.fileno
@@ -3670,6 +3672,7 @@ class TurtleScreen:
         text = textwrap.dedent(Puckland).strip()
 
         assert PucklandWidth == 64
+        assert FrameWidth == 4
         split_width = 64 - 4 - 4
 
         rows = ["", ""] + text.splitlines() + ["", ""]
@@ -3701,13 +3704,11 @@ class TurtleScreen:
 
         # Write the Puck into a Z Layer above the Puckland
 
+        self.puck_stomp()
+
         FullBlock = unicodedata.lookup("Full Block")  # '█'
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
         puckman_paints = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
-
-        # paints_below = self.puck_read_paints()
-        paint_eaten: tuple[Paint, Paint] = ((" ", []), (" ", []))
-        self.paints_below = paint_eaten
 
         self.write_control("\x1b7")
         self.puck_write(puckman_paints)
@@ -3792,6 +3793,8 @@ class TurtleScreen:
 
     def puck_step_down_else_wrap(self) -> None:
 
+        assert PuckHeight == 1
+
         puck_y = self.puck_y
         puck_y_min = self.puck_y_min
         puck_y_max = self.puck_y_max
@@ -3801,29 +3804,41 @@ class TurtleScreen:
         else:
             self.puck_warp_to_dy_dx(+1, dx=0)
 
+        self.puck_stomp_if()
+
     def puck_step_left_else_wrap(self) -> None:
 
         puck_x = self.puck_x
         puck_x_min = self.puck_x_min
         puck_x_max = self.puck_x_max
 
+        assert PuckWidth == 2
+
         if (puck_x - 2) < puck_x_min:
             self.puck_warp_to_dy_dx(0, dx=(puck_x_max - 1 - puck_x))
         else:
             self.puck_warp_to_dy_dx(0, dx=-2)
 
+        self.puck_stomp_if()
+
     def puck_step_right_else_wrap(self) -> None:
+
+        assert PuckWidth == 2
 
         puck_x = self.puck_x
         puck_x_min = self.puck_x_min
         puck_x_max = self.puck_x_max
 
-        if (puck_x + 2 + 1) > puck_x_max:
+        if (puck_x + 2 + (2 - 1)) > puck_x_max:
             self.puck_warp_to_dy_dx(0, dx=(puck_x_min - puck_x))
         else:
             self.puck_warp_to_dy_dx(0, dx=+2)
 
+        self.puck_stomp_if()
+
     def puck_step_up_else_wrap(self) -> None:
+
+        assert PuckHeight == 1
 
         puck_y = self.puck_y
         puck_y_min = self.puck_y_min
@@ -3834,12 +3849,35 @@ class TurtleScreen:
         else:
             self.puck_warp_to_dy_dx(-1, dx=0)
 
+        self.puck_stomp_if()
+
+    def puck_stomp_if(self) -> None:
+
+        paints = self.paints_below
+        ((ch0, penscapes_0), (ch1, penscapes_1)) = paints
+        pair = ch0 + ch1
+
+        # self.debug = getattr(self, "debug", 0) + 1
+        # if self.debug == 2:
+        #     print(repr(pair), ord(pair[0]), ord(pair[-1]), end="\r\n")
+        #     self.chat_line_break()
+
+        if pair in ("()", "@@"):
+            self.puck_stomp()
+
     def puck_move(self) -> None:
         """Move the Puck to a new Spot"""
 
         puck_dy = self.puck_dy
         puck_dx = self.puck_dx
-        puck_dydx = (puck_dy, puck_dx)
+
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
 
         # List the Moves
 
@@ -3862,50 +3900,72 @@ class TurtleScreen:
                 if pair == "  ":
                     empty_dydx_list.append(dydx)
 
-        # Drop the Moves into Empty when other Moves available
+        # Drop all the Moves into Empty when other Moves available
 
         pairs_set = set(pairs_by_dydx.values())
         if pairs_set != set(["  "]):
             for dydx in empty_dydx_list:
                 del pairs_by_dydx[dydx]
 
-        # Prefer to repeat the same Move
+        # Drop the Move of Backwards into Empty when other Moves available
+
+        inverse_puck_dydx = (-puck_dy, -puck_dx)
+        if inverse_puck_dydx in pairs_by_dydx.keys():
+            inverse_pair = pairs_by_dydx[inverse_puck_dydx]
+            if inverse_pair == "  ":
+                if len(pairs_by_dydx.values()) > 1:
+                    del pairs_by_dydx[inverse_puck_dydx]
+
+        # Choose 1 Move
 
         warp_dydx = random.choice(list(pairs_by_dydx.keys()))
-        if puck_dydx in pairs_by_dydx.keys():
-            warp_dydx = puck_dydx
 
-        # if not hasattr(TurtleScreen, "once"):
-        #     TurtleScreen.once = True
-        #
-        #     print(puck_dydx, warp_dydx, list(pairs_by_dydx.keys()), end="\r\n")
-        #     self.chat_line_break()
+        # Wrap around the Puckland, if moved out of bounds
 
-        # Move & eat
+        assert FrameWidth == 4
+        assert FrameHeight == 2
+        assert PuckWidth == 2
 
         (dy, dx) = warp_dydx
 
-        # print("warp_dydx", warp_dydx, end="\r\n")
-        # self.chat_line_break()
+        y = puck_y + dy
+        x = puck_x + dx
 
-        self.puck_warp_to_dy_dx(dy, dx=dx)
+        if y < puck_y_min + 2:  # our first Puckland didn't test wrapping Y
+            y = puck_y_max - 2
+        if y > puck_y_max - 2:
+            y = puck_y_min + 2
 
-        paint_eaten: tuple[Paint, Paint] = ((" ", []), (" ", []))
-        self.paints_below = paint_eaten  # maybe no change
+        if x < puck_x_min + 4:
+            x = puck_x_max - 4 - (2 - 1)
+        if x > puck_x_max - 4 - (2 - 1):
+            x = puck_x_min + 4
+
+        warp_dy = y - puck_y
+        warp_dx = x - puck_x
+
+        # Move & eat
+
+        self.puck_warp_to_dy_dx(warp_dy, dx=warp_dx)
+        self.puck_stomp()
+
+    def puck_stomp(self) -> None:
+        """Clear the Spot beneath the Puck"""
+
+        stomped_penscapes = ["\x1b[48;5;240m"]
+        paint_stomped: tuple[Paint, Paint]
+        paint_stomped = ((" ", stomped_penscapes), (" ", stomped_penscapes))
+
+        self.paints_below = paint_stomped
 
     def find_puck_moves(self) -> dict[int, dict[int, tuple[Paint, Paint]]]:
-        """List how the Puck can move"""
+        """List how the Puck can move, except do allow it to exit Puckland"""
 
         char_by_y_x = self.char_by_y_x
         penscapes_by_y_x = self.penscapes_by_y_x
 
         puck_y = self.puck_y
         puck_x = self.puck_x
-
-        puck_y_min = self.puck_y_min
-        puck_y_max = self.puck_y_max
-        puck_x_min = self.puck_x_min
-        puck_x_max = self.puck_x_max
 
         # Look down, left, right, & up
 
@@ -3915,16 +3975,6 @@ class TurtleScreen:
         for dy, dx in dydx_list:
             y = puck_y + dy
             x = puck_x + dx
-
-            # Only let the Puckman move across the Puckland
-
-            inside = False
-            if (puck_y_min + 2) <= y <= (puck_y_max - 2):
-                if (puck_x_min + 4) <= x <= x + 1 <= (puck_x_max - 4):
-                    inside = True
-
-            if not inside:
-                continue
 
             # Let the Puckman move onto Dots, Pellets, and Spaces (but not Walls)
 
@@ -3969,7 +4019,7 @@ class TurtleScreen:
 
         self.puck_y += dy
         self.puck_x += dx
-        next_paints_below = self.puck_read_paints()
+        puck_read = self.puck_read()
         self.puck_write(puckman_paints)
 
         self.puck_y -= dy
@@ -3978,14 +4028,14 @@ class TurtleScreen:
 
         self.puck_y += dy
         self.puck_x += dx
-        self.paints_below = next_paints_below
+        self.paints_below = puck_read
 
         self.write_control("\x1b8")
         stdio.flush()
 
         # FIXME: solve overlapping moves, such as:  ts.puck_warp_to_dy_dx(dy=0, dx=1)
 
-    def puck_read_paints(self) -> tuple[Paint, Paint]:
+    def puck_read(self) -> tuple[Paint, Paint]:
         """Read the Puck from the Terminal Screen"""
 
         y = self.puck_y
@@ -4158,12 +4208,18 @@ Puckland = """
 
 assert "█" == unicodedata.lookup("Full Block")
 
-PucklandWidth = 8 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitlines())
-PucklandHeight = 4 + len(textwrap.dedent(Puckland).strip().splitlines())
+FrameWidth = 4
+FrameHeight = 2
+
+PucklandWidth = 4 + 4 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitlines())
+PucklandHeight = 2 + 2 + len(textwrap.dedent(Puckland).strip().splitlines())
 
 assert (PucklandWidth, PucklandHeight) == (64, 37), (PucklandWidth, PucklandHeight)
 
 SouthPanelHeight = 2
+
+PuckHeight = 1
+PuckWidth = 2
 
 
 turtle_screen = TurtleScreen()
