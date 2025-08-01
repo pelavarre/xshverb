@@ -3105,7 +3105,7 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: teach .puck_stomp_if to stomp in a Corridor, but not over other " " Space marks
+# FIXME: backport to 2018 Python 3.7
 
 # FIXME: score the Dots and Pellets eaten
 # FIXME: declare a win when all Corridor Spots stomped
@@ -3116,7 +3116,8 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: ⇧Tab for 8x Backspace
 # FIXME: show convincingly that our stack can't reply to ⌘Z
 
-# FIXME: Ms Pac-Man
+# FIXME: Ms Pac-Man, Snake, Pong
+# FIXME: Tic-Tac-Toe, Checkers, Chess
 # FIXME: Ghosts!
 # FIXME: Moar Levels!!
 # FIXME: Multiplayer!!
@@ -3226,10 +3227,16 @@ class TurtleScreen:
     pin_y: int = +1
     pin_x: int = +1
 
+    #
+
     puck_y_min: int = -1
     puck_y_max: int = -1
     puck_x_min: int = -1
     puck_x_max: int = -1
+
+    puckland_rows: list[str] = list()
+
+    #
 
     puck_y: int = -1
     puck_x: int = -1
@@ -3237,6 +3244,8 @@ class TurtleScreen:
 
     puck_dy: int = 0  # initially (0, +2) Right
     puck_dx: int = +2
+
+    #
 
     def __init__(self) -> None:
 
@@ -3673,6 +3682,7 @@ class TurtleScreen:
         """Write the Rows of the Puckland"""
 
         puck_x_min = self.puck_x_min
+        puckland_rows = self.puckland_rows
 
         # Pull the Rows from the Puckland Plain Text and frame them on all 4 Sides
 
@@ -3685,6 +3695,12 @@ class TurtleScreen:
         rows = ["", ""] + text.splitlines() + ["", ""]
         rows = list(_.ljust(split_width) for _ in rows)
         rows = list(("    " + _ + "    ") for _ in rows)
+
+        if puckland_rows:  # todo: stop re-calc'ing identically more than once
+            assert puckland_rows == rows, (puckland_rows, rows)
+
+        puckland_rows.clear()
+        puckland_rows.extend(rows)
 
         # Write Framed Rows on a Colored Background, and find the Puck
 
@@ -3744,8 +3760,8 @@ class TurtleScreen:
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
 
-        penscape_by_ch = {
-            "(": Pellet,
+        penscape_by_ch = {  # omits the " " Space, the "." Full-Stop, and every kind of Wall
+            "(": Pellet,  # aka Coin
             ")": Pellet,
             "@": Dot,
             FullBlock: Puckman,
@@ -3757,8 +3773,10 @@ class TurtleScreen:
         pentext = ""
 
         pentexts = list()
-        for i, ch_ in enumerate(text):
+        for i, ch__ in enumerate(text):
             x = column_x + i
+
+            ch_ = " " if (ch__ == ".") else ch__
 
             ch = ch_
             if ch_ == FullBlock:
@@ -3859,17 +3877,12 @@ class TurtleScreen:
         self.puck_stomp_if()
 
     def puck_stomp_if(self) -> None:
+        """Lay down a Trail if on a Dot, on a Pellet, or in a Corridor"""
 
-        paints = self.paints_below
-        ((ch0, penscapes_0), (ch1, penscapes_1)) = paints
+        (ch0, ch1) = self.puck_read_layout()
+
         pair = ch0 + ch1
-
-        # self.debug = getattr(self, "debug", 0) + 1
-        # if self.debug == 2:
-        #     print(repr(pair), ord(pair[0]), ord(pair[-1]), end="\r\n")
-        #     self.chat_line_break()
-
-        if pair in ("()", "@@"):
+        if pair in ("  ", "()", "@@"):
             self.puck_stomp()
 
     def puck_move(self) -> None:
@@ -4045,6 +4058,44 @@ class TurtleScreen:
 
         # FIXME: solve overlapping moves, such as:  ts.puck_warp_to_dy_dx(dy=0, dx=1)
 
+    def puck_read_layout(self) -> tuple[str, str]:
+        """Read the Puck from the Layout"""
+
+        y = self.puck_y
+        x = self.puck_x
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        puckland_rows = self.puckland_rows
+
+        assert FrameHeight == 2
+        assert FrameWidth == 4
+
+        if y < puck_y_min + 2:
+            return (".", ".")
+        if y > puck_y_max - 2:
+            return (".", ".")
+
+        if x < puck_x_min + 4:
+            return (".", ".")
+        if x > puck_x_max - 4 - (2 - 1):
+            return (".", ".")
+
+        assert PuckHeight == 1
+        assert PuckWidth == 2
+
+        i = y - puck_y_min
+        j = x - puck_x_min
+
+        row = puckland_rows[i]
+        ch0 = row[j + 0]
+        ch1 = row[j + 1]
+
+        return (ch0, ch1)
+
     def puck_read(self) -> tuple[Paint, Paint]:
         """Read the Puck from the Terminal Screen"""
 
@@ -4184,7 +4235,7 @@ Puckland = """
     │┌────────────────────────┐  ┌────────────────────────┐│
     ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
     ││()┌──────┐()┌────────┐()│  │()┌────────┐()┌──────┐()││
-    ││@@│      │()│        │()│  │()│        │()│      │@@││
+    ││@@│ .... │()│ ...... │()│  │()│ ...... │()│ .... │@@││
     ││()└──────┘()└────────┘()└──┘()└────────┘()└──────┘()││
     ││()()()()()()()()()()()()()()()()()()()()()()()()()()││
     ││()┌──────┐()┌──┐()┌──────────────┐()┌──┐()┌──────┐()││
@@ -4192,13 +4243,13 @@ Puckland = """
     ││()()()()()()│  │()()()()│  │()()()()│  │()()()()()()││
     │└─────────┐()│  └─────┐  │  │  ┌─────┘  │()┌─────────┘│
     └─────────┐│()│  ┌─────┘  └──┘  └─────┐  │()│┌─────────┘
-              ││()│  │                    │  │()││
+    ..........││()│  │                    │  │()││..........
     ──────────┘│()│  │  ┌─────----─────┐  │  │()│└──────────
     ───────────┘()└──┘  │┌────----────┐│  └──┘()└───────────
-                ()      ││            ││      ()
+                ()      ││............││      ()
     ───────────┐()┌──┐  │└────────────┘│  ┌──┐()┌───────────
     ──────────┐│()│  │  └──────────────┘  │  │()│┌──────────
-              ││()│  │                    │  │()││
+    ..........││()│  │                    │  │()││..........
     ┌─────────┘│()│  │  ┌──────────────┐  │  │()│└─────────┐
     │┌─────────┘()└──┘  └─────┐  ┌─────┘  └──┘()└─────────┐│
     ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
