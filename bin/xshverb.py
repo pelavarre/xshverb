@@ -83,9 +83,14 @@ import termios
 import textwrap
 import tty
 import types
+import typing
 import unicodedata
 import urllib.parse
-import zoneinfo  # new since Oct/2020 Python 3.9
+
+if sys.version_info >= (3, 9):
+    import zoneinfo  # new since Oct/2020 Python 3.9
+else:
+    zoneinfo = None
 
 
 _: dict[str, int] | None  # new since Oct/2021 Python 3.10
@@ -107,9 +112,10 @@ _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgPar
 GatewayVerbs = ("d", "dot", "dt", "e", "g", "k", "v")  # these eat args despite str_is_identifier_ish
 
 
-Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
-PacificLaunch = dt.datetime.now(Pacific)
-UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
+if zoneinfo:
+    Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
+    PacificLaunch = dt.datetime.now(Pacific)
+    UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
 AppPathname = "__pycache__/p.pbpaste"  # traces the last Pipe
@@ -125,7 +131,13 @@ ScreenWriteLogPathname = "__pycache__/s.screen"  # yes, a ScreenLog  # yes, a Sc
 
 ScreenWriteLogPath = pathlib.Path(ScreenWriteLogPathname)
 ScreenWriteLogPath.parent.mkdir(exist_ok=True)  # implicit .parents=False
-ScreenWriteLogPath.unlink(missing_ok=True)
+if sys.version_info >= (3, 8):
+    ScreenWriteLogPath.unlink(missing_ok=True)
+else:
+    try:
+        ScreenWriteLogPath.unlink()
+    except FileNotFoundError:
+        pass
 
 ScreenWriteLog = ScreenWriteLogPath.open("a")
 
@@ -1886,7 +1898,7 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
 
         try:
             re.compile(pattern)
-        except re.PatternError:
+        except re.PatternError:  # todo: often PyLance struggles to define re.PatternError
             return False
 
         if "(" not in pattern:
@@ -3106,6 +3118,7 @@ def do_turtling(argv: list[str]) -> None:
 
 
 # FIXME: backport to 2018 Python 3.7
+# FIXME: report sha version of this Source Code
 
 # FIXME: score the Dots and Pellets eaten
 # FIXME: declare a win when all Corridor Spots stomped
@@ -3114,7 +3127,6 @@ def do_turtling(argv: list[str]) -> None:
 
 # FIXME: Backspace or ⌃Z to undo the Spacebar - craft and list the undo actions
 # FIXME: ⇧Tab for 8x Backspace
-# FIXME: show convincingly that our stack can't reply to ⌘Z
 
 # FIXME: Ms Pac-Man, Snake, Pong
 # FIXME: Tic-Tac-Toe, Checkers, Chess
@@ -3207,7 +3219,8 @@ class TurtleConsole(code.InteractiveConsole):
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
 
-Paint = tuple[str, list[str]]
+# Paint = tuple[str, list[str]]  # since Oct/2020 Python 3.9
+Paint = typing.Tuple[str, typing.List[str]]
 
 
 class TurtleScreen:
