@@ -3105,7 +3105,6 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: don't randomly choose to undo a warp, after doing a warp for Spacebar or Tab
 # FIXME: teach .puck_stomp_if to stomp in a Corridor, but not over other " " Space marks
 
 # FIXME: score the Dots and Pellets eaten
@@ -3117,8 +3116,10 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: ⇧Tab for 8x Backspace
 # FIXME: show convincingly that our stack can't reply to ⌘Z
 
+# FIXME: Ms Pac-Man
 # FIXME: Ghosts!
 # FIXME: Moar Levels!!
+# FIXME: Multiplayer!!
 
 # FIXME: factor the Puckman Game out of the Class TurtleScreen
 # FIXME: deploy Class TerminalBytePacket into XShVerb Py
@@ -3877,14 +3878,6 @@ class TurtleScreen:
         puck_dy = self.puck_dy
         puck_dx = self.puck_dx
 
-        puck_y = self.puck_y
-        puck_x = self.puck_x
-
-        puck_y_min = self.puck_y_min
-        puck_y_max = self.puck_y_max
-        puck_x_min = self.puck_x_min
-        puck_x_max = self.puck_x_max
-
         # List the Moves
 
         paints_by_dy_dx = self.find_puck_moves()
@@ -3924,31 +3917,7 @@ class TurtleScreen:
 
         # Choose 1 Move
 
-        warp_dydx = random.choice(list(pairs_by_dydx.keys()))
-
-        # Wrap around the Puckland, if moved out of bounds
-
-        assert FrameWidth == 4
-        assert FrameHeight == 2
-        assert PuckWidth == 2
-
-        (dy, dx) = warp_dydx
-
-        y = puck_y + dy
-        x = puck_x + dx
-
-        if y < puck_y_min + 2:  # our first Puckland didn't test wrapping Y
-            y = puck_y_max - 2
-        if y > puck_y_max - 2:
-            y = puck_y_min + 2
-
-        if x < puck_x_min + 4:
-            x = puck_x_max - 4 - (2 - 1)
-        if x > puck_x_max - 4 - (2 - 1):
-            x = puck_x_min + 4
-
-        warp_dy = y - puck_y
-        warp_dx = x - puck_x
+        (warp_dy, warp_dx) = random.choice(list(pairs_by_dydx.keys()))
 
         # Move & eat
 
@@ -3973,11 +3942,13 @@ class TurtleScreen:
         puck_y = self.puck_y
         puck_x = self.puck_x
 
-        # Look down, left, right, & up
+        # Look down, left, right, & up - and through the warp to the far edge, if need be
 
         paints_by_dy_dx: dict[int, dict[int, tuple[Paint, Paint]]] = dict()
 
-        dydx_list = ((+1, 0), (0, -2), (0, +2), (-1, 0))
+        ideal_dydx_list = ((+1, 0), (0, -2), (0, +2), (-1, 0))
+        dydx_list = list(self.dy_dx_puck_wrap(*_) for _ in ideal_dydx_list)
+
         for dy, dx in dydx_list:
             y = puck_y + dy
             x = puck_x + dx
@@ -4007,6 +3978,39 @@ class TurtleScreen:
             dy_paints_by_dy_dx[dx] = paints
 
         return paints_by_dy_dx
+
+    def dy_dx_puck_wrap(self, dy: int, dx: int) -> tuple[int, int]:
+        """Wrap the Puck from edge to edge"""
+
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        assert FrameWidth == 4
+        assert FrameHeight == 2
+        assert PuckWidth == 2
+
+        y = puck_y + dy
+        x = puck_x + dx
+
+        if y < puck_y_min + 2:  # our first Puckland didn't test wrapping Y
+            y = puck_y_max - 2
+        if y > puck_y_max - 2:
+            y = puck_y_min + 2
+
+        if x < puck_x_min + 4:
+            x = puck_x_max - 4 - (2 - 1)
+        if x > puck_x_max - 4 - (2 - 1):
+            x = puck_x_min + 4
+
+        dy = y - puck_y  # replaces, might change
+        dx = x - puck_x  # replaces, might change
+
+        return (dy, dx)
 
     def puck_warp_to_dy_dx(self, dy: int, dx: int) -> None:
         """Leap the Puck from spot to spot"""
