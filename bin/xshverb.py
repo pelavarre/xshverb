@@ -72,6 +72,7 @@ import pathlib
 import pdb
 import random
 import re
+import select
 import shlex
 import shutil
 import signal
@@ -154,6 +155,9 @@ assert with_sys_except_hook.__name__ == "excepthook", (with_sys_except_hook.__na
 
 assert int(0x80 + signal.SIGINT) == 130  # 'mypy --strict' needs the int() here
 
+assert sys.__stderr__ is not None
+WITH_STDERR_TCGETATTR = termios.tcgetattr(sys.__stderr__.fileno())
+
 
 def excepthook(
     exc_type: type[BaseException],
@@ -164,6 +168,19 @@ def excepthook(
     if exc_type is KeyboardInterrupt:
         sys.stderr.write("\n")
         sys.exit(130)  # 0x80 + signal.SIGINT
+
+    # if True:  # FIXME: the .setraw should finally undo itself, when covered by pdb.pm?
+    #
+    #     assert sys.__stderr__ is not None
+    #     sys.__stderr__.write("\x1b[m")
+    #
+    #     sys.__stderr__.flush()  # before .with_sys_except_hook
+    #
+    #     when = termios.TCSADRAIN
+    #     attributes = WITH_STDERR_TCGETATTR
+    #     termios.tcsetattr(sys.__stderr__.fileno(), when, attributes)
+    #
+    #     pass
 
     with_sys_except_hook(exc_type, exc_value, exc_traceback)
 
@@ -3033,6 +3050,7 @@ TURTLING_DOC = r"""
 def do_turtling(argv: list[str]) -> None:
     """Launch a chat with Python Turtles"""
 
+    pcp = puck_color_picker
     ts = turtle_screen
 
     # Form Shell Args Parser
@@ -3068,6 +3086,7 @@ def do_turtling(argv: list[str]) -> None:
     d: dict[str, object] = dict()
     d["br"] = ts.chat_line_break  # such as:  br();br();br();br();br()
     d["cls"] = ts.chat_clear
+    d["color"] = pcp.puck_pick
     d["play"] = ts.puck_play
     d["ts"] = ts
     d["turtling"] = ts  # as if 'import turtling'
@@ -3139,6 +3158,368 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: option to debug with not raw except during input
 
 
+class PuckColorPicker:  # type of .pcp, .puck_color_picker
+    """Pick Colors"""
+
+    # FIXME: search and replace the Screen Shadows of Tile to its new Color
+
+    tile: str = "Floor"
+    lamp_if: str = ""  # one of '', 'Red', 'Green', 'Blue'
+
+    penscapes_by_tile: dict[str, list[str]] = {
+        "Dot": ["\x1b[38;5;219m"],
+        "Floor": ["\x1b[48;5;232m"],
+        "Pellet": ["\x1b[38;5;214m"],
+        "Puck": ["\x1b[38;5;184m"],
+        "Stomp": ["\x1b[48;5;240m"],
+        "Wall": ["\x1b[38;5;39m"],
+    }
+
+    def puck_pick(self) -> None:
+        """Take in Keyboard Chords to pick Colors, till Return pressed"""
+
+        ts = turtle_screen
+
+        fileno = ts.fileno
+
+        text = "Press Return or Esc"
+        text += ", after Tab and ⇧Tab and R G B or W and the ↑ ↓ Arrows"
+        print(text)
+
+        with_tcgetattr = termios.tcgetattr(fileno)
+        tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
+
+        self.print_focus_br()
+
+        try:
+            while True:
+                self.puck_try_pick(with_tcgetattr)
+        except SystemExit:
+            pass
+        finally:
+
+            when = termios.TCSADRAIN
+            attributes = with_tcgetattr
+            termios.tcsetattr(fileno, when, attributes)
+
+        ts.chat_line_break()
+        ts.chat_line_break()
+        print("Thank you")
+
+    def puck_try_pick(self, with_tcgetattr: list[int]) -> None:
+        """Take in Keyboard Chords to pick Colors, till Return pressed"""
+
+        ts = turtle_screen
+
+        fileno = ts.fileno
+        stdio = ts.stdio
+
+        stdio.flush()  # before os.read of .puck_try_play
+
+        byte0 = os.read(fileno, 1)
+        if byte0 == b"\r":
+            sys.exit()
+
+        if byte0 == b"\x09":  # Tab
+            self.do_tab()
+            return
+
+        if byte0.upper() == b"R":  # R r
+            self.pick_lamp("Red")
+            return
+        if byte0.upper() == b"G":  # G g
+            self.pick_lamp("Green")
+            return
+        if byte0.upper() == b"B":  # B b
+            assert False
+            self.pick_lamp("Blue")
+            return
+        if byte0.upper() == b"W":  # W w
+            self.pick_lamp("")  # Grayscale
+            return
+
+        # FIXME: blocks after 1..N Prefix Bytes
+
+        if byte0 == b"\x1b":
+            if not ts.kbhit(timeout=0.000):  # Esc
+                self.do_esc()
+                sys.exit()
+            else:
+                byte1 = os.read(fileno, 1)
+                if byte1 == b"[":
+                    byte2 = os.read(fileno, 1)
+
+                    # ← ↑ → ↓ Arrows
+
+                    if byte2 == b"B":  # ↓ Down
+                        self.do_down()
+                        return
+                    elif byte2 == b"D":  # ← Left
+                        self.do_untab()
+                        return
+                    elif byte2 == b"C":  # → Right
+                        self.do_tab()
+                        return
+                    elif byte2 == b"A":  # ↑ Up
+                        self.do_up()
+                        return
+
+                    # ⇧Tab
+
+                    elif byte2 == b"Z":  # ⇧Tab
+                        self.do_untab()
+                        return
+
+        stdio.write("\a")
+
+    def do_tab(self) -> None:
+        """Step up one Tile, and forget choice of Lamp"""
+
+        ts = turtle_screen
+
+        self._tile_step(1)
+
+        if self.tile == "Floor":
+            print()
+            ts.chat_line_break()
+
+        self.print_focus_br()
+
+    def do_untab(self) -> None:
+        """Step down one Tile, and forget choice of Lamp"""
+
+        ts = turtle_screen
+
+        if self.tile == "Floor":
+            print()
+            ts.chat_line_break()
+
+        self._tile_step(-1)
+
+        self.print_focus_br()
+
+    def _tile_step(self, step: int) -> None:
+        """Step up or down one Tile, and forget choice of Lamp"""
+
+        penscapes_by_tile = self.penscapes_by_tile
+        tile = self.tile
+
+        tiles = list(penscapes_by_tile.keys())
+
+        i = tiles.index(tile)
+        i = (i + step) % len(tiles)
+
+        next_tile = tiles[i]
+
+        self.tile = next_tile
+        self.lamp_if = ""
+
+    def pick_lamp(self, lamp: str) -> None:
+        """Choose the Lamp to tune"""
+
+        assert lamp in ("", "Red", "Green", "Blue"), (lamp,)
+
+        lamp_if = self.lamp_if
+        tile = self.tile
+
+        ts = turtle_screen
+        stdio = ts.stdio
+
+        (m_int, str_m_int, m_colorspace_if) = self._color_plus_decode(tile, lamp_if=lamp_if, step=0)
+        assert m_colorspace_if in ("", "RGB", "W"), (m_colorspace_if,)
+
+        # Change Colorspace only when at max Black or at max White
+
+        if m_colorspace_if == "RGB":
+            if m_int not in (16, 16 + 216 - 1):  # Black, White
+                if lamp == "":
+                    stdio.write("\a")
+                    return
+
+        if m_colorspace_if == "W":
+            if m_int not in (16 + 216 - 1, 16 + 216):  # White, Black
+                if lamp != "":
+                    stdio.write("\a")
+                    return
+
+        # Change Black Encoding to fit Colorspace
+
+        if m_int == 16:  # RGB Black
+            if lamp == "":
+                warp_m_int = 16 + 216  # Grayscale Black
+                self._color_warp(warp_m_int)
+
+        if m_int == (16 + 216):  # Grayscale Black
+            if lamp:
+                warp_m_int = 16  # RGB Black
+                self._color_warp(warp_m_int)
+
+        # Succeed
+
+        self.lamp_if = lamp
+        self.print_focus_br()
+
+    def do_up(self) -> None:
+        """Tune the Lamp up"""
+
+        self._color_step(1)
+        self.print_focus_br()
+
+    def do_down(self) -> None:
+        """Tune the Lamp down"""
+
+        self._color_step(-1)
+        self.print_focus_br()
+
+    def _color_warp(self, warp_m_int: int) -> None:
+        """Swap out Grayscale for R G B, or vice versa"""
+
+        tile = self.tile
+        penscapes_by_tile = self.penscapes_by_tile
+
+        penscapes = penscapes_by_tile[tile]
+        assert len(penscapes) == 1, (penscapes,)
+        penscape = penscapes[-1]
+
+        parts = list(penscape.rpartition(";"))
+        parts[-1] = f"{warp_m_int}m"
+        next_penscape = "".join(parts)
+
+        penscapes_by_tile[tile] = [next_penscape]
+
+    def _color_step(self, step: int) -> None:
+        """Tune the Lamp up or down"""
+
+        lamp_if = self.lamp_if
+        penscapes_by_tile = self.penscapes_by_tile
+        tile = self.tile
+
+        penscapes = penscapes_by_tile[tile]
+        assert len(penscapes) == 1, (penscapes,)
+        penscape = penscapes[-1]
+
+        (m_int, str_m_int, m_colorspace_if) = self._color_plus_decode(
+            tile, lamp_if=lamp_if, step=step
+        )
+
+        parts = list(penscape.rpartition(";"))
+        parts[-1] = f"{m_int}m"
+        next_penscape = "".join(parts)
+
+        penscapes_by_tile[tile] = [next_penscape]
+
+    def _color_plus_decode(self, tile: str, lamp_if: str, step: int) -> tuple[int, str, str]:
+        """Sketch the Lamp as coded for Esc [ m and as R G B or W"""
+
+        assert tile in ("Dot", "Floor", "Pellet", "Puck", "Stomp", "Wall"), (tile,)
+        assert lamp_if in ("", "Red", "Green", "Blue"), (lamp_if,)
+
+        penscapes_by_tile = self.penscapes_by_tile
+
+        # Decode the Penscape
+
+        penscapes = penscapes_by_tile[tile]
+        assert len(penscapes) == 1, (penscapes,)
+        penscape = penscapes[-1]
+
+        parts = list(penscape.rpartition(";"))
+
+        digits = parts[-1].split("m")[0]
+        digits_int = int(digits)
+        assert 16 <= digits_int <= 255 == 0xFF, (digits_int,)
+
+        # Pick out the Colorspace
+
+        if digits_int in (16, 16 + 216 - 1, 16 + 216):  # Black, White, Black
+            m_colorspace_if = ""
+            if lamp_if:
+                m_colorspace_if = "RGB"
+        elif 16 < digits_int < 16 + 216 - 1:
+            m_colorspace_if = "RGB"
+        else:
+            assert digits_int >= 16 + 216, (digits_int,)
+            m_colorspace_if = "W"
+
+        # Step through Grayscale
+
+        if m_colorspace_if != "RGB":
+            assert 16 + 216 - 1 <= digits_int <= 256 == 0x100, (digits_int,)
+
+            graydiff = digits_int - (16 + 216)  # -1..23
+            grayscale = 24 if (graydiff == -1) else graydiff  # 0..24
+
+            if (grayscale + step) < 0:
+                m_graydiff = graydiff
+            elif (grayscale + step) > 24:
+                m_graydiff = graydiff
+            else:
+                m_graydiff = (grayscale + step) % 25  # 0..24
+
+            m_grayscale = -1 if (m_graydiff == 24) else m_graydiff  # -1..23
+
+            m_int = 16 + 216 + m_grayscale
+            str_m_int = f"{grayscale}"
+
+        # Else step through R or G or B
+
+        else:
+            assert 16 <= digits_int <= 16 + 216 - 1, (digits_int,)
+
+            rgb = digits_int - 16
+
+            r = rgb // (6 * 6)
+            g = (rgb // 6) % 6
+            b = rgb % 6
+
+            (mr, mb, mg) = (r, b, g)
+            if lamp_if == "Red":
+                mr = r + step
+                mr = max(0, min(5, mr))
+            elif lamp_if == "Green":
+                mg = g + step
+                mg = max(0, min(5, mg))
+            elif lamp_if == "Blue":
+                mb = b + step
+                mb = max(0, min(5, mb))
+
+            m_rgb = mr * 6 * 6 + mg * 6 + mb
+
+            m_int = 16 + m_rgb
+            str_m_int = f"{mr} {mg} {mb}"
+
+        # Succeed
+
+        return (m_int, str_m_int, m_colorspace_if)
+
+        # (16, "0 0 0")
+        # (231, "5 5 5")
+        # (231, "24")
+
+    def print_focus_br(self) -> None:
+        """Print the Focus, with a Line Break"""
+
+        lamp_if = self.lamp_if
+        tile = self.tile
+
+        ts = turtle_screen
+
+        (m_int, str_m_int, m_colorspace_if) = self._color_plus_decode(tile, lamp_if=lamp_if, step=0)
+
+        print(f"{tile=} {lamp_if=} {str_m_int}", end="\r\n")
+        ts.chat_line_break()
+
+    def do_esc(self) -> None:
+        """Cancel the Color Pick"""
+
+        ts = turtle_screen
+
+        print("Cancelling Color Changes ...", end="\r\n")
+        ts.chat_line_break()
+
+        penscapes_by_tile = self.penscapes_by_tile
+        penscapes_by_tile.update(PuckColorPicker.penscapes_by_tile)
+
+
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
 
 DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
@@ -3200,7 +3581,7 @@ class TurtleConsole(code.InteractiveConsole):
             ts.chat_line_break()
 
         stdio.write("\x1b[35m" + prompt + "\x1b[m" + "\x1b[1m")
-        stdio.flush()  # before .raw_input
+        stdio.flush()  # for TurtleConsole.raw_input before super
 
         # Write the Prompt, then flush and block to read & echo the Input
 
@@ -3223,7 +3604,7 @@ class TurtleConsole(code.InteractiveConsole):
 Paint = typing.Tuple[str, typing.List[str]]
 
 
-class TurtleScreen:
+class TurtleScreen:  # type of .ts, .turtle_screen
     """Amp up writes to the Terminal Screen"""
 
     # runs partly, not wholly, like io.TextIOWrapper(io.BytesIO())
@@ -3302,7 +3683,8 @@ class TurtleScreen:
     def flush(self) -> None:
         """Run in place of Flush by Sys Stdout/Stderr"""
 
-        self.stdio.flush()
+        stdio = self.stdio
+        stdio.flush()  # for TurtleScreen.flush
 
         # runs in place of io.TextIOWrapper.flush
         # might could run for a FileNo or FD, on termios.tcflush termios.TCOFLUSH
@@ -3347,7 +3729,10 @@ class TurtleScreen:
     def pane_resume(self) -> None:
         """Resume (or start persisting) the Turtle Screen Pane"""
 
+        stdio = self.stdio
+
         self.chat_clear()
+        stdio.flush()  # for .pane_resume
         print("To get started, try:  cls(); play()")
 
         # our 'Turtle Screen Pane' rhymes with the Python Turtle Graphics Window
@@ -3381,7 +3766,7 @@ class TurtleScreen:
 
         stdio.write("\x1b[H")  # warps to Upper Left
 
-        stdio.flush()  # before Python Chat places its Prompt
+        stdio.flush()  # at exit of .chat_clear, for when called from Repl
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
@@ -3408,7 +3793,7 @@ class TurtleScreen:
         stdio.write("\x1b[A")  # warps up into the Row that was at pin
         stdio.write("\x1b[L")  # inserts a Row
 
-        stdio.flush()  # before Python Chat places its Prompt
+        stdio.flush()  # at exit of .chat_line_break, for when called from Repl
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
@@ -3602,15 +3987,13 @@ class TurtleScreen:
     #
 
     def puck_play(self) -> None:
-        """Reply to Keyboard Chords till Return pressed"""
+        """Take in Keyboard Chords to play Puckman, till Return pressed"""
 
         fileno = self.fileno
-        stdio = self.stdio
 
         text = "Press Return to stop play,"
-        text += " else Spacebar or Tab and the ← ↑ → ↓ Arrows to play\n"
-        stdio.write(text)
-        stdio.flush()
+        text += " else Spacebar or Tab and the ← ↑ → ↓ Arrows to play"
+        print(text)
 
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
@@ -3626,14 +4009,17 @@ class TurtleScreen:
             attributes = with_tcgetattr
             termios.tcsetattr(fileno, when, attributes)
 
-        print("Thank you")
         self.chat_line_break()
+        self.chat_line_break()
+        print("Thank you")
 
     def puck_try_play(self, with_tcgetattr: list[int]) -> None:  # FIXME  # noqa C901
         """Reply to Keyboard Chords till Return pressed"""
 
         fileno = self.fileno
         stdio = self.stdio
+
+        stdio.flush()  # before os.read of .puck_try_play
 
         byte0 = os.read(fileno, 1)
         if byte0 == b"\r":
@@ -3663,33 +4049,59 @@ class TurtleScreen:
                 self.puck_move()
             return
 
+        # FIXME: blocks after 1..N Prefix Bytes
+
         if byte0 == b"\xc2":
-            byte1 = os.read(fileno, 1)  # FIXME: blocks after Utf-8 Prefix
+            byte1 = os.read(fileno, 1)
             if byte1 == b"\xa0":  # ⌥Spacebar
                 for _ in range(25):
                     self.puck_move()
                 return
 
         if byte0 == b"\x1b":
-            byte1 = os.read(fileno, 1)  # FIXME: blocks after Esc
+            byte1 = os.read(fileno, 1)
             if byte1 == b"[":
-                byte2 = os.read(fileno, 1)  # FIXME: blocks after Esc [
+                byte2 = os.read(fileno, 1)
 
-                if byte2 == b"B":  # Down
+                # ← ↑ → ↓ Arrows
+
+                if byte2 == b"B":  # ↓ Down
                     self.puck_step_down_else_wrap()
                     return
-                elif byte2 == b"D":  # Left
+                elif byte2 == b"D":  # ← Left
                     self.puck_step_left_else_wrap()
                     return
-                elif byte2 == b"C":  # Right
+                elif byte2 == b"C":  # → Right
                     self.puck_step_right_else_wrap()
                     return
-                elif byte2 == b"A":  # Up
+                elif byte2 == b"A":  # ↑ Up
                     self.puck_step_up_else_wrap()
                     return
 
+                # ⇧ Fn ← ↑ → ↓ Arrows
+
+                elif byte2 == b"6":
+                    byte3 = os.read(fileno, 1)
+                    if byte3 == b"~":  # ⇧ Fn ↓ Down
+                        self.puck_warp_to_dy_dx(dy=4, dx=0)
+                        self.puck_stomp_if()
+                        return
+                elif byte2 == b"H":  # ⇧ Fn ← Left
+                    self.puck_warp_to_dy_dx(dy=0, dx=-4 * 2)
+                    self.puck_stomp_if()
+                    return
+                elif byte2 == b"F":  # ⇧ Fn → Right
+                    self.puck_warp_to_dy_dx(dy=0, dx=4 * 2)
+                    self.puck_stomp_if()
+                    return
+                elif byte2 == b"5":
+                    byte3 = os.read(fileno, 1)
+                    if byte3 == b"~":  # ⇧ Fn ↑ Up
+                        self.puck_warp_to_dy_dx(dy=-4, dx=0)
+                        self.puck_stomp_if()
+                        return
+
         stdio.write("\a")
-        stdio.flush()  # sounds the Bell immediately
 
     def puck_rows_write(self) -> None:
         """Write the Rows of the Puckland"""
@@ -4045,7 +4457,6 @@ class TurtleScreen:
         self.puck_dx = dx
 
         paints_below = self.paints_below
-        stdio = self.stdio
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
         Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
@@ -4067,7 +4478,6 @@ class TurtleScreen:
         self.paints_below = puck_read
 
         self.write_control("\x1b8")
-        stdio.flush()
 
         # FIXME: solve overlapping moves, such as:  ts.puck_warp_to_dy_dx(dy=0, dx=1)
 
@@ -4168,6 +4578,21 @@ class TurtleScreen:
     # Chat with the Terminal, and update its in-memory Shadow
     #
 
+    def kbhit(self, timeout: float) -> bool:
+        """Block till next Input Byte, else till Timeout, else till forever"""
+
+        fileno = self.fileno
+        stdio = self.stdio
+
+        stdio.flush()  # before select.select of .kbhit
+
+        (r, w, x) = select.select([fileno], [], [], timeout)
+        hit = fileno in r
+
+        return hit
+
+        # 'timeout' is 0 for Now, None for Never, else a Count of Seconds
+
     def row_y_column_x_read(self) -> tuple[int, int]:
         """Sample Cursor Row & Column"""
 
@@ -4180,13 +4605,11 @@ class TurtleScreen:
 
         # Ask for Y X
 
-        stdio.flush()
-
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
         stdio.write("\x1b[6n")  # bypass the in-memory Shadow
-        stdio.flush()
+        stdio.flush()  # before os.read of .row_y_column_x_read
 
         # Flush and block to read Y X
 
@@ -4296,6 +4719,7 @@ PuckHeight = 1
 PuckWidth = 2
 
 
+puck_color_picker = PuckColorPicker()
 turtle_screen = TurtleScreen()
 
 
