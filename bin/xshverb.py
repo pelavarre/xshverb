@@ -169,18 +169,15 @@ def excepthook(
         sys.stderr.write("\n")
         sys.exit(130)  # 0x80 + signal.SIGINT
 
-    # if True:  # FIXME: the .setraw should finally undo itself, when covered by pdb.pm?
-    #
-    #     assert sys.__stderr__ is not None
-    #     sys.__stderr__.write("\x1b[m")
-    #
-    #     sys.__stderr__.flush()  # before .with_sys_except_hook
-    #
-    #     when = termios.TCSADRAIN
-    #     attributes = WITH_STDERR_TCGETATTR
-    #     termios.tcsetattr(sys.__stderr__.fileno(), when, attributes)
-    #
-    #     pass
+    tty_setraw_gap = False  # cleans up Traceback when Try/ Finally misses a try.setraw
+    if tty_setraw_gap:
+
+        assert sys.__stderr__ is not None
+        sys.__stderr__.write("\x1b[m")
+
+        when = termios.TCSADRAIN
+        attributes = WITH_STDERR_TCGETATTR
+        termios.tcsetattr(sys.__stderr__.fileno(), when, attributes)
 
     with_sys_except_hook(exc_type, exc_value, exc_traceback)
 
@@ -3136,8 +3133,17 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: backport to 2018 Python 3.7
+# FIXME: Color Picker
+
+# FIXME: Ms Pac-Man color palette, crossed with Hello Kitty?
+# FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ←
+
+# FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ← etc
+
 # FIXME: report sha version of this Source Code
+
+
+# FIXME: 2nd and 3rd Pucks pop into existence on the A S D F and H J K L Arrows
 
 # FIXME: score the Dots and Pellets eaten
 # FIXME: declare a win when all Corridor Spots stomped
@@ -3147,7 +3153,7 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: Backspace or ⌃Z to undo the Spacebar - craft and list the undo actions
 # FIXME: ⇧Tab for 8x Backspace
 
-# FIXME: Ms Pac-Man, Snake, Pong
+# FIXME: Snake, Pong
 # FIXME: Tic-Tac-Toe, Checkers, Chess
 # FIXME: Ghosts!
 # FIXME: Moar Levels!!
@@ -3161,26 +3167,22 @@ def do_turtling(argv: list[str]) -> None:
 class PuckColorPicker:  # type of .pcp, .puck_color_picker
     """Pick Colors"""
 
+    # FIXME: Hey, digits should work, especially 0..5
+
     # FIXME: search and replace the Screen Shadows of Tile to its new Color
 
     tile: str = "Floor"
     lamp_if: str = ""  # one of '', 'Red', 'Green', 'Blue'
 
-    penscapes_by_tile: dict[str, list[str]] = {
-        "Dot": ["\x1b[38;5;219m"],
-        "Floor": ["\x1b[48;5;232m"],
-        "Pellet": ["\x1b[38;5;214m"],
-        "Puck": ["\x1b[38;5;184m"],
-        "Stomp": ["\x1b[48;5;240m"],
-        "Wall": ["\x1b[38;5;39m"],
-    }
+    esc_penscapes_by_tile: dict[str, list[str]] = dict()
 
     def puck_pick(self) -> None:
         """Take in Keyboard Chords to pick Colors, till Return pressed"""
 
         ts = turtle_screen
-
         fileno = ts.fileno
+
+        self.do_colors_back_up()
 
         text = "Press Return or Esc"
         text += ", after Tab and ⇧Tab and R G B or W and the ↑ ↓ Arrows"
@@ -3189,9 +3191,8 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
 
-        self.print_focus_br()
-
         try:
+            self.print_focus_br()
             while True:
                 self.puck_try_pick(with_tcgetattr)
         except SystemExit:
@@ -3210,11 +3211,10 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         """Take in Keyboard Chords to pick Colors, till Return pressed"""
 
         ts = turtle_screen
-
         fileno = ts.fileno
         stdio = ts.stdio
 
-        stdio.flush()  # before os.read of .puck_try_play
+        stdio.flush()  # before os.read of .puck_try_pick
 
         byte0 = os.read(fileno, 1)
         if byte0 == b"\r":
@@ -3224,6 +3224,10 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             self.do_tab()
             return
 
+        if byte0 == b"\x0c":  # ⌃L
+            ts.repaint()
+            return
+
         if byte0.upper() == b"R":  # R r
             self.pick_lamp("Red")
             return
@@ -3231,7 +3235,6 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             self.pick_lamp("Green")
             return
         if byte0.upper() == b"B":  # B b
-            assert False
             self.pick_lamp("Blue")
             return
         if byte0.upper() == b"W":  # W w
@@ -3242,7 +3245,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
         if byte0 == b"\x1b":
             if not ts.kbhit(timeout=0.000):  # Esc
-                self.do_esc()
+                self.do_colors_restore()
                 sys.exit()
             else:
                 byte1 = os.read(fileno, 1)
@@ -3253,12 +3256,6 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
                     if byte2 == b"B":  # ↓ Down
                         self.do_down()
-                        return
-                    elif byte2 == b"D":  # ← Left
-                        self.do_untab()
-                        return
-                    elif byte2 == b"C":  # → Right
-                        self.do_tab()
                         return
                     elif byte2 == b"A":  # ↑ Up
                         self.do_up()
@@ -3301,9 +3298,10 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
     def _tile_step(self, step: int) -> None:
         """Step up or down one Tile, and forget choice of Lamp"""
 
-        penscapes_by_tile = self.penscapes_by_tile
         tile = self.tile
 
+        ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
         tiles = list(penscapes_by_tile.keys())
 
         i = tiles.index(tile)
@@ -3375,7 +3373,9 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         """Swap out Grayscale for R G B, or vice versa"""
 
         tile = self.tile
-        penscapes_by_tile = self.penscapes_by_tile
+
+        ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
 
         penscapes = penscapes_by_tile[tile]
         assert len(penscapes) == 1, (penscapes,)
@@ -3385,14 +3385,17 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         parts[-1] = f"{warp_m_int}m"
         next_penscape = "".join(parts)
 
-        penscapes_by_tile[tile] = [next_penscape]
+        ts.restyle(tile, penscapes=[next_penscape])
+        assert penscapes_by_tile[tile] == [next_penscape], (penscapes_by_tile[tile], next_penscape)
 
     def _color_step(self, step: int) -> None:
         """Tune the Lamp up or down"""
 
         lamp_if = self.lamp_if
-        penscapes_by_tile = self.penscapes_by_tile
         tile = self.tile
+
+        ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
 
         penscapes = penscapes_by_tile[tile]
         assert len(penscapes) == 1, (penscapes,)
@@ -3406,15 +3409,22 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         parts[-1] = f"{m_int}m"
         next_penscape = "".join(parts)
 
-        penscapes_by_tile[tile] = [next_penscape]
+        ts.restyle(tile, penscapes=[next_penscape])
+        assert penscapes_by_tile[tile] == [next_penscape], (penscapes_by_tile[tile], next_penscape)
 
     def _color_plus_decode(self, tile: str, lamp_if: str, step: int) -> tuple[int, str, str]:
         """Sketch the Lamp as coded for Esc [ m and as R G B or W"""
 
-        assert tile in ("Dot", "Floor", "Pellet", "Puck", "Stomp", "Wall"), (tile,)
+        famous_tiles = ["Dot", "Floor", "Frame", "Pellet", "Puck", "Stomp", "Wall"]
+
+        assert tile in famous_tiles, (tile,)
         assert lamp_if in ("", "Red", "Green", "Blue"), (lamp_if,)
 
-        penscapes_by_tile = self.penscapes_by_tile
+        ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
+
+        tiles = list(penscapes_by_tile.keys())
+        assert tiles == famous_tiles, (tiles, famous_tiles, list_diffs(tiles, b=famous_tiles))
 
         # Decode the Penscape
 
@@ -3508,16 +3518,29 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         print(f"{tile=} {lamp_if=} {str_m_int}", end="\r\n")
         ts.chat_line_break()
 
-    def do_esc(self) -> None:
-        """Cancel the Color Pick"""
+    def do_colors_back_up(self) -> None:
+        """Set up to cancel the Color Picks"""
+
+        esc_penscapes_by_tile = self.esc_penscapes_by_tile
 
         ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
+
+        esc_penscapes_by_tile.clear()
+        esc_penscapes_by_tile.update(penscapes_by_tile)
+
+    def do_colors_restore(self) -> None:
+        """Cancel the Color Picks"""
+
+        esc_penscapes_by_tile = self.esc_penscapes_by_tile
+
+        ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
 
         print("Cancelling Color Changes ...", end="\r\n")
         ts.chat_line_break()
 
-        penscapes_by_tile = self.penscapes_by_tile
-        penscapes_by_tile.update(PuckColorPicker.penscapes_by_tile)
+        penscapes_by_tile.update(esc_penscapes_by_tile)
 
 
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
@@ -3558,7 +3581,7 @@ class TurtleConsole(code.InteractiveConsole):
         assert sys.__stderr__, (sys.__stderr__,)
         stdio = sys.__stderr__
 
-        assert PucklandHeight == 37
+        assert GameboardHeight == 37
         assert SouthPanelHeight == 2
 
         height = ts.window_height()
@@ -3610,7 +3633,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     # runs partly, not wholly, like io.TextIOWrapper(io.BytesIO())
 
     fileno: int = -1
-    stdio: io.TextIOWrapper
+    stdio: io.TextIOWrapper  # todo: NameError if mentioned before initted
 
     char_by_y_x: dict[int, dict[int, str]] = dict()
     column_x: int = -1
@@ -3618,10 +3641,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     penscapes_by_y_x: dict[int, dict[int, list[str]]] = dict()
     row_y: int = -1
 
-    pin_y: int = +1
-    pin_x: int = +1
+    pin_y: int = -1  # backed up and restored by \x1b7 \x1b8 DECSC DECRC
+    pin_x: int = -1
 
-    #
+    # Shadow the Gameboard
 
     puck_y_min: int = -1
     puck_y_max: int = -1
@@ -3630,11 +3653,21 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
     puckland_rows: list[str] = list()
 
-    #
+    penscapes_by_tile: dict[str, list[str]] = {  # Foreground & Background Colors
+        "Dot": ["\x1b[38;5;219m"],
+        "Floor": ["\x1b[48;5;232m"],  # Background Floor
+        "Frame": ["\x1b[48;5;232m"],  # Background Frame
+        "Pellet": ["\x1b[38;5;214m"],
+        "Puck": ["\x1b[38;5;184m"],
+        "Stomp": ["\x1b[48;5;240m"],  # Background Stomp
+        "Wall": ["\x1b[38;5;39m"],
+    }
+
+    # Move the Puck about
 
     puck_y: int = -1
     puck_x: int = -1
-    paints_below: tuple[Paint, Paint]
+    paints_below: tuple[Paint, Paint]  # todo: NameError if mentioned before initted
 
     puck_dy: int = 0  # initially (0, +2) Right
     puck_dx: int = +2
@@ -3654,17 +3687,17 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         #
 
-        assert PucklandHeight == 37
+        assert GameboardHeight == 37
         assert SouthPanelHeight == 2
 
         height = self.window_height()
         north_panel_y_max = height - 37 - 2
 
         width = self.window_width()
-        center = (PucklandWidth * "+").center(width)
+        center = (GameboardWidth * "+").center(width)
         puck_x_min = 1 + len(center) - len(center.lstrip())  # biased left for an even-width middle
 
-        assert PucklandWidth == 64
+        assert GameboardWidth == 64
 
         puck_y_min = north_panel_y_max + 1
         puck_y_max = puck_y_min + 37 - 1
@@ -3693,7 +3726,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         """Run in place of Write by Sys Stdout/Stderr"""
 
         length = len(text)
-        self.shadow_and_write(text)
+        self.write_and_log(text)  # writing without shadowing into .char_by_y_x
 
         return length
 
@@ -3742,7 +3775,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         stdio = self.stdio
 
-        assert PucklandHeight == 37
+        assert GameboardHeight == 37
         assert SouthPanelHeight == 2
 
         height = self.window_height()
@@ -3770,7 +3803,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
-        # FIXME: cls() with and without homing the Puckman
+        # FIXME: cls() without/ with homing the Puckman, without/ with homing the Chat Panel
 
     def chat_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
@@ -3819,21 +3852,20 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         pin_y = self.pin_y
         row_y = self.row_y
 
-        #
+        # Write the Bytes without shadowing them into .char_by_y_x
 
         assert any((not _.isprintable()) for _ in text), (text,)
-        self.shadow_and_write(text)
+        self.write_and_log(text)
 
-        #
+        # Shadow the LF kind of ↓ Down Arrow
 
         assert LF == "\n"
 
         if text == "\n":
-            self.row_y = row_y + 1
-            self.column_x = 1
+            self.row_y = row_y + 1  # and not:  self.column_x = 1
             return
 
-        #
+        # Shadow the Back-Up/ Restore Cursor Y X
 
         assert DECSC == "\x1b" "7"
         assert DECRC == "\x1b" "8"
@@ -3848,7 +3880,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             self.column_x = pin_x
             return
 
-        #
+        # Setup to Shadow the Esc Csi kind of Control Sequences
 
         assert CSI_PIF_REGEX == r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
 
@@ -3865,7 +3897,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             i = self.to_int_positive(text, default=1)
             return i
 
-        #
+        # Shadow the ↑ Up Arrow
 
         assert CUU_Y == "\x1b" "[" "{}A"
 
@@ -3878,7 +3910,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
             return
 
-        #
+        # Shadow the Warp to X Column
 
         assert CHA_X == "\x1b" "[" "{}G"
 
@@ -3891,7 +3923,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
             return
 
-        #
+        # Shadow the Warp to 1 1, or to Y 1, or to Y X
 
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
 
@@ -3915,26 +3947,23 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
             return
 
-        #
+        # Shadow the Styling of >= 0 Chars of Text to follow
+        # FIXME: Color Pick Bold/ Plain Penscapes
 
         assert SGR == "\x1b" "[" "{}m"
 
-        Plain = "\x1b[m"
-
-        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        OnStomped = "\x1b[48;5;240m"
-
-        Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
-        Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
-        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
-
-        assert text in (Plain, OnBlack, OnStomped, Dot, Pellet, Puckman, Wall), (text,)
-
         penscapes.clear()
-        if text != Plain:
-            if text != OnBlack:
-                penscapes.append(text)
+        if text != "\x1b[m":
+
+            parts = list(text.rpartition(";"))
+            assert parts[0] in ["\x1b[38;5", "\x1b[48;5"], (parts, text)
+            assert parts[1] == ";", (parts, text)
+            assert parts[2].endswith("m"), (parts, text)
+
+            m_int = int(parts[2].removesuffix("m"))
+            assert 0 <= m_int <= 0xFF == 255, (m_int, text)
+
+            penscapes.append(text)
 
     def to_int_positive(self, text: str, default: int) -> int:
         """Convert >= 0 Decimal Digits to Positive Int >= 1, else return Default"""
@@ -3959,8 +3988,12 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         penscapes_by_y_x = self.penscapes_by_y_x
         row_y = self.row_y
 
+        # Write the Bytes without shadowing them into .char_by_y_x
+
         assert all(_.isprintable() for _ in text), (text,)
-        self.shadow_and_write(text)
+        self.write_and_log(text)
+
+        # Shadow the Bytes into .char_by_y_x
 
         self.column_x += len(text)
 
@@ -3981,6 +4014,51 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             yx_penscapes = penscapes_by_y_x[y][x]
             yx_penscapes.clear()
             yx_penscapes.extend(penscapes)
+
+    def repaint(self) -> None:
+        """Redraw the Terminal Screen from its in-memory Shadow"""
+
+        char_by_y_x = self.char_by_y_x
+        penscapes_by_y_x = self.penscapes_by_y_x
+
+        ts = turtle_screen
+        penscapes_by_tile = ts.penscapes_by_tile
+        Frames = penscapes_by_tile["Frame"]  # Background Frame
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+        assert SGR == "\x1b" "[" "{}m"
+
+        self.write_control("\x1b7")
+
+        for y in sorted(char_by_y_x.keys()):
+            for x in sorted(char_by_y_x[y].keys()):
+                ch = char_by_y_x[y][x]
+                yx_penscapes = penscapes_by_y_x[y][x]
+
+                self.write_control("\x1b[m")  # todo: work harder to drop redundant Controls
+                self.write_some_controls(Frames)
+                self.write_control(f"\x1b[{y};{x}H")
+
+                for penscape in yx_penscapes:
+                    self.write_control(penscape)
+
+                self.write_text(ch)
+
+        self.write_control("\x1b[m")
+        self.write_control("\x1b8")
+
+        # FIXME: scroll away and restart Chat Panel, as part of ⌃L Repaint
+
+    def restyle(self, tile: str, penscapes: list[str]) -> None:
+        """Change the Penscapes of a Tile"""
+
+        penscapes_by_tile = self.penscapes_by_tile
+
+        tile_penscapes = penscapes_by_tile[tile]
+        tile_penscapes.clear()
+        tile_penscapes.extend(penscapes)
 
     #
     # Play Puckman, a la Pac-Man®
@@ -4025,6 +4103,20 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         if byte0 == b"\r":
             sys.exit()
 
+        if byte0 == b"\x00":  # ⌃Spacebar
+            for _ in range(3):
+                self.puck_move()
+            return
+
+        if byte0 == b"\x09":  # Tab
+            for _ in range(8):  # 8 is classic str.expandtabs.tabsize
+                self.puck_move()
+            return
+
+        if byte0 == b"\x0c":  # ⌃L
+            self.repaint()
+            return
+
         if byte0 == b" ":  # Spacebar
 
             # when = termios.TCSADRAIN
@@ -4037,16 +4129,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             # tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
             # assert with_tcgetattr_ == with_tcgetattr, (with_tcgetattr_, with_tcgetattr)
 
-            return
-
-        if byte0 == b"\x09":  # Tab
-            for _ in range(8):  # 8 is classic str.expandtabs.tabsize
-                self.puck_move()
-            return
-
-        if byte0 == b"\x00":  # ⌃Spacebar
-            for _ in range(3):
-                self.puck_move()
             return
 
         # FIXME: blocks after 1..N Prefix Bytes
@@ -4104,8 +4186,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         stdio.write("\a")
 
     def puck_rows_write(self) -> None:
-        """Write the Rows of the Puckland"""
+        """Write the Rows of the Gameboard"""
 
+        penscapes_by_tile = self.penscapes_by_tile
         puck_x_min = self.puck_x_min
         puckland_rows = self.puckland_rows
 
@@ -4113,13 +4196,13 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         text = textwrap.dedent(Puckland).strip()
 
-        assert PucklandWidth == 64
+        assert GameboardWidth == 64
         assert FrameWidth == 4
         split_width = 64 - 4 - 4
 
         rows = ["", ""] + text.splitlines() + ["", ""]
         rows = list(_.ljust(split_width) for _ in rows)
-        rows = list(("    " + _ + "    ") for _ in rows)
+        rows = list(("    " + _ + "    ") for _ in rows)  # adds in Left & Right Frames
 
         if puckland_rows:  # todo: stop re-calc'ing identically more than once
             assert puckland_rows == rows, (puckland_rows, rows)
@@ -4134,8 +4217,8 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert CHA_X == "\x1b" "[" "{}G"
         assert SGR == "\x1b" "[" "{}m"
 
-        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        self.write_control(OnBlack)
+        Frames = penscapes_by_tile["Frame"]
+        self.write_some_controls(Frames)
 
         self.puck_y = -1
         self.puck_x = -1
@@ -4171,17 +4254,23 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         """Write a Row of the Puckland"""
 
         column_x = self.column_x
+        penscapes_by_tile = self.penscapes_by_tile
         row_y = self.row_y
 
         assert LF == "\n"
         assert SGR == "\x1b" "[" "{}m"
 
-        # Choose Foreground Colors
+        # Choose Foreground Colors & Characters
 
-        Dot = "\x1b[38;5;219m"  # setPenColor "ff99ff" 8  # 0o20 + int("535", base=6)
-        Pellet = "\x1b[38;5;214m"  # setPenColor "ff9900" 8  # 0o20 + int("530", base=6)
-        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        Wall = "\x1b[38;5;39m"  # setPenColor "0099ff" 8  # 0o20 + int("035", base=6)
+        tiles = list(self.penscapes_by_tile.keys())
+        assert tiles == ["Dot", "Floor", "Frame", "Pellet", "Puck", "Stomp", "Wall"], (tiles,)
+
+        Dot = penscapes_by_tile["Dot"][-1]
+        Pellet = penscapes_by_tile["Pellet"][-1]
+        Puckman = penscapes_by_tile["Puck"][-1]
+        Wall = penscapes_by_tile["Wall"][-1]
+        # FIXME: Color Pick Bold/ Plain Penscapes
+        # FIXME: Draw the Penscapes of Frame as affirmatively as Floor & Stomp
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
 
@@ -4233,7 +4322,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         pentexts.append(pentext)
         self.write_text(pentext)
 
-        assert PucklandWidth == 64
+        assert GameboardWidth == 64
         assert sum(len(_) for _ in pentexts) == len(text) == 64, (pentexts, text)
 
         # self.stdio.write("\x1b[m" "\n")
@@ -4365,14 +4454,17 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     def puck_stomp(self) -> None:
         """Clear the Spot beneath the Puck"""
 
-        stomped_penscapes = ["\x1b[48;5;240m"]
+        penscapes_by_tile = self.penscapes_by_tile
+
+        Stomp = penscapes_by_tile["Stomp"][-1]  # FIXME: Color Pick Bold/ Plain Penscapes
+
         paint_stomped: tuple[Paint, Paint]
-        paint_stomped = ((" ", stomped_penscapes), (" ", stomped_penscapes))
+        paint_stomped = ((" ", [Stomp]), (" ", [Stomp]))
 
         self.paints_below = paint_stomped
 
     def find_puck_moves(self) -> dict[int, dict[int, tuple[Paint, Paint]]]:
-        """List how the Puck can move, except do allow it to exit Puckland"""
+        """List how the Puck can move, even out of the Frame"""
 
         char_by_y_x = self.char_by_y_x
         penscapes_by_y_x = self.penscapes_by_y_x
@@ -4435,7 +4527,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         y = puck_y + dy
         x = puck_x + dx
 
-        if y < puck_y_min + 2:  # our first Puckland didn't test wrapping Y
+        if y < puck_y_min + 2:  # our early Gameboards didn't test wrapping Y
             y = puck_y_max - 2
         if y > puck_y_max - 2:
             y = puck_y_min + 2
@@ -4538,6 +4630,8 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     def puck_write(self, paints: tuple[Paint, Paint]) -> None:
         """Write the Puck to the Terminal Screen"""
 
+        penscapes_by_tile = self.penscapes_by_tile
+
         y = self.puck_y
         x = self.puck_x
 
@@ -4554,17 +4648,17 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         self.write_control(f"\x1b[{y};{x}H")
 
-        OnBlack = "\x1b[48;5;16m"  # setPenHighlight "000000" 8  # setPenHighlight 0o20 8
-        self.write_control(OnBlack)
+        Frames = penscapes_by_tile["Frame"]
+        self.write_some_controls(Frames)
 
         self.write_control(ps0)
         self.write_text(ch0)
         self.write_control(ps1)
         self.write_text(ch1)
 
-        # todo: work harder to compress ps0 + OnBlack + p1 + OnBlack
+        # todo: work harder to drop redundant Controls
 
-    def shadow_and_write(self, text: str) -> None:
+    def write_and_log(self, text: str) -> None:
         """Write Bytes to the Terminal Screen and its Shadows"""
 
         stdio = self.stdio
@@ -4708,10 +4802,10 @@ assert "█" == unicodedata.lookup("Full Block")
 FrameWidth = 4
 FrameHeight = 2
 
-PucklandWidth = 4 + 4 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitlines())
-PucklandHeight = 2 + 2 + len(textwrap.dedent(Puckland).strip().splitlines())
+GameboardWidth = 4 + 4 + max(len(_) for _ in textwrap.dedent(Puckland).strip().splitlines())
+GameboardHeight = 2 + 2 + len(textwrap.dedent(Puckland).strip().splitlines())
 
-assert (PucklandWidth, PucklandHeight) == (64, 37), (PucklandWidth, PucklandHeight)
+assert (GameboardWidth, GameboardHeight) == (64, 37), (GameboardWidth, GameboardHeight)
 
 SouthPanelHeight = 2
 
@@ -5293,6 +5387,21 @@ def bytes_textify(bytes_: bytes) -> bytes:
     encode = textify.encode()  # doesn't raise UnicodeEncodeError
 
     return encode
+
+
+#
+# Amp up Import BuiltsIns List
+#
+
+
+def list_diffs(a: list[str], b: list[str]) -> list[str]:
+    """List the Changes needed to remake the Ordered List at A into B"""
+
+    diffs = list(difflib.unified_diff(a=a, b=b, lineterm=""))
+    diffs = list(_ for _ in diffs if _[0] in ("+", "-"))
+    diffs = list(_ for _ in diffs if _ not in ("--- ", "+++ "))
+
+    return diffs
 
 
 #
