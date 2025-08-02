@@ -99,6 +99,11 @@ _: dict[str, int] | None  # new since Oct/2021 Python 3.10
 if not __debug__:
     raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
 
+if zoneinfo:
+    Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
+    PacificLaunch = dt.datetime.now(Pacific)
+    UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
+
 
 #
 # Name a few things
@@ -110,13 +115,10 @@ YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier dat
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
 
+FullBlock = unicodedata.lookup("Full Block")  # '█'
+
+
 GatewayVerbs = ("d", "dot", "dt", "e", "g", "k", "v")  # these eat args despite str_is_identifier_ish
-
-
-if zoneinfo:
-    Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
-    PacificLaunch = dt.datetime.now(Pacific)
-    UTC = zoneinfo.ZoneInfo("UTC")  # todo: extend welcome into the periphery beyond San Francisco
 
 
 AppPathname = "__pycache__/p.pbpaste"  # traces the last Pipe
@@ -3169,8 +3171,6 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
     # FIXME: Hey, digits should work, especially 0..5
 
-    # FIXME: search and replace the Screen Shadows of Tile to its new Color
-
     tile: str = "Floor"
     lamp_if: str = ""  # one of '', 'Red', 'Green', 'Blue'
 
@@ -3826,10 +3826,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         assert MAX_PN_32100 == 32100
 
-        stdio.write("\x1b7")  # bounces back to Row of pin
+        stdio.write("\x1b7")  # finds the Cursor in the Chat Panel  # for .chat_line_break
         stdio.write("\x1b[32100H")  # warps to Lower Left
         stdio.write("\n")  # scrolls Screen up a Row and skips down a Row
-        stdio.write("\x1b8")  # bounces back to Row of pin
+        stdio.write("\x1b8")  # bounces back into the Chat Panel  # for .chat_line_break
         stdio.write("\x1b[A")  # warps up into the Row that was at pin
         stdio.write("\x1b[L")  # inserts a Row
 
@@ -4030,14 +4030,14 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         ts = turtle_screen
         penscapes_by_tile = ts.penscapes_by_tile
-        Frames = penscapes_by_tile["Frame"]  # Background Frame
+        Floors = penscapes_by_tile["Floor"]  # for .repaint
 
         assert DECSC == "\x1b" "7"
         assert DECRC == "\x1b" "8"
         assert CUP_Y_X == "\x1b" "[" "{};{}H"
         assert SGR == "\x1b" "[" "{}m"
 
-        self.write_control("\x1b7")
+        self.write_control("\x1b7")  # finds the Cursor in the Chat Panel  # for .repaint
 
         for y in sorted(char_by_y_x.keys()):
             for x in sorted(char_by_y_x[y].keys()):
@@ -4045,7 +4045,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
                 yx_penscapes = penscapes_by_y_x[y][x]
 
                 self.write_control("\x1b[m")  # todo: work harder to drop redundant Controls
-                self.write_some_controls(Frames)
+                self.write_some_controls(Floors)
                 self.write_control(f"\x1b[{y};{x}H")
 
                 for penscape in yx_penscapes:
@@ -4054,14 +4054,98 @@ class TurtleScreen:  # type of .ts, .turtle_screen
                 self.write_text(ch)
 
         self.write_control("\x1b[m")
-        self.write_control("\x1b8")
+        self.write_control("\x1b8")  # bounces back into the Chat Panel  # for .repaint
 
         # FIXME: scroll away and restart Chat Panel, as part of ⌃L Repaint
 
     def restyle(self, tile: str, penscapes: list[str]) -> None:
         """Change the Penscapes of a Tile"""
 
+        stdio = self.stdio
+
+        char_by_y_x = self.char_by_y_x
+        penscapes_by_y_x = self.penscapes_by_y_x
         penscapes_by_tile = self.penscapes_by_tile
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        # Find the Frame
+
+        assert FrameHeight == 2
+        assert FrameWidth == 4
+
+        assert PuckHeight == 1
+        assert PuckWidth == 2
+
+        board_y_min = puck_y_min + 2
+        board_y_max = puck_y_max - 2
+        board_x_min = puck_x_min + 4
+        board_x_max = puck_x_max - 4  # don't want - (2 - 1) here as when bounding Wide Puck Moves
+
+        Floors = penscapes_by_tile["Floor"]  # for .restyle
+        Stomp = penscapes_by_tile["Stomp"][-1]  # for .restyle
+
+        # Consider each Y X
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+
+        stdio.write("\x1b7")  # finds the Cursor in the Chat Panel  # for .restyle
+
+        for y in sorted(char_by_y_x.keys()):
+            for x in sorted(char_by_y_x[y].keys()):
+                ch = char_by_y_x[y][x]
+                yx_penscapes = penscapes_by_y_x[y][x]
+
+                # layout_ch = self.puck_read_layout_at_yx(y, x=x, default="?")
+
+                # Read the Tile from Y X  # todo: Shadow Tiles, not just Styles?
+
+                yx_in_board = False
+                if board_y_min <= y <= board_y_max:
+                    if board_x_min <= x <= board_x_max:
+                        yx_in_board = True
+
+                if ch in "()":
+                    yx_tile = "Coin"
+                elif ch in "@@":
+                    yx_tile = "Jolt"
+                elif ch == FullBlock:  # █
+                    yx_tile = "Puck"
+                elif ch == " ":
+                    if not yx_in_board:
+                        yx_tile = "Frame"
+                    elif Stomp in yx_penscapes:
+                        yx_tile = "Stomp"
+                    else:
+                        yx_tile = "Floor"
+                else:
+                    yx_tile = "Wall"
+
+                # Skip over Y X not of the Tile
+
+                if yx_tile != tile:
+                    continue
+
+                # Write the Style & Text of the Y X
+
+                yx_penscapes.clear()
+                yx_penscapes.extend(penscapes_by_tile[yx_tile])
+
+                self.write_control("\x1b[m")  # todo: work harder to drop redundant Controls
+                self.write_some_controls(Floors)
+                self.write_control(f"\x1b[{y};{x}H")
+
+                for penscape in yx_penscapes:
+                    self.write_control(penscape)
+
+                self.write_text(ch)
+
+        self.write_control("\x1b[m")
+        stdio.write("\x1b8")  # bounces back into the Chat Panel  # for .restyle
 
         tile_penscapes = penscapes_by_tile[tile]
         tile_penscapes.clear()
@@ -4224,7 +4308,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert CHA_X == "\x1b" "[" "{}G"
         assert SGR == "\x1b" "[" "{}m"
 
-        Frames = penscapes_by_tile["Frame"]
+        Frames = penscapes_by_tile["Frame"]  # for .puck_rows_write
         self.write_some_controls(Frames)
 
         self.puck_y = -1
@@ -4242,15 +4326,16 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # Write the Puck into a Z Layer above the Puckland
 
+        assert PuckMark == FullBlock, (PuckMark,)
+
         self.puck_stomp()
 
-        FullBlock = unicodedata.lookup("Full Block")  # '█'
         Puck = penscapes_by_tile["Puck"][-1]
         puck_paints = ((FullBlock, [Puck]), (FullBlock, [Puck]))
 
-        self.write_control("\x1b7")
+        self.write_control("\x1b7")  # finds the Cursor below the Gameboard  # for .puck_rows_write
         self.puck_write(puck_paints)
-        self.write_control("\x1b8")
+        self.write_control("\x1b8")  # bounces back below the Gameboard  # for .puck_rows_write
 
         # Close out the last Write of Style
 
@@ -4269,6 +4354,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # Choose Foreground Colors & Characters
 
+        assert CoinMarks == "()", (CoinMarks,)
+        assert JoltMark == "@", (JoltMark,)
+        assert PuckMark == FullBlock, (PuckMark,)
+
         tiles = list(self.penscapes_by_tile.keys())
         assert tiles == ["Coin", "Floor", "Frame", "Jolt", "Puck", "Stomp", "Wall"], (tiles,)
 
@@ -4279,8 +4368,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         # FIXME: Color Pick Bold/ Plain Penscapes
         # FIXME: Draw the Penscapes of Frame as affirmatively as Floor & Stomp
 
-        FullBlock = unicodedata.lookup("Full Block")  # '█'
-
         penscape_by_ch = {  # omits the " " Space, the "." Full-Stop, and every kind of Wall
             "(": Coin,  # aka Coin
             ")": Coin,
@@ -4289,6 +4376,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         }
 
         # Mix Colors into Text
+
+        assert CoinMarks == "()", (CoinMarks,)
+        assert BrickMark == ".", (BrickMark,)
+        assert PuckMark == FullBlock, (PuckMark,)
 
         with_penscape = ""
         pentext = ""
@@ -4400,17 +4491,38 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     def puck_stomp_if(self) -> None:
         """Lay down a Trail if on a Coin, on a Jolt, or in a Corridor of Floor"""
 
+        assert CoinMarks == "()", (CoinMarks,)
+        assert FloorMarks == "  ", (FloorMarks,)
+        assert JoltMark == "@", (JoltMark,)
+
         (ch0, ch1) = self.puck_read_layout()
 
         pair = ch0 + ch1
         if pair in ("  ", "()", "@@"):
             self.puck_stomp()
 
+    def puck_stomp(self) -> None:
+        """Clear the Spot beneath the Puck"""
+
+        penscapes_by_tile = self.penscapes_by_tile
+
+        Stomp = penscapes_by_tile["Stomp"][-1]  # FIXME: Color Pick Bold/ Plain Penscapes
+
+        paint_stomped: tuple[Paint, Paint]
+        paint_stomped = ((" ", [Stomp]), (" ", [Stomp]))
+
+        self.paints_below = paint_stomped
+
+        # FIXME: Stomps land on Bricks
+        # FIXME: Spacebar and Tab move across Bricks
+
     def puck_move(self) -> None:
         """Move the Puck to a new Spot"""
 
         puck_dy = self.puck_dy
         puck_dx = self.puck_dx
+
+        assert FloorMarks == "  ", (FloorMarks,)
 
         # List the Moves
 
@@ -4435,12 +4547,16 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # Drop all the Moves into Empty when other Moves available
 
+        assert FloorMarks == "  ", (FloorMarks,)
+
         pairs_set = set(pairs_by_dydx.values())
         if pairs_set != set(["  "]):
             for dydx in empty_dydx_list:
                 del pairs_by_dydx[dydx]
 
         # Drop the Move of Backwards into Empty when other Moves available
+
+        assert FloorMarks == "  ", (FloorMarks,)
 
         inverse_puck_dydx = (-puck_dy, -puck_dx)
         if inverse_puck_dydx in pairs_by_dydx.keys():
@@ -4458,18 +4574,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.puck_warp_to_dy_dx(warp_dy, dx=warp_dx)
         self.puck_stomp()
 
-    def puck_stomp(self) -> None:
-        """Clear the Spot beneath the Puck"""
-
-        penscapes_by_tile = self.penscapes_by_tile
-
-        Stomp = penscapes_by_tile["Stomp"][-1]  # FIXME: Color Pick Bold/ Plain Penscapes
-
-        paint_stomped: tuple[Paint, Paint]
-        paint_stomped = ((" ", [Stomp]), (" ", [Stomp]))
-
-        self.paints_below = paint_stomped
-
     def find_puck_moves(self) -> dict[int, dict[int, tuple[Paint, Paint]]]:
         """List how the Puck can move one Spot away, even off the Floor into the Frame"""
 
@@ -4479,7 +4583,12 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         puck_y = self.puck_y
         puck_x = self.puck_x
 
+        assert CoinMarks == "()", (CoinMarks,)
+        assert JoltMark == "@", (JoltMark,)
+
         # Look down, left, right, & up - and through the warp to the far edge, if need be
+
+        assert FloorMarks == "  ", (FloorMarks,)
 
         paints_by_dy_dx: dict[int, dict[int, tuple[Paint, Paint]]] = dict()
 
@@ -4558,11 +4667,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         paints_below = self.paints_below
 
-        FullBlock = unicodedata.lookup("Full Block")  # '█'
         Puck = penscapes_by_tile["Puck"][-1]
         puck_paints = ((FullBlock, [Puck]), (FullBlock, [Puck]))
 
-        self.write_control("\x1b7")
+        self.write_control("\x1b7")  # finds the Cursor in the Chat Panel  # for .puck_warp_to_dy_dx
 
         self.puck_y += dy
         self.puck_x += dx
@@ -4577,7 +4685,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.puck_x += dx
         self.paints_below = puck_read
 
-        self.write_control("\x1b8")
+        self.write_control("\x1b8")  # bounces back into the Chat Panel  # for .puck_warp_to_dy_dx
 
         # FIXME: solve overlapping moves, such as:  ts.puck_warp_to_dy_dx(dy=0, dx=1)
 
@@ -4619,6 +4727,42 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         return (ch0, ch1)
 
+    def puck_read_layout_at_yx(self, y: int, x: int, default: str) -> str:
+        """Read 1 Char from the Layout"""
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        puckland_rows = self.puckland_rows
+
+        assert FrameHeight == 2
+        assert FrameWidth == 4
+
+        if y < puck_y_min + 2:  # todo: merge with .board_y_min etc
+            return default
+        if y > puck_y_max - 2:
+            return default
+
+        if x < puck_x_min + 4:
+            return default
+        if x > puck_x_max - 4 - (2 - 1):
+            return default
+
+        assert PuckHeight == 1
+        assert PuckWidth == 2
+
+        i = y - puck_y_min
+        j = x - puck_x_min
+
+        row = puckland_rows[i]
+        ch = row[j]
+
+        return ch
+
+        # todo: delete or merge .puck_read_layout_at_yx, all this while it's not much tested
+
     def puck_read(self) -> tuple[Paint, Paint]:
         """Read the Puck from the Terminal Screen"""
 
@@ -4656,8 +4800,8 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         self.write_control(f"\x1b[{y};{x}H")
 
-        Frames = penscapes_by_tile["Frame"]
-        self.write_some_controls(Frames)
+        Floors = penscapes_by_tile["Floor"]
+        self.write_some_controls(Floors)
 
         self.write_control(ps0)
         self.write_text(ch0)
@@ -4770,34 +4914,34 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 Puckland = """
 
     ┌──────────────────────────────────────────────────────┐
-    │┌────────────────────────┐  ┌────────────────────────┐│
-    ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
-    ││()┌──────┐()┌────────┐()│  │()┌────────┐()┌──────┐()││
-    ││@@│ .... │()│ ...... │()│  │()│ ...... │()│ .... │@@││
+    │┌────────────────────────┐..┌────────────────────────┐│
+    ││()()()()()()()()()()()()│..│()()()()()()()()()()()()││
+    ││()┌──────┐()┌────────┐()│..│()┌────────┐()┌──────┐()││
+    ││@@│......│()│........│()│..│()│........│()│......│@@││
     ││()└──────┘()└────────┘()└──┘()└────────┘()└──────┘()││
     ││()()()()()()()()()()()()()()()()()()()()()()()()()()││
     ││()┌──────┐()┌──┐()┌──────────────┐()┌──┐()┌──────┐()││
-    ││()└──────┘()│  │()└─────┐  ┌─────┘()│  │()└──────┘()││
-    ││()()()()()()│  │()()()()│  │()()()()│  │()()()()()()││
-    │└─────────┐()│  └─────┐  │  │  ┌─────┘  │()┌─────────┘│
-    └─────────┐│()│  ┌─────┘  └──┘  └─────┐  │()│┌─────────┘
-    ..........││()│  │                    │  │()││..........
-    ──────────┘│()│  │  ┌─────----─────┐  │  │()│└──────────
+    ││()└──────┘()│..│()└─────┐..┌─────┘()│..│()└──────┘()││
+    ││()()()()()()│..│()()()()│..│()()()()│..│()()()()()()││
+    │└─────────┐()│..└─────┐  │..│  ┌─────┘..│()┌─────────┘│
+    └─────────┐│()│..┌─────┘  └──┘  └─────┐..│()│┌─────────┘
+    ..........││()│..│                    │..│()││..........
+    ──────────┘│()│..│  ┌─────----─────┐  │..│()│└──────────
     ───────────┘()└──┘  │┌────----────┐│  └──┘()└───────────
                 ()      ││............││      ()
     ───────────┐()┌──┐  │└────────────┘│  ┌──┐()┌───────────
-    ──────────┐│()│  │  └──────────────┘  │  │()│┌──────────
-    ..........││()│  │                    │  │()││..........
-    ┌─────────┘│()│  │  ┌──────────────┐  │  │()│└─────────┐
-    │┌─────────┘()└──┘  └─────┐  ┌─────┘  └──┘()└─────────┐│
-    ││()()()()()()()()()()()()│  │()()()()()()()()()()()()││
-    ││()┌──────┐()┌────────┐()│  │()┌────────┐()┌──────┐()││
-    ││()└───┐  │()└────────┘()└──┘()└────────┘()│  ┌───┘()││
-    ││@@()()│  │()()()()()()()██()()()()()()()()│  │()()@@││
-    │└───┐()│  │()┌──┐()┌──────────────┐()┌──┐()│  │()┌───┘│
-    │┌───┘()└──┘()│  │()└─────┐  ┌─────┘()│  │()└──┘()└───┐│
-    ││()()()()()()│  │()()()()│  │()()()()│  │()()()()()()││
-    ││()┌─────────┘  └─────┐()│  │()┌─────┘  └─────────┐()││
+    ──────────┐│()│..│  └──────────────┘  │..│()│┌──────────
+    ..........││()│..│                    │..│()││..........
+    ┌─────────┘│()│..│  ┌──────────────┐  │..│()│└─────────┐
+    │┌─────────┘()└──┘  └─────┐..┌─────┘  └──┘()└─────────┐│
+    ││()()()()()()()()()()()()│..│()()()()()()()()()()()()││
+    ││()┌──────┐()┌────────┐()│..│()┌────────┐()┌──────┐()││
+    ││()└───┐..│()└────────┘()└──┘()└────────┘()│..┌───┘()││
+    ││@@()()│..│()()()()()()()██()()()()()()()()│..│()()@@││
+    │└───┐()│..│()┌──┐()┌──────────────┐()┌──┐()│..│()┌───┘│
+    │┌───┘()└──┘()│..│()└─────┐..┌─────┘()│..│()└──┘()└───┐│
+    ││()()()()()()│..│()()()()│..│()()()()│..│()()()()()()││
+    ││()┌─────────┘..└─────┐()│..│()┌─────┘..└─────────┐()││
     ││()└──────────────────┘()└──┘()└──────────────────┘()││
     ││()()()()()()()()()()()()()()()()()()()()()()()()()()││
     │└────────────────────────────────────────────────────┘│
@@ -4805,7 +4949,7 @@ Puckland = """
 
 """
 
-assert "█" == unicodedata.lookup("Full Block")
+assert "█" == unicodedata.lookup("Full Block") == FullBlock
 
 FrameWidth = 4
 FrameHeight = 2
@@ -4819,6 +4963,12 @@ SouthPanelHeight = 2
 
 PuckHeight = 1
 PuckWidth = 2
+
+BrickMark = "."
+CoinMarks = "()"
+FloorMarks = "  "
+JoltMark = "@"
+PuckMark = FullBlock  # █
 
 
 puck_color_picker = PuckColorPicker()
