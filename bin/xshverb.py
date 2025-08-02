@@ -3135,7 +3135,7 @@ def do_turtling(argv: list[str]) -> None:
 
 # FIXME: Color Picker
 
-# FIXME: Ms Pac-Man color palette, crossed with Hello Kitty?
+# FIXME: Ms Pac-Man ® color palette, crossed with Hello Kitty ® ?
 # FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ←
 
 # FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ← etc
@@ -3145,8 +3145,8 @@ def do_turtling(argv: list[str]) -> None:
 
 # FIXME: 2nd and 3rd Pucks pop into existence on the A S D F and H J K L Arrows
 
-# FIXME: score the Dots and Pellets eaten
-# FIXME: declare a win when all Corridor Spots stomped
+# FIXME: score the Jolts and Coins eaten
+# FIXME: declare a win when all Corridor Floor Spots stomped
 
 # FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
 
@@ -3159,7 +3159,7 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: Moar Levels!!
 # FIXME: Multiplayer!!
 
-# FIXME: factor the Puckman Game out of the Class TurtleScreen
+# FIXME: factor the Puck Game out of the Class TurtleScreen
 # FIXME: deploy Class TerminalBytePacket into XShVerb Py
 # FIXME: option to debug with not raw except during input
 
@@ -3415,16 +3415,15 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
     def _color_plus_decode(self, tile: str, lamp_if: str, step: int) -> tuple[int, str, str]:
         """Sketch the Lamp as coded for Esc [ m and as R G B or W"""
 
-        famous_tiles = ["Dot", "Floor", "Frame", "Pellet", "Puck", "Stomp", "Wall"]
-
-        assert tile in famous_tiles, (tile,)
+        tiles = ["Coin", "Floor", "Frame", "Jolt", "Puck", "Stomp", "Wall"]
+        assert tile in tiles, (tile, tiles)
         assert lamp_if in ("", "Red", "Green", "Blue"), (lamp_if,)
 
         ts = turtle_screen
         penscapes_by_tile = ts.penscapes_by_tile
 
-        tiles = list(penscapes_by_tile.keys())
-        assert tiles == famous_tiles, (tiles, famous_tiles, list_diffs(tiles, b=famous_tiles))
+        tile_keys = list(penscapes_by_tile.keys())
+        assert tiles == tile_keys, (tiles, tile_keys, list_diffs(tiles, b=tile_keys))
 
         # Decode the Penscape
 
@@ -3442,7 +3441,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
         if digits_int in (16, 16 + 216 - 1, 16 + 216):  # Black, White, Black
             m_colorspace_if = ""
-            if lamp_if:
+            if lamp_if or (digits_int == 16):
                 m_colorspace_if = "RGB"
         elif 16 < digits_int < 16 + 216 - 1:
             m_colorspace_if = "RGB"
@@ -3450,29 +3449,9 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             assert digits_int >= 16 + 216, (digits_int,)
             m_colorspace_if = "W"
 
-        # Step through Grayscale
+        # Step through R or G or B
 
-        if m_colorspace_if != "RGB":
-            assert 16 + 216 - 1 <= digits_int <= 256 == 0x100, (digits_int,)
-
-            graydiff = digits_int - (16 + 216)  # -1..23
-            grayscale = 24 if (graydiff == -1) else graydiff  # 0..24
-
-            if (grayscale + step) < 0:
-                m_graydiff = graydiff
-            elif (grayscale + step) > 24:
-                m_graydiff = graydiff
-            else:
-                m_graydiff = (grayscale + step) % 25  # 0..24
-
-            m_grayscale = -1 if (m_graydiff == 24) else m_graydiff  # -1..23
-
-            m_int = 16 + 216 + m_grayscale
-            str_m_int = f"{grayscale}"
-
-        # Else step through R or G or B
-
-        else:
+        if m_colorspace_if == "RGB":
             assert 16 <= digits_int <= 16 + 216 - 1, (digits_int,)
 
             rgb = digits_int - 16
@@ -3496,6 +3475,27 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
             m_int = 16 + m_rgb
             str_m_int = f"{mr} {mg} {mb}"
+
+        # Step through Grayscale
+
+        else:
+            assert m_colorspace_if in ("", "W"), (m_colorspace_if,)
+            assert 16 + 216 - 1 <= digits_int <= 256 == 0x100, (digits_int,)
+
+            graydiff = digits_int - (16 + 216)  # -1..23
+            grayscale = 24 if (graydiff == -1) else graydiff  # 0..24
+
+            if (grayscale + step) < 0:
+                m_graydiff = graydiff
+            elif (grayscale + step) > 24:
+                m_graydiff = graydiff
+            else:
+                m_graydiff = (grayscale + step) % 25  # 0..24
+
+            m_grayscale = -1 if (m_graydiff == 24) else m_graydiff  # -1..23
+
+            m_int = 16 + 216 + m_grayscale
+            str_m_int = f"{grayscale}"
 
         # Succeed
 
@@ -3645,6 +3645,8 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     pin_x: int = -1
 
     # Shadow the Gameboard
+    # Speak of the two-syllable 'Pellets' as 'Coins'
+    # Speak of the four-syllable 'Power Pellets' as 'Jolts'
 
     puck_y_min: int = -1
     puck_y_max: int = -1
@@ -3653,15 +3655,17 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
     puckland_rows: list[str] = list()
 
-    penscapes_by_tile: dict[str, list[str]] = {  # Foreground & Background Colors
-        "Dot": ["\x1b[38;5;219m"],
-        "Floor": ["\x1b[48;5;232m"],  # Background Floor
-        "Frame": ["\x1b[48;5;232m"],  # Background Frame
-        "Pellet": ["\x1b[38;5;214m"],
-        "Puck": ["\x1b[38;5;184m"],
-        "Stomp": ["\x1b[48;5;240m"],  # Background Stomp
-        "Wall": ["\x1b[38;5;39m"],
+    penscapes_by_tile: dict[str, list[str]] = {
+        "Coin": ["\x1b[38;5;214m"],  # 214 == 0o20 + int("5_3_0", base=6)  # Gold
+        "Floor": ["\x1b[48;5;232m"],  # 232 == 232 + 0  # 0/24 Black
+        "Frame": ["\x1b[48;5;232m"],  # 232 == 232 + 0  # 0/24 Black
+        "Jolt": ["\x1b[38;5;210m"],  # 210 == 0o20 + int("5_2_2", base=6)  # Bright Red
+        "Puck": ["\x1b[38;5;184m"],  # 184 == 0o20 + int("4_4_0", base=6)  # Bright Yellow
+        "Stomp": ["\x1b[48;5;240m"],  # 240 == 232 + 8  # 1/3 = 8/24 Dark Gray
+        "Wall": ["\x1b[38;5;33m"],  # 33 == 0o20 + int("025", base=6)  # Blue
     }
+
+    tiles = list(penscapes_by_tile.keys())
 
     # Move the Puck about
 
@@ -3764,6 +3768,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         stdio = self.stdio
 
+        tiles = self.tiles
+        assert sorted(tiles) == tiles, (sorted(tiles), tiles, list_diffs(sorted(tiles), b=tiles))
+
         self.chat_clear()
         stdio.flush()  # for .pane_resume
         print("To get started, try:  cls(); play()")
@@ -3803,7 +3810,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # bypasses the ScreenWriteLog when writing the Chat Panel, for speed
 
-        # FIXME: cls() without/ with homing the Puckman, without/ with homing the Chat Panel
+        # FIXME: cls() without/ with homing the Puck, without/ with homing the Chat Panel
 
     def chat_line_break(self) -> None:
         """Scroll up the Top Panel by one Row"""
@@ -4061,11 +4068,11 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         tile_penscapes.extend(penscapes)
 
     #
-    # Play Puckman, a la Pac-Man®
+    # Play Puckman  # a la Ms Pac-Man ® & [Mr] Pac-Man ®
     #
 
     def puck_play(self) -> None:
-        """Take in Keyboard Chords to play Puckman, till Return pressed"""
+        """Take in Keyboard Chords to move the Puck, till Return pressed"""
 
         fileno = self.fileno
 
@@ -4092,7 +4099,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         print("Thank you")
 
     def puck_try_play(self, with_tcgetattr: list[int]) -> None:  # FIXME  # noqa C901
-        """Reply to Keyboard Chords till Return pressed"""
+        """Take in Keyboard Chords to move the Puck, till Return pressed"""
 
         fileno = self.fileno
         stdio = self.stdio
@@ -4238,11 +4245,11 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.puck_stomp()
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
-        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        puckman_paints = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+        Puck = penscapes_by_tile["Puck"][-1]
+        puck_paints = ((FullBlock, [Puck]), (FullBlock, [Puck]))
 
         self.write_control("\x1b7")
-        self.puck_write(puckman_paints)
+        self.puck_write(puck_paints)
         self.write_control("\x1b8")
 
         # Close out the last Write of Style
@@ -4263,11 +4270,11 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         # Choose Foreground Colors & Characters
 
         tiles = list(self.penscapes_by_tile.keys())
-        assert tiles == ["Dot", "Floor", "Frame", "Pellet", "Puck", "Stomp", "Wall"], (tiles,)
+        assert tiles == ["Coin", "Floor", "Frame", "Jolt", "Puck", "Stomp", "Wall"], (tiles,)
 
-        Dot = penscapes_by_tile["Dot"][-1]
-        Pellet = penscapes_by_tile["Pellet"][-1]
-        Puckman = penscapes_by_tile["Puck"][-1]
+        Coin = penscapes_by_tile["Coin"][-1]
+        Jolt = penscapes_by_tile["Jolt"][-1]
+        Puck = penscapes_by_tile["Puck"][-1]
         Wall = penscapes_by_tile["Wall"][-1]
         # FIXME: Color Pick Bold/ Plain Penscapes
         # FIXME: Draw the Penscapes of Frame as affirmatively as Floor & Stomp
@@ -4275,10 +4282,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         FullBlock = unicodedata.lookup("Full Block")  # '█'
 
         penscape_by_ch = {  # omits the " " Space, the "." Full-Stop, and every kind of Wall
-            "(": Pellet,  # aka Coin
-            ")": Pellet,
-            "@": Dot,
-            FullBlock: Puckman,
+            "(": Coin,  # aka Coin
+            ")": Coin,
+            "@": Jolt,
+            FullBlock: Puck,
         }
 
         # Mix Colors into Text
@@ -4391,7 +4398,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.puck_stomp_if()
 
     def puck_stomp_if(self) -> None:
-        """Lay down a Trail if on a Dot, on a Pellet, or in a Corridor"""
+        """Lay down a Trail if on a Coin, on a Jolt, or in a Corridor of Floor"""
 
         (ch0, ch1) = self.puck_read_layout()
 
@@ -4464,7 +4471,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.paints_below = paint_stomped
 
     def find_puck_moves(self) -> dict[int, dict[int, tuple[Paint, Paint]]]:
-        """List how the Puck can move, even out of the Frame"""
+        """List how the Puck can move one Spot away, even off the Floor into the Frame"""
 
         char_by_y_x = self.char_by_y_x
         penscapes_by_y_x = self.penscapes_by_y_x
@@ -4483,7 +4490,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             y = puck_y + dy
             x = puck_x + dx
 
-            # Let the Puckman move onto Dots, Pellets, and Spaces (but not Walls)
+            # Move the Puck onto Coins, Jolts, Floor, or Frame (but not Walls)
 
             ch0 = char_by_y_x[y][x + 0]
             penscapes_0 = list(penscapes_by_y_x[y][x + 0])
@@ -4545,21 +4552,22 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     def puck_warp_to_dy_dx(self, dy: int, dx: int) -> None:
         """Leap the Puck from spot to spot"""
 
+        penscapes_by_tile = self.penscapes_by_tile
         self.puck_dy = dy
         self.puck_dx = dx
 
         paints_below = self.paints_below
 
         FullBlock = unicodedata.lookup("Full Block")  # '█'
-        Puckman = "\x1b[38;5;184m"  # setPenColor "cccc00" 8  # 0o20 + int("440", base=6)
-        puckman_paints = ((FullBlock, [Puckman]), (FullBlock, [Puckman]))
+        Puck = penscapes_by_tile["Puck"][-1]
+        puck_paints = ((FullBlock, [Puck]), (FullBlock, [Puck]))
 
         self.write_control("\x1b7")
 
         self.puck_y += dy
         self.puck_x += dx
         puck_read = self.puck_read()
-        self.puck_write(puckman_paints)
+        self.puck_write(puck_paints)
 
         self.puck_y -= dy
         self.puck_x -= dx
