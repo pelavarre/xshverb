@@ -147,19 +147,20 @@ ScreenWriteLog = ScreenWriteLogPath.open("a")
 
 
 #
-# Do exit into a Post-Mortem Debugger, when not exiting via SystemExit
+# Exit nonzero into the Pdb-Pm Post-Mortem Debugger, when not KeyboardInterrupt nor SystemExit
 #
 
 
-with_sys_except_hook = sys.excepthook
-assert with_sys_except_hook.__module__ == "sys", (with_sys_except_hook.__module__,)
-assert with_sys_except_hook.__name__ == "excepthook", (with_sys_except_hook.__name__,)
+with_exc_hook = sys.excepthook  # aliases old hook, and fails fast to chain hooks
+assert with_exc_hook.__module__ == "sys", (with_exc_hook.__module__,)
+assert with_exc_hook.__name__ == "excepthook", (with_exc_hook.__name__,)
+
+assert sys.__stderr__ is not None  # refuses to run headless
+with_stderr = sys.stderr
+with_tcgetattr = termios.tcgetattr(sys.__stderr__.fileno())
 
 
-assert int(0x80 + signal.SIGINT) == 130  # 'mypy --strict' needs the int() here
-
-assert sys.__stderr__ is not None
-WITH_STDERR_TCGETATTR = termios.tcgetattr(sys.__stderr__.fileno())
+assert int(0x80 + signal.SIGINT) == 130  # discloses the Nonzero Exit Code for after ⌃C SigInt
 
 
 def excepthook(
@@ -168,23 +169,27 @@ def excepthook(
     exc_traceback: types.TracebackType | None,
 ) -> None:
 
+    # Clean up after Terminal Writes, if need be
+
+    with_stderr.write("\x1b[m")  # clears Select Graphic Rendition (SGR)
+
+    when = termios.TCSADRAIN  # undoes tty.setraw
+    attributes = with_tcgetattr
+    termios.tcsetattr(with_stderr.fileno(), when, attributes)
+
+    # Quit now for visible cause, if KeyboardInterrupt
+
     if exc_type is KeyboardInterrupt:
-        sys.stderr.write("\n")  # might not be sys.__stderr__
+        with_stderr.write("KeyboardInterrupt\n")
         sys.exit(130)  # 0x80 + signal.SIGINT
 
-    tty_setraw_gap = False  # cleans up Traceback when Try/ Finally misses a try.setraw
-    if tty_setraw_gap:
+    # Print the Traceback, etc
 
-        assert sys.__stderr__ is not None
-        sys.__stderr__.write("\x1b[m")
+    with_exc_hook(exc_type, exc_value, exc_traceback)
 
-        when = termios.TCSADRAIN
-        attributes = WITH_STDERR_TCGETATTR
-        termios.tcsetattr(sys.__stderr__.fileno(), when, attributes)
+    # Launch the Post-Mortem Debugger
 
-    with_sys_except_hook(exc_type, exc_value, exc_traceback)
-
-    print(">>> pdb.pm()", file=sys.stderr)
+    print(">>> pdb.pm()", file=with_stderr)
     pdb.pm()
 
 
@@ -2386,7 +2391,7 @@ def do_python(argv: list[str]) -> None:
 
     # Schedule a chat with Python to happen after Return from Def Main
 
-    sys.excepthook = with_sys_except_hook
+    sys.excepthook = with_exc_hook
     os.environ["PYTHONINSPECT"] = str(True)
 
     # todo: sync .do_python with .do_turtling
@@ -3073,7 +3078,7 @@ def do_turtling(argv: list[str]) -> None:
 
     # Launch a Chat
 
-    # sys.excepthook = with_sys_except_hook  # todo: when to except-hook & when not
+    # sys.excepthook = with_exc_hook  # todo: when to except-hook & when not
 
     assert CUU_Y == "\x1b" "[" "{}A"
     assert CUP_Y_X == "\x1b" "[" "{};{}H"
@@ -3083,7 +3088,24 @@ def do_turtling(argv: list[str]) -> None:
 
     atexit.register(lambda: ts.write_some_controls(["\x1b[32100H", "\x1b[A"]))
 
-    d: dict[str, object] = dict()
+    # Emulate having imported the enclosing Module as ./xshverb.py
+
+    assert "xshverb" not in sys.modules.keys()
+    xshverb = sys.modules["__main__"]
+    sys.modules["xshverb"] = xshverb
+
+    # Land the Repl into a small new Module of its own
+
+    module = types.ModuleType("xshverb.repl")
+    sys.modules["__main__"] = module
+
+    d = vars(module)
+
+    d["__file__"] = __file__  # almost correct
+    d["__main__"] = module
+    d["turtling"] = ts  # as if 'import turtling'
+    d["xshverb"] = xshverb
+
     d["br"] = ts.chat_line_break  # such as:  br();br();br();br();br()
     d["cls"] = ts.chat_clear
     d["color"] = pcp.puck_pick
@@ -3092,7 +3114,10 @@ def do_turtling(argv: list[str]) -> None:
     d["pcp"] = pcp
     d["play"] = ts.puck_play
     d["ts"] = ts
-    d["turtling"] = ts  # as if 'import turtling'
+
+    # Launch the Py Repl at Process Exit, as if:  python3 -i -c ''
+
+    os.environ["PYTHONINSPECT"] = str(True)
 
     choice = 1
 
