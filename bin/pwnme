@@ -5,6 +5,8 @@ cd "$D"/ || exit 1
 
 echo
 echo cd $(dirs -p |head -1)/
+
+echo
 git log --oneline --no-decorate -3
 
 echo
