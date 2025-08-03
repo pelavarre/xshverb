@@ -58,6 +58,7 @@ import argparse
 import atexit
 import code
 import collections.abc
+import copy
 import dataclasses
 import datetime as dt
 import decimal
@@ -168,7 +169,7 @@ def excepthook(
 ) -> None:
 
     if exc_type is KeyboardInterrupt:
-        sys.stderr.write("\n")
+        sys.stderr.write("\n")  # might not be sys.__stderr__
         sys.exit(130)  # 0x80 + signal.SIGINT
 
     tty_setraw_gap = False  # cleans up Traceback when Try/ Finally misses a try.setraw
@@ -3086,6 +3087,8 @@ def do_turtling(argv: list[str]) -> None:
     d["br"] = ts.chat_line_break  # such as:  br();br();br();br();br()
     d["cls"] = ts.chat_clear
     d["color"] = pcp.puck_pick
+    d["mr"] = ts.mr_puckman_palette_take_up
+    d["ms"] = ts.ms_puckman_palette_take_up
     d["pcp"] = pcp
     d["play"] = ts.puck_play
     d["ts"] = ts
@@ -3136,13 +3139,12 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: Color Picker
-
-# FIXME: Ms Pac-Man ® color palette, crossed with Hello Kitty ® ?
-# FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ←
+# FIXME: Color Picker even when Floor Color equals Stomp Color
+# FIXME: Also shadow the Background Colors, no longer only the Foreground Colors
 
 # FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ←, by ⇧ Fn ↑ ↓ → ←, etc
 
+# FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ←
 # FIXME: report sha version of this Source Code
 
 
@@ -3672,7 +3674,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
     puckland_rows: list[str] = list()
 
-    penscapes_by_tile: dict[str, list[str]] = {
+    mr_penscapes_by_tile = {  # a la Mr Pac-Man ®
         "Coin": ["\x1b[38;5;214m"],  # 214 == 0o20 + int("5_3_0", base=6)  # Gold
         "Floor": ["\x1b[48;5;232m"],  # 232 == 232 + 0  # 0/24 Black
         "Frame": ["\x1b[48;5;232m"],  # 232 == 232 + 0  # 0/24 Black
@@ -3682,6 +3684,17 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         "Wall": ["\x1b[38;5;33m"],  # 33 == 0o20 + int("025", base=6)  # Blue
     }
 
+    ms_penscapes_by_tile = {  # a la Ms Pac-Man ®
+        "Coin": ["\x1b[38;5;37m"],  # 37 == 0o20 + int("0_3_3", base=6)  # Blue Green
+        "Floor": ["\x1b[48;5;231m"],  # 231 == 0o20 + int("5_5_5", base=6)  # Bright White
+        "Frame": ["\x1b[48;5;231m"],  # 231 == 0o20 + int("5_5_5", base=6)  # Bright White
+        "Jolt": ["\x1b[38;5;25m"],  # 25 == 0o20 + int("0_1_3", base=6)  # Green Blue
+        "Puck": ["\x1b[38;5;160m"],  # 160 == 0o20 + int("4_0_0", base=6)  # Deep Red
+        "Stomp": ["\x1b[48;5;254m"],  # 254 == 232 + 22  # 11/12 = 22/24 Off White
+        "Wall": ["\x1b[38;5;199m"],  # 199 == 0o20 + int("503", base=6)  # Blue
+    }
+
+    penscapes_by_tile: dict[str, list[str]] = dict(mr_penscapes_by_tile)
     tiles = list(penscapes_by_tile.keys())
 
     # Move the Puck about
@@ -4184,7 +4197,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     ) -> list[str]:
         """Calculate the new Penscapes at Y X, given the old"""
 
-        penscapes_by_y_x = self.penscapes_by_y_x
         penscapes_by_tile = self.penscapes_by_tile
 
         Stomp = penscapes_by_tile["Stomp"][-1]  # for .restyle
@@ -4225,6 +4237,57 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         # Succeed
 
         return new_yx_penscapes
+
+    #
+    # Choose Colors
+    #
+
+    def mr_puckman_palette_take_up(self) -> None:
+        """Run ahead with Mr Puckman Colors"""
+
+        palette = copy.deepcopy(self.mr_penscapes_by_tile)
+        self.palette_take_up(palette)
+
+        assert sys.__stderr__ is not None
+        sys.__stderr__.flush()  # at exit of .mr_puckman_palette_take_up, for when called from Repl
+
+    def ms_puckman_palette_take_up(self) -> None:
+        """Run ahead with Ms Puckman Colors"""
+
+        palette = copy.deepcopy(self.ms_penscapes_by_tile)
+        self.palette_take_up(palette)
+
+        assert sys.__stderr__ is not None
+        sys.__stderr__.flush()  # at exit of .ms_puckman_palette_take_up, for when called from Repl
+
+    def palette_take_up(self, palette: dict[str, list[str]]) -> None:
+        """Swap in a new Color Palette"""
+
+        penscapes_by_tile = self.penscapes_by_tile
+
+        self.trigger()
+        penscapes_by_tile.clear()
+        penscapes_by_tile.update(palette)
+        self.trigger()
+        self.restyle(tile="Stomp", penscapes=list(palette["Stomp"]))
+        self.trigger()
+
+    def trigger(self) -> None:
+
+        penscapes_by_tile = self.penscapes_by_tile
+        assert penscapes_by_tile
+
+        tiles = list(penscapes_by_tile.keys())
+        assert tiles == self.tiles, (tiles, self.tiles)
+
+        for tile in tiles:
+            tile_penscapes = penscapes_by_tile[tile]
+            if not tile_penscapes:
+                eprint(tile)
+
+        for tile in tiles:
+            tile_penscapes = penscapes_by_tile[tile]
+            assert tile_penscapes, (tile, tile_penscapes)
 
     #
     # Play Puckman  # a la Ms Pac-Man ® & [Mr] Pac-Man ®
