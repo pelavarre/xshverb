@@ -4,7 +4,7 @@ D=$(dirname "$0")/..
 cd "$D"/ || exit 1
 
 echo
-dirs -p |head -1
+echo cd $(dirs -p |head -1)/
 git log --oneline --no-decorate -3
 
 echo
