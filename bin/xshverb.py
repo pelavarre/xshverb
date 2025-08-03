@@ -3086,6 +3086,7 @@ def do_turtling(argv: list[str]) -> None:
     d["br"] = ts.chat_line_break  # such as:  br();br();br();br();br()
     d["cls"] = ts.chat_clear
     d["color"] = pcp.puck_pick
+    d["pcp"] = pcp
     d["play"] = ts.puck_play
     d["ts"] = ts
     d["turtling"] = ts  # as if 'import turtling'
@@ -3140,7 +3141,7 @@ def do_turtling(argv: list[str]) -> None:
 # FIXME: Ms Pac-Man ® color palette, crossed with Hello Kitty ® ?
 # FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ←
 
-# FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ← etc
+# FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ←, by ⇧ Fn ↑ ↓ → ←, etc
 
 # FIXME: report sha version of this Source Code
 
@@ -3186,7 +3187,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
         text = "Press Return or Esc"
         text += ", after Tab and ⇧Tab and R G B or W and the ↑ ↓ Arrows"
-        print(text)
+        eprint(text)
 
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
@@ -3205,7 +3206,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
         ts.chat_line_break()
         ts.chat_line_break()
-        print("Thank you")
+        eprint("Thank you")
 
     def puck_try_pick(self, with_tcgetattr: list[int]) -> None:
         """Take in Keyboard Chords to pick Colors, till Return pressed"""
@@ -3217,14 +3218,14 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         stdio.flush()  # before os.read of .puck_try_pick
 
         byte0 = os.read(fileno, 1)
-        if byte0 == b"\r":
+        if byte0 == b"\r":  # Return
             sys.exit()
 
-        if byte0 == b"\x09":  # Tab
+        if byte0 == b"\t":  # Tab
             self.do_tab()
             return
 
-        if byte0 == b"\x0c":  # ⌃L
+        if byte0 == b"\f":  # ⌃L
             ts.repaint()
             return
 
@@ -3277,7 +3278,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         self._tile_step(1)
 
         if self.tile == "Floor":
-            print()
+            eprint()
             ts.chat_line_break()
 
         self.print_focus_br()
@@ -3288,7 +3289,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         ts = turtle_screen
 
         if self.tile == "Floor":
-            print()
+            eprint()
             ts.chat_line_break()
 
         self._tile_step(-1)
@@ -3323,7 +3324,10 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         ts = turtle_screen
         stdio = ts.stdio
 
-        (m_int, str_m_int, m_colorspace_if) = self._color_plus_decode(tile, lamp_if=lamp_if, step=0)
+        (m_int, str_m_int, m_colorspace_if, m_stilled) = self._color_plus_decode(
+            tile, lamp_if=lamp_if, step=0
+        )
+
         assert m_colorspace_if in ("", "RGB", "W"), (m_colorspace_if,)
 
         # Change Colorspace only when at max Black or at max White
@@ -3382,10 +3386,12 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         penscape = penscapes[-1]
 
         parts = list(penscape.rpartition(";"))
+        assert parts[-1] != f"{warp_m_int}m", (parts[-1], f"{warp_m_int}m", parts)
         parts[-1] = f"{warp_m_int}m"
         next_penscape = "".join(parts)
 
         ts.restyle(tile, penscapes=[next_penscape])
+
         assert penscapes_by_tile[tile] == [next_penscape], (penscapes_by_tile[tile], next_penscape)
 
     def _color_step(self, step: int) -> None:
@@ -3401,7 +3407,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         assert len(penscapes) == 1, (penscapes,)
         penscape = penscapes[-1]
 
-        (m_int, str_m_int, m_colorspace_if) = self._color_plus_decode(
+        (m_int, str_m_int, m_colorspace_if, m_stilled) = self._color_plus_decode(
             tile, lamp_if=lamp_if, step=step
         )
 
@@ -3409,10 +3415,12 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         parts[-1] = f"{m_int}m"
         next_penscape = "".join(parts)
 
-        ts.restyle(tile, penscapes=[next_penscape])
+        if not m_stilled:
+            ts.restyle(tile, penscapes=[next_penscape])
+
         assert penscapes_by_tile[tile] == [next_penscape], (penscapes_by_tile[tile], next_penscape)
 
-    def _color_plus_decode(self, tile: str, lamp_if: str, step: int) -> tuple[int, str, str]:
+    def _color_plus_decode(self, tile: str, lamp_if: str, step: int) -> tuple[int, str, str, bool]:
         """Sketch the Lamp as coded for Esc [ m and as R G B or W"""
 
         tiles = ["Coin", "Floor", "Frame", "Jolt", "Puck", "Stomp", "Wall"]
@@ -3464,12 +3472,17 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             if lamp_if == "Red":
                 mr = r + step
                 mr = max(0, min(5, mr))
+                m_stilled = mr == r
             elif lamp_if == "Green":
                 mg = g + step
                 mg = max(0, min(5, mg))
+                m_stilled = mg == g
             elif lamp_if == "Blue":
                 mb = b + step
                 mb = max(0, min(5, mb))
+                m_stilled = mb == b
+            else:
+                m_stilled = True
 
             m_rgb = mr * 6 * 6 + mg * 6 + mb
 
@@ -3486,20 +3499,22 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             grayscale = 24 if (graydiff == -1) else graydiff  # 0..24
 
             if (grayscale + step) < 0:
-                m_graydiff = graydiff
+                m_grayscale = grayscale
             elif (grayscale + step) > 24:
-                m_graydiff = graydiff
+                m_grayscale = grayscale
             else:
-                m_graydiff = (grayscale + step) % 25  # 0..24
+                m_grayscale = (grayscale + step) % 25  # 0..24
 
-            m_grayscale = -1 if (m_graydiff == 24) else m_graydiff  # -1..23
+            m_stilled = m_grayscale == grayscale
 
-            m_int = 16 + 216 + m_grayscale
+            m_graydiff = -1 if (m_grayscale == 24) else m_grayscale  # -1..23
+
+            m_int = 16 + 216 + m_graydiff
             str_m_int = f"{grayscale}"
 
         # Succeed
 
-        return (m_int, str_m_int, m_colorspace_if)
+        return (m_int, str_m_int, m_colorspace_if, m_stilled)
 
         # (16, "0 0 0")
         # (231, "5 5 5")
@@ -3513,9 +3528,11 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
         ts = turtle_screen
 
-        (m_int, str_m_int, m_colorspace_if) = self._color_plus_decode(tile, lamp_if=lamp_if, step=0)
+        (m_int, str_m_int, m_colorspace_if, m_stilled) = self._color_plus_decode(
+            tile, lamp_if=lamp_if, step=0
+        )
 
-        print(f"{tile=} {lamp_if=} {str_m_int}", end="\r\n")
+        eprint(f"{tile=} {lamp_if=} {str_m_int}", end="\r\n")
         ts.chat_line_break()
 
     def do_colors_back_up(self) -> None:
@@ -3537,7 +3554,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         ts = turtle_screen
         penscapes_by_tile = ts.penscapes_by_tile
 
-        print("Cancelling Color Changes ...", end="\r\n")
+        eprint("Cancelling Color Changes ...", end="\r\n")
         ts.chat_line_break()
 
         penscapes_by_tile.update(esc_penscapes_by_tile)
@@ -3773,7 +3790,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         self.chat_clear()
         stdio.flush()  # for .pane_resume
-        print("To get started, try:  cls(); play()")
+        eprint("To get started, try:  cls(); play()")
 
         # our 'Turtle Screen Pane' rhymes with the Python Turtle Graphics Window
 
@@ -4022,7 +4039,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             yx_penscapes.clear()
             yx_penscapes.extend(penscapes)
 
-    def repaint(self) -> None:
+    def repaint(self) -> None:  # FIXME: merge .repaint with .puck_rows_write()
         """Redraw the Terminal Screen from its in-memory Shadow"""
 
         char_by_y_x = self.char_by_y_x
@@ -4030,7 +4047,11 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         ts = turtle_screen
         penscapes_by_tile = ts.penscapes_by_tile
+
         Floors = penscapes_by_tile["Floor"]  # for .repaint
+        Frames = penscapes_by_tile["Frame"]  # for .repaint
+
+        #
 
         assert DECSC == "\x1b" "7"
         assert DECRC == "\x1b" "8"
@@ -4043,14 +4064,14 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             for x in sorted(char_by_y_x[y].keys()):
                 ch = char_by_y_x[y][x]
                 yx_penscapes = penscapes_by_y_x[y][x]
+                yx_in_board = self.yx_find_in_board(y, x)
+
+                #
 
                 self.write_control("\x1b[m")  # todo: work harder to drop redundant Controls
-                self.write_some_controls(Floors)
                 self.write_control(f"\x1b[{y};{x}H")
-
-                for penscape in yx_penscapes:
-                    self.write_control(penscape)
-
+                self.write_some_controls(Floors if yx_in_board else Frames)
+                self.write_some_controls(yx_penscapes)
                 self.write_text(ch)
 
         self.write_control("\x1b[m")
@@ -4058,21 +4079,13 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # FIXME: scroll away and restart Chat Panel, as part of ⌃L Repaint
 
-    def restyle(self, tile: str, penscapes: list[str]) -> None:
-        """Change the Penscapes of a Tile"""
-
-        stdio = self.stdio
-
-        char_by_y_x = self.char_by_y_x
-        penscapes_by_y_x = self.penscapes_by_y_x
-        penscapes_by_tile = self.penscapes_by_tile
+    def yx_find_in_board(self, y: int, x: int) -> bool:
+        """Find the Y X on the Board, or not"""
 
         puck_y_min = self.puck_y_min
         puck_y_max = self.puck_y_max
         puck_x_min = self.puck_x_min
         puck_x_max = self.puck_x_max
-
-        # Find the Frame
 
         assert FrameHeight == 2
         assert FrameWidth == 4
@@ -4085,8 +4098,36 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         board_x_min = puck_x_min + 4
         board_x_max = puck_x_max - 4  # don't want - (2 - 1) here as when bounding Wide Puck Moves
 
+        if board_y_min <= y <= board_y_max:
+            if board_x_min <= x <= board_x_max:
+                return True
+
+        return False
+
+    def restyle(self, tile: str, penscapes: list[str]) -> None:
+        """Change the Penscapes of a Tile"""
+
+        stdio = self.stdio
+
+        char_by_y_x = self.char_by_y_x
+        penscapes_by_y_x = self.penscapes_by_y_x
+        penscapes_by_tile = self.penscapes_by_tile
+
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+        paints_below = self.paints_below
+
+        #
+
         Floors = penscapes_by_tile["Floor"]  # for .restyle
-        Stomp = penscapes_by_tile["Stomp"][-1]  # for .restyle
+        Frames = penscapes_by_tile["Frame"]  # for .restyle
+
+        NewFloors = list(Floors)
+        NewFrames = list(Frames)
+        if tile == "Floor":
+            NewFloors = list(penscapes)
+        elif tile == "Frame":
+            NewFrames = list(penscapes)
 
         # Consider each Y X
 
@@ -4099,57 +4140,91 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             for x in sorted(char_by_y_x[y].keys()):
                 ch = char_by_y_x[y][x]
                 yx_penscapes = penscapes_by_y_x[y][x]
+                yx_in_board = self.yx_find_in_board(y, x)
 
-                # layout_ch = self.puck_read_layout_at_yx(y, x=x, default="?")
+                new_yx_penscapes = self.puck_read_yx_tile(
+                    y, x=x, ch=ch, yx_penscapes=yx_penscapes, tile=tile, penscapes=penscapes
+                )
 
-                # Read the Tile from Y X  # todo: Shadow Tiles, not just Styles?
+                # Update the Shadow  # todo: Skip over Y X not of the Tile
 
-                yx_in_board = False
-                if board_y_min <= y <= board_y_max:
-                    if board_x_min <= x <= board_x_max:
-                        yx_in_board = True
-
-                if ch in "()":
-                    yx_tile = "Coin"
-                elif ch in "@@":
-                    yx_tile = "Jolt"
-                elif ch == FullBlock:  # █
-                    yx_tile = "Puck"
-                elif ch == " ":
-                    if not yx_in_board:
-                        yx_tile = "Frame"
-                    elif Stomp in yx_penscapes:
-                        yx_tile = "Stomp"
-                    else:
-                        yx_tile = "Floor"
-                else:
-                    yx_tile = "Wall"
-
-                # Skip over Y X not of the Tile
-
-                if yx_tile != tile:
-                    continue
+                yx_penscapes.clear()
+                yx_penscapes.extend(new_yx_penscapes)
 
                 # Write the Style & Text of the Y X
 
-                yx_penscapes.clear()
-                yx_penscapes.extend(penscapes_by_tile[yx_tile])
-
-                self.write_control("\x1b[m")  # todo: work harder to drop redundant Controls
-                self.write_some_controls(Floors)
                 self.write_control(f"\x1b[{y};{x}H")
-
-                for penscape in yx_penscapes:
-                    self.write_control(penscape)
+                self.write_control("\x1b[m")  # todo: work harder to drop redundant Controls
+                self.write_some_controls(NewFloors if yx_in_board else NewFrames)
+                self.write_some_controls(new_yx_penscapes)
 
                 self.write_text(ch)
 
         self.write_control("\x1b[m")
         stdio.write("\x1b8")  # bounces back into the Chat Panel  # for .restyle
 
+        y = puck_y
+        x = puck_x
+        for paint in paints_below:
+            (ch, yx_penscapes) = paint
+
+            new_yx_penscapes = self.puck_read_yx_tile(
+                y, x=x, ch=ch, yx_penscapes=yx_penscapes, tile=tile, penscapes=penscapes
+            )
+
+            yx_penscapes.clear()
+            yx_penscapes.extend(new_yx_penscapes)
+
         tile_penscapes = penscapes_by_tile[tile]
         tile_penscapes.clear()
         tile_penscapes.extend(penscapes)
+
+    def puck_read_yx_tile(
+        self, y: int, x: int, ch: str, yx_penscapes: list[str], tile: str, penscapes: list[str]
+    ) -> list[str]:
+        """Calculate the new Penscapes at Y X, given the old"""
+
+        penscapes_by_y_x = self.penscapes_by_y_x
+        penscapes_by_tile = self.penscapes_by_tile
+
+        Stomp = penscapes_by_tile["Stomp"][-1]  # for .restyle
+
+        # Read the Tile from Y X and Penscapes  # todo: Shadow Tiles, not just Styles?
+
+        yx_in_board = self.yx_find_in_board(y, x)
+
+        if not yx_in_board:
+            assert ch == " ", (ch, y, x)
+
+        if ch in "()":
+            yx_tile = "Coin"
+        elif ch in "@@":
+            yx_tile = "Jolt"
+        elif ch == FullBlock:  # █
+            yx_tile = "Puck"
+        elif ch == " ":
+            if not yx_in_board:
+                yx_tile = "Frame"
+            elif Stomp in yx_penscapes:
+                yx_tile = "Stomp"
+            else:
+                yx_tile = "Floor"
+        else:
+            yx_tile = "Wall"
+
+        if not yx_in_board:
+            assert yx_tile == "Frame", (ch, y, x)
+
+        # Choose Foreground Penscapes by Tile
+
+        if yx_tile == tile:
+            new_yx_penscapes = list(penscapes)
+        else:
+            new_yx_penscapes = list(penscapes_by_tile[yx_tile])
+
+        # Succeed
+
+        return new_yx_penscapes
 
     #
     # Play Puckman  # a la Ms Pac-Man ® & [Mr] Pac-Man ®
@@ -4162,7 +4237,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         text = "Press Return to stop play,"
         text += " else Spacebar or Tab and the ← ↑ → ↓ Arrows to play"
-        print(text)
+        eprint(text)
 
         with_tcgetattr = termios.tcgetattr(fileno)
         tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
@@ -4180,7 +4255,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         self.chat_line_break()
         self.chat_line_break()
-        print("Thank you")
+        eprint("Thank you")
 
     def puck_try_play(self, with_tcgetattr: list[int]) -> None:  # FIXME  # noqa C901
         """Take in Keyboard Chords to move the Puck, till Return pressed"""
@@ -4191,7 +4266,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         stdio.flush()  # before os.read of .puck_try_play
 
         byte0 = os.read(fileno, 1)
-        if byte0 == b"\r":
+        if byte0 == b"\r":  # Return
             sys.exit()
 
         if byte0 == b"\x00":  # ⌃Spacebar
@@ -4199,12 +4274,12 @@ class TurtleScreen:  # type of .ts, .turtle_screen
                 self.puck_move()
             return
 
-        if byte0 == b"\x09":  # Tab
+        if byte0 == b"\t":  # Tab
             for _ in range(8):  # 8 is classic str.expandtabs.tabsize
                 self.puck_move()
             return
 
-        if byte0 == b"\x0c":  # ⌃L
+        if byte0 == b"\f":  # ⌃L
             self.repaint()
             return
 
@@ -4368,6 +4443,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         # FIXME: Color Pick Bold/ Plain Penscapes
         # FIXME: Draw the Penscapes of Frame as affirmatively as Floor & Stomp
 
+        Floors = penscapes_by_tile["Floor"]  # for .puck_one_row_write
+        Frames = penscapes_by_tile["Frame"]  # for .puck_one_row_write
+
         penscape_by_ch = {  # omits the " " Space, the "." Full-Stop, and every kind of Wall
             "(": Coin,  # aka Coin
             ")": Coin,
@@ -4381,14 +4459,14 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert BrickMark == ".", (BrickMark,)
         assert PuckMark == FullBlock, (PuckMark,)
 
-        with_penscape = ""
-        pentext = ""
-
-        pentexts = list()
+        y = row_y
         for i, ch__ in enumerate(text):
             x = column_x + i
+            yx_in_board = self.yx_find_in_board(y, x)
 
             ch_ = " " if (ch__ == ".") else ch__
+
+            # Pick out where the Puck stands
 
             ch = ch_
             if ch_ == FullBlock:
@@ -4401,30 +4479,15 @@ class TurtleScreen:  # type of .ts, .turtle_screen
                 else:
                     assert False, (row_y, x, self.puck_y, self.puck_x)
 
-            if ch != " ":
-                default_eq_Wall = Wall
-                penscape = penscape_by_ch.get(ch, default_eq_Wall)
-                if penscape != with_penscape:
-                    assert pentext, (pentext,)  # because begun by " " Space's
-                    pentexts.append(pentext)
+            #
 
-                    self.write_text(pentext)
-                    self.write_control(penscape)
+            default_eq_Wall = Wall
+            penscape = penscape_by_ch.get(ch, default_eq_Wall)
 
-                    with_penscape = penscape
-                    pentext = ""
-
-            pentext += ch
-
-        assert pentext, (pentext,)  # because last visited Char not yet written
-        pentexts.append(pentext)
-        self.write_text(pentext)
-
-        assert GameboardWidth == 64
-        assert sum(len(_) for _ in pentexts) == len(text) == 64, (pentexts, text)
-
-        # self.stdio.write("\x1b[m" "\n")
-        # breakpoint()
+            self.write_control("\x1b[m")
+            self.write_some_controls(Floors if yx_in_board else Frames)
+            self.write_control(penscape)
+            self.write_text(ch)
 
         self.write_control("\n")
 
@@ -5684,8 +5747,8 @@ def pathlib_path_read_version(pathname: str) -> str:
 #
 
 
-def eprint(*args: object) -> None:
-    print(*args, file=sys.stderr)
+def eprint(*args: object, end: str = "\n") -> None:
+    print(*args, end=end, file=sys.stderr)
 
 
 #
