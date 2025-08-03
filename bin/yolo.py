@@ -21,6 +21,9 @@ import sys
 import termios
 import types
 
+if not __debug__:
+    raise NotImplementedError([__debug__])  # refuses to run without live Asserts
+
 
 #
 # Exit nonzero into the Pdb-Pm Post-Mortem Debugger, when not KeyboardInterrupt nor SystemExit

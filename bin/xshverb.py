@@ -98,7 +98,7 @@ else:
 _: dict[str, int] | None  # new since Oct/2021 Python 3.10
 
 if not __debug__:
-    raise NotImplementedError(str((__debug__,)))  # "'python3' is better than 'python3 -O'"
+    raise NotImplementedError([__debug__])  # refuses to run without live Asserts
 
 if zoneinfo:
     Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
