@@ -6,7 +6,7 @@ usage: yolo.py --
 do what's popular now
 
 examples:
-  bin/yolo.py
+  bin/yolo.py --yolo
 """
 
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard

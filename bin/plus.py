@@ -6,7 +6,8 @@ usage: plus.py --
 do what's popular now
 
 examples:
-  bin/plus.py
+  bin/+
+  bin/plus.py --yolo
 """
 
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
