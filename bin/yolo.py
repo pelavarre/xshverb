@@ -83,7 +83,8 @@ sys.excepthook = excepthook
 def main() -> None:
     """Run from the Shell Command Line, and exit into the Py Repl"""
 
-    assert sys.argv[1:] == ["--"], (sys.argv[1:], sys.argv[0])
+    assert sys.argv[1:], sys.argv
+    assert "--yolo".startswith(sys.argv[1]) and sys.argv[1].startswith("--"), sys.argv
 
     # Emulate having imported the enclosing Module as ./yolo.py
 

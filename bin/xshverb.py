@@ -111,7 +111,7 @@ if zoneinfo:
 #
 
 
-YYYY_MM_DD = "2025-06-24"  # date of last change to this Code, or an earlier date
+YYYY_MM_DD = "2025-08-03"  # date of last change to this Code, or an earlier date
 
 _3_10_ARGPARSE = (3, 10)  # Oct/2021 Python 3.10  # oldest trusted to run ArgParse Static Analyses
 
