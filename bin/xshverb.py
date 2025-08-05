@@ -3731,12 +3731,14 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     puck_x: int = -1
     paints_below: tuple[Paint, Paint]  # todo: NameError if mentioned before initted
 
-    puck_dy: int = 0  # initially (0, +2) Right
-    puck_dx: int = +2
+    puck_dy: int = 0  # initially (0, 2) Right
+    puck_dx: int = 2
 
     #
 
     def __init__(self) -> None:
+
+        assert PuckWidth == 2  # needed above
 
         #
 
@@ -4449,23 +4451,27 @@ class TurtleScreen:  # type of .ts, .turtle_screen
                 elif byte2 == b"6":
                     byte3 = os.read(fileno, 1)
                     if byte3 == b"~":  # ⇧ Fn ↓ Down
-                        self.puck_warp_to_dy_dx(dy=4, dx=0)
+                        if (self.puck_y + 4) <= self.puck_y_max:
+                            self.puck_warp_to_dy_dx(dy=4, dx=0)
+                            self.puck_stomp_if()
+                            return
+                elif byte2 == b"H":  # ⇧ Fn ← Left
+                    if (self.puck_x + -4 * 2) >= self.puck_x_min:
+                        self.puck_warp_to_dy_dx(dy=0, dx=-4 * 2)
                         self.puck_stomp_if()
                         return
-                elif byte2 == b"H":  # ⇧ Fn ← Left
-                    self.puck_warp_to_dy_dx(dy=0, dx=-4 * 2)
-                    self.puck_stomp_if()
-                    return
                 elif byte2 == b"F":  # ⇧ Fn → Right
-                    self.puck_warp_to_dy_dx(dy=0, dx=4 * 2)
-                    self.puck_stomp_if()
-                    return
+                    if (self.puck_x + 4 * 2) <= self.puck_x_max:
+                        self.puck_warp_to_dy_dx(dy=0, dx=4 * 2)
+                        self.puck_stomp_if()
+                        return
                 elif byte2 == b"5":
                     byte3 = os.read(fileno, 1)
                     if byte3 == b"~":  # ⇧ Fn ↑ Up
-                        self.puck_warp_to_dy_dx(dy=-4, dx=0)
-                        self.puck_stomp_if()
-                        return
+                        if (self.puck_y + -4) >= self.puck_y_min:
+                            self.puck_warp_to_dy_dx(dy=-4, dx=0)
+                            self.puck_stomp_if()
+                            return
 
         stdio.write("\a")
 
@@ -4620,7 +4626,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         if (puck_y + 1) > puck_y_max:
             self.puck_warp_to_dy_dx(puck_y_min - puck_y, dx=0)
         else:
-            self.puck_warp_to_dy_dx(+1, dx=0)
+            self.puck_warp_to_dy_dx(dy=1, dx=0)
 
         self.puck_stomp_if()
 
@@ -4633,9 +4639,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert PuckWidth == 2
 
         if (puck_x - 2) < puck_x_min:
-            self.puck_warp_to_dy_dx(0, dx=(puck_x_max - 1 - puck_x))
+            self.puck_warp_to_dy_dx(dy=0, dx=(puck_x_max - 1 - puck_x))
         else:
-            self.puck_warp_to_dy_dx(0, dx=-2)
+            self.puck_warp_to_dy_dx(dy=0, dx=-2)
 
         self.puck_stomp_if()
 
@@ -4648,9 +4654,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         puck_x_max = self.puck_x_max
 
         if (puck_x + 2 + (2 - 1)) > puck_x_max:
-            self.puck_warp_to_dy_dx(0, dx=(puck_x_min - puck_x))
+            self.puck_warp_to_dy_dx(dy=0, dx=(puck_x_min - puck_x))
         else:
-            self.puck_warp_to_dy_dx(0, dx=+2)
+            self.puck_warp_to_dy_dx(dy=0, dx=+2)
 
         self.puck_stomp_if()
 
@@ -4665,7 +4671,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         if (puck_y - 1) < puck_y_min:
             self.puck_warp_to_dy_dx(puck_y_max - puck_y, dx=0)
         else:
-            self.puck_warp_to_dy_dx(-1, dx=0)
+            self.puck_warp_to_dy_dx(dy=-1, dx=0)
 
         self.puck_stomp_if()
 
