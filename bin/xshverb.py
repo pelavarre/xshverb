@@ -3771,6 +3771,30 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.puck_x_min = puck_x_min
         self.puck_x_max = puck_x_max
 
+        #
+
+        assert FrameHeight == 2
+        assert FrameWidth == 4
+
+        min_width = FrameWidth + GameboardWidth + FrameWidth
+        min_height = 3 + GameboardHeight + SouthPanelHeight
+
+        self.require_width_height(min_width, height=min_height)
+
+    def require_width_height(self, width: int, height: int) -> None:
+        """Require the Terminal Screen Pane to be as wide and tall as the Game"""
+
+        w = self.window_width()
+        h = self.window_height()
+
+        lack = f"{width} x {height} Columns-x-Rows needed to play - but you've got {w} x {h}"
+        repair = "Press ⌘ - to choose a smaller Font, so you can resize"
+
+        if (w < width) or (h < height):
+            eprint(lack)
+            eprint(repair)
+            sys.exit(2)  # exits 2 for Bad Env
+
     #
     # Run in place of Sys Stdout/Stderr
     #
@@ -5128,10 +5152,6 @@ JoltMark = "@"
 PuckMark = FullBlock  # █
 
 
-puck_color_picker = PuckColorPicker()
-turtle_screen = TurtleScreen()
-
-
 #
 # Upper the Case of each Word in each Line
 #
@@ -6045,7 +6065,15 @@ FUNC_BY_VERB["textwrap.dedent"] = do_dedent
 # todo: merge these in above, like as .do_textwrap_dedent, .do_str_strip
 
 
+#
+# Name some Singletons
+#
+
+
 alt = ShellPipe()
+
+puck_color_picker = PuckColorPicker()
+turtle_screen = TurtleScreen()
 
 
 #
