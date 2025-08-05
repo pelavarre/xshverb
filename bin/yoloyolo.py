@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 r"""
-usage: yolo.py --
+usage: yoloyolo.py --
 
 do what's popular now
 
 examples:
-  bin/yolo.py --yolo
+  bin/yoloyolo.py --yolo
 """
 
 # code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
@@ -86,22 +86,22 @@ def main() -> None:
     assert sys.argv[1:], sys.argv
     assert "--yolo".startswith(sys.argv[1]) and sys.argv[1].startswith("--"), sys.argv
 
-    # Emulate having imported the enclosing Module as ./yolo.py
+    # Emulate having imported the enclosing Module as ./yoloyolo.py
 
-    assert "yolo" not in sys.modules.keys()
-    yolo = sys.modules["__main__"]
-    sys.modules["yolo"] = yolo
+    assert "yoloyolo" not in sys.modules.keys()
+    yoloyolo = sys.modules["__main__"]
+    sys.modules["yoloyolo"] = yoloyolo
 
     # Land the Repl into a small new Module of its own
 
-    module = types.ModuleType("yolo.repl")
+    module = types.ModuleType("yoloyolo.repl")
     sys.modules["__main__"] = module
 
     d = vars(module)
 
     d["__file__"] = __file__  # almost correct
     d["__main__"] = module
-    d["yolo"] = yolo
+    d["yoloyolo"] = yoloyolo
 
     d["passme"] = passme
     d["failme"] = failme
@@ -141,12 +141,12 @@ _ = """
 
 Example Input
 
-    bin/yolo.py --
+    bin/yoloyolo.py --
 
     passme()
 
     dir()  # small, by our design
-    dir(yolo)  # large, all of our imports here, etc
+    dir(yoloyolo)  # large, all of our imports here, etc
 
     failme()  # raises Exception and launches the Pdb-Pm Post-Mortem Debugger
     dir()  # just our own 'countdown' and '_' examples
@@ -155,7 +155,7 @@ Example Input
 
 Example Output
 
-    % bin/yolo.py --
+    % bin/yoloyolo.py --
     To get started, press Return after typing:  passme(); failme()
     >>>
 
@@ -163,9 +163,9 @@ Example Output
     >>>
     >>> dir()
     ['__builtins__', '__doc__', '__file__', '__loader__', '__main__', '__name__', '__package__',
-        '__spec__', 'failme', 'passme', 'yolo']
+        '__spec__', 'failme', 'passme', 'yoloyolo']
     >>>
-    >>> dir(yolo)
+    >>> dir(yoloyolo)
     ['_', '__annotations__', '__builtins__', '__doc__', '__loader__', '__name__', '__package__',
         '__spec__', 'annotations', 'excepthook', 'failme', 'main', 'os', 'passme', 'pdb', 'signal',
          'sys', 'termios', 'types', 'with_exc_hook', 'with_stderr', 'with_tcgetattr']
@@ -176,11 +176,11 @@ Example Output
     File "<python-input-7>", line 1, in <module>
         failme()
         ~~~~~~^^
-    File ".../xshverb/bin/yolo.py", line 124, in failme
+    File ".../xshverb/bin/yoloyolo.py", line 128, in failme
         raise Exception("Intentionally Left Mostly Blank")
     Exception: Intentionally Left Mostly Blank
     >>> pdb.pm()
-    > .../xshverb/bin/yolo.py(124)failme()
+    > .../xshverb/bin/yoloyolo.py(128)failme()
     -> raise Exception("Intentionally Left Mostly Blank")
     (Pdb)
 
@@ -198,5 +198,5 @@ Example Output
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
 
 
-# posted as:  https://github.com/pelavarre/xshverb/blob/main/bin/yolo.py
+# posted as:  https://github.com/pelavarre/xshverb/blob/main/bin/yoloyolo.py
 # copied from:  git clone https://github.com/pelavarre/xshverb.git
