@@ -3106,13 +3106,13 @@ def do_turtling(argv: list[str]) -> None:
     d["turtling"] = ts  # as if 'import turtling'
     d["xshverb"] = xshverb
 
-    d["br"] = ts.chat_line_break  # such as:  br();br();br();br();br()
-    d["cls"] = ts.chat_clear
-    d["color"] = pcp.puck_pick
-    d["mr"] = ts.mr_puckman_palette_take_up
-    d["ms"] = ts.ms_puckman_palette_take_up
+    d["br"] = ts.chat_line_break  # as if def br():  # like for:  br();br();br();br();br()
+    d["cls"] = ts.chat_clear  # as if def cls():
+    d["color"] = pcp.puck_pick  # as if def color():
+    d["mr"] = ts.mr_puckman_palette_take_up  # as if def mr():
+    d["ms"] = ts.ms_puckman_palette_take_up  # as if def ms():
     d["pcp"] = pcp
-    d["play"] = ts.puck_play
+    d["play"] = ts.puck_play  # as if def play():
     d["ts"] = ts
 
     # Launch the Py Repl at Process Exit, as if:  python3 -i -c ''
@@ -3256,16 +3256,19 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             ts.repaint()
             return
 
-        if byte0.upper() == b"R":  # R r
+        if byte0 == b"Q":  # ⇧Q
+            assert False
+
+        if byte0.upper() == b"R":  # ⇧R R
             self.pick_lamp("Red")
             return
-        if byte0.upper() == b"G":  # G g
+        if byte0.upper() == b"G":  # ⇧G G
             self.pick_lamp("Green")
             return
-        if byte0.upper() == b"B":  # B b
+        if byte0.upper() == b"B":  # ⇧B B
             self.pick_lamp("Blue")
             return
-        if byte0.upper() == b"W":  # W w
+        if byte0.upper() == b"W":  # ⇧W W
             self.pick_lamp("")  # Grayscale
             return
 
@@ -4384,6 +4387,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             # assert with_tcgetattr_ == with_tcgetattr, (with_tcgetattr_, with_tcgetattr)
 
             return
+
+        if byte0 == b"Q":  # ⇧Q
+            assert False
 
         # FIXME: blocks after 1..N Prefix Bytes
 
