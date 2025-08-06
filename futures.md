@@ -1,5 +1,20 @@
 things to do, futures to build
 
+lately
+
+    $ touch a b && d <(cat a |sed 's,p,x,g') <(cat b |sed 's,q,x,g')
+    + diff -brpu /dev/fd/63 /dev/fd/62
+    diff: /dev/fd/63: No such file or directory
+    diff: /dev/fd/62: No such file or directory
+    $
+
+    $ diff -brpu a b
+    $
+
+    $ touch a b && python3 -c 'import os, sys; print(open(sys.argv[-2]), open(sys.argv[-1]))' <(cat a |sed 's,p,x,g') <(cat b |sed 's,q,x,g')
+    <_io.TextIOWrapper name='/dev/fd/63' mode='r' encoding='UTF-8'> <_io.TextIOWrapper name='/dev/fd/62' mode='r' encoding='UTF-8'>
+    $
+
 soon
 
 

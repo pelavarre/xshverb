@@ -15,13 +15,16 @@ examples:
 
 from __future__ import annotations  # backports new datatype syntaxes into old Pythons
 
+import collections.abc
 import datetime as dt
 import os
+import pathlib
 import pdb
 import select
 import signal
 import sys
 import termios
+import textwrap
 import tty
 import types
 import typing
@@ -125,83 +128,286 @@ def main() -> None:
 def tryme() -> None:
     """Run when called"""
 
+    func = try_tbp_self_test
+    func = try_take_one_if
+    func = try_read_byte_packet
+    func = try_buffered_loopback
+    func = try_screen_editor
+
+    func = try_screen_editor  # last choice wins
+
+    func()
+
+
+def try_screen_editor() -> None:
+    """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+    with ScreenEditor() as se:
+        se.loopback_awhile()
+
+
+def try_buffered_loopback() -> None:
+    """Loop Keyboard back to Screen, but as whole Packets"""
+
+    with BytesTerminal() as bt:
+        fileno = bt.fileno
+        while True:
+            tbp = bt.read_byte_packet(timeout=None)
+            kdata = tbp.to_bytes()
+            os.write(fileno, kdata)
+            if kdata == b"\r":
+                break
+
+
+def try_read_byte_packet() -> None:
+    """Loop over BytesTerminal Read_Byte_Packet"""
+
+    with BytesTerminal() as bt:
+        stdio = bt.stdio
+        while True:
+            tbp = bt.read_byte_packet(timeout=None)
+            data = tbp.to_bytes()
+
+            print(tbp, end="\r\n", file=stdio)
+
+            if data == b"\r":
+                break
+
+
+def try_take_one_if() -> None:
+    """Loop over TerminalBytePacket Take_One_If"""
+
+    with BytesTerminal() as bt:
+        stdio = bt.stdio
+        fileno = bt.fileno
+
+        data = b""
+        extras = b""
+        while True:
+            tbp = TerminalBytePacket(extras)
+
+            while True:
+                byte = os.read(fileno, 1)
+                print(1, byte, file=stdio, end="\r\n")
+
+                extras = tbp.take_one_if(byte)
+                data = tbp.to_bytes()
+                print(2, tbp, file=stdio, end="\r\n")
+
+                if extras:
+                    print(3, f"{extras=}", file=stdio, end="\r\n")
+                    tbp.close()
+                elif not bt.kbhit(timeout=0.000):
+                    tbp.close()
+
+                if tbp.closed:
+                    break
+
+            print(file=stdio, end="\r\n")
+
+            if data == b"\r":
+                break
+
+
+def try_tbp_self_test() -> None:
+    """Try Tests of Class TerminalBytePacket"""
+
     tbp = TerminalBytePacket()
 
-    choice = 3
+    t0 = dt.datetime.now()
+    tbp._try_()
+    t1 = dt.datetime.now()
 
-    if choice == 4:
+    print(t0)
+    print(t1 - t0)
 
-        print("Loop Keyboard back to Screen, but as whole Packets")
 
-        with BytesTerminal() as bt:
-            stdio = bt.stdio
-            fileno = bt.fileno
-            while True:
-                tbp = bt.read_byte_packet(timeout=None)
-                idata = tbp.to_bytes()
-                os.write(fileno, idata)
-                if idata == b"\r":
+#
+# Loop Keyboard back to Screen, but as whole Packets, & with some emulations
+#
+
+
+CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1B" "[" "G"
+LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
+
+CUU_Y = "\x1b" "[" "{}A"  # CSI 04/01 Cursor Up
+CUP_Y_X = "\x1b" "[" "{};{}H"  # CSI 04/08 Cursor Position
+
+MAX_PN_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
+
+
+class ScreenEditor:
+    """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+    keyboard_bytes_log: typing.BinaryIO
+    screen_bytes_log: typing.BinaryIO
+    bytes_terminal: BytesTerminal
+    func_by_kdata: dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]] = dict()
+
+    def __init__(self) -> None:
+
+        klog_path = pathlib.Path("__pycache__/k.keyboard")
+        slog_path = pathlib.Path("__pycache__/s.screen")
+
+        klog_path.parent.mkdir(exist_ok=True)
+        slog_path.parent.mkdir(exist_ok=True)
+
+        klog = klog_path.open("ab")
+        slog = slog_path.open("ab")
+        bt = BytesTerminal()
+
+        func_by_kdata = {
+            b"\x1bOP": self.do_kdata_fn_f1,
+        }
+
+        self.keyboard_bytes_log = klog
+        self.screen_bytes_log = slog
+        self.bytes_terminal = bt
+        self.func_by_kdata = dict(func_by_kdata)  # MyPy needs Dict
+
+    def __enter__(self) -> ScreenEditor:  # -> typing.Self:
+        r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
+
+        bt = self.bytes_terminal
+        klog = self.keyboard_bytes_log
+        slog = self.screen_bytes_log
+
+        # Enter each
+
+        bt.__enter__()
+        klog.__enter__()
+        slog.__enter__()
+
+        # Succeed
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        r"""Start line-buffering Input, start replacing \n Output with \r\n, etc"""
+
+        bt = self.bytes_terminal
+        klog = self.keyboard_bytes_log
+        slog = self.screen_bytes_log
+
+        fileno = bt.fileno
+
+        assert CUU_Y == "\x1b" "[" "{}A"
+        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+        assert MAX_PN_32100 == 32100
+
+        # Exit via 1st Column of 1 Row above the Last Row
+
+        sdata = b"\x1b[32100H" + b"\x1b[A"
+        os.write(fileno, sdata)
+
+        # Exit each, in reverse order of Enter's
+
+        slog.__exit__(exc_type, exc_val, exc_tb)
+        klog.__exit__(exc_type, exc_val, exc_tb)
+        bt.__exit__(exc_type, exc_val, exc_tb)
+
+        # Succeed
+
+        return None
+
+    def print(self, *args: object, end: str = "\r\n") -> None:
+
+        bt = self.bytes_terminal
+        stdio = bt.stdio
+
+        print(*args, end=end, file=stdio)
+
+    def loopback_awhile(self) -> None:
+        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+        bt = self.bytes_terminal
+        func_by_kdata = self.func_by_kdata
+        klog = self.keyboard_bytes_log
+        slog = self.screen_bytes_log
+
+        fileno = bt.fileno
+
+        self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
+
+        kba = bytearray()
+        while True:
+            tbp = bt.read_byte_packet(timeout=None)  # todo: log & echo the Bytes as they arrive
+            kdata = tbp.to_bytes()
+
+            kba.extend(kdata)  # todo: .kba grows without end
+            klog.write(kdata)
+
+            if kdata not in func_by_kdata.keys():
+
+                sdata = kdata
+                os.write(fileno, sdata)  # todo: make unwanted Control Characters visible
+                slog.write(sdata)
+
+            else:
+
+                func = func_by_kdata[kdata]
+
+                try:
+                    func(tbp)
+                except SystemExit:
                     break
 
-    if choice == 3:
+            if kba.endswith(b"\x04"):  # ⌃D
+                raise SystemExit()
 
-        print("Calling BytesTerminal Read_Byte_Packet")
+            # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
 
-        with BytesTerminal() as bt:
-            stdio = bt.stdio
-            while True:
-                tbp = bt.read_byte_packet(timeout=None)
-                data = tbp.to_bytes()
+    def do_kdata_fn_f1(self, tbp: TerminalBytePacket) -> None:
 
-                print(tbp, end="\r\n", file=stdio)
+        help = textwrap.dedent(SCREEN_EDITOR_HELP).strip()
 
-                if data == b"\r":
-                    break
+        self.print()
+        self.print()
 
-    if choice == 2:
+        for line in help.splitlines():
+            self.print(line)
 
-        print("Streaming Keyboard Bytes into TerminalBytePacket's")
+        self.print()
+        self.print()
 
-        with BytesTerminal() as bt:
-            stdio = bt.stdio
-            fileno = bt.fileno
 
-            data = b""
-            extras = b""
-            while True:
-                tbp = TerminalBytePacket(extras)
+SCREEN_EDITOR_HELP = r"""
 
-                while True:
-                    byte = os.read(fileno, 1)
-                    print(1, byte, file=stdio, end="\r\n")
+    Keycap's here are ⎋ Esc, ⌃ Control, ⌥ Option/ Alt, ⇧ Shift, ⌘ Command/ Os
 
-                    extras = tbp.take_one_if(byte)
-                    data = tbp.to_bytes()
-                    print(2, tbp, file=stdio, end="\r\n")
+    The best-known forms of Csi are ⎋[ ⇧ @ABCDEGHIJKLMPSTZ & dhlmqt
 
-                    if extras:
-                        print(3, f"{extras=}", file=stdio, end="\r\n")
-                        tbp.close()
-                    elif not bt.kbhit(timeout=0.000):
-                        tbp.close()
+        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←
+        ⎋[I Tab  ⎋[⇧Z ⇧Tab
+        ⎋[d row-go  ⎋[⇧G column-go  ⎋[⇧H row-column-go
 
-                    if tbp.closed:
-                        break
+        ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
+        ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
+        ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase
+        ⎋[⇧T scrolls-down  ⎋[⇧S scrolls-up
 
-                print(file=stdio, end="\r\n")
+        ⎋[4h insert  ⎋[4l replace  ⎋[6 q bar  ⎋[4 q skid  ⎋[ q unstyled
 
-                if data == b"\r":
-                    break
+        ⎋[1m bold, ⎋[3m italic, ⎋[4m underline, ⎋[7m reverse/inverse
+        ⎋[31m red  ⎋[32m green  ⎋[34m blue  ⎋[38;5;130m orange
+        ⎋[m plain
 
-    if choice == 1:
+        ⎋[5n call for reply ⎋[0n
+        ⎋[6n call for reply ⎋[{y};{x}⇧R  ⎋[18t call for reply ⎋[{rows};{columns}t
+        ⎋[⇧E \r\n but never implies ⎋[⇧S
 
-        print("Calling Tests of Class TerminalBytePacket")
+        ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
-        t0 = dt.datetime.now()
-        tbp._try_()
-        t1 = dt.datetime.now()
-        print(t0)
-        print(t1 - t0)
+    Press ⌃D to quit, else Fn F1 for help, else see what happens
+
+"""
+
+# FIXME: ⎋[H⎋[J to clear screen
 
 
 #
