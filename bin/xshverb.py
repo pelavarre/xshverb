@@ -3164,11 +3164,14 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
+# FIXME: jail ← ↑ → ↓ inside Corridors
+# FIXME: take ⇧ F ← ↑ → ↓ as fly without making a trail
+# FIXME: beyond ⌥ → ← find more Arrows inside Option as Meta => ⌥ ↑ ↓ and ⌃⌥ ← →
+# FIXME: take Digit Keys as multipliers for the Arrows
+
+# FIXME: take both play() and tryme() so we less care is it bin/@ or bin/+
+
 # FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ←, by ⇧ Fn ↑ ↓ → ←, etc
-
-# FIXME: move the ↑|↓|→|← to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
-
-# FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ← (presently capped with Beep)
 # FIXME: report sha version of this Source Code
 
 # FIXME: score the Jolts and Coins eaten
@@ -3730,6 +3733,8 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
     # Move the Puck about
 
+    chat_clear_count: int = 0
+
     puck_y: int = -1
     puck_x: int = -1
     paints_below: tuple[Paint, Paint]  # todo: NameError if mentioned before initted
@@ -3859,13 +3864,23 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert sorted(tiles) == tiles, (sorted(tiles), tiles, list_diffs(sorted(tiles), b=tiles))
 
         self.chat_clear()
+        self.chat_clear_count = 0  # todo: messy?
+
         stdio.flush()  # for .pane_resume
-        eprint("To get started, try:  cls(); play()")
+        eprint("To get started, try:  play()")
 
         # our 'Turtle Screen Pane' rhymes with the Python Turtle Graphics Window
 
+    def chat_clear_once(self) -> None:
+        """Clear the Top Panel, but at the first call only"""
+
+        if not self.chat_clear_count:
+            self.chat_clear()
+
     def chat_clear(self) -> None:
         """Clear the Top Panel"""
+
+        self.chat_clear_count += 1
 
         stdio = self.stdio
 
@@ -4353,10 +4368,12 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     def puck_play(self) -> None:
         """Take in Keyboard Chords to move the Puck, till Return pressed"""
 
+        self.chat_clear_once()  # defines 'play()' as 'clear(); play()' at the first call only
+
         fileno = self.fileno
 
-        text = "Press Return to stop play,"
-        text += " else Spacebar or Tab and the ← ↑ → ↓ Arrows to play"
+        text = "Press Return to quit,"  # doesnt mention  ⌃Spacebar  ⌥Spacebar  ⇧ Fn Arrows
+        text += " else one of:  Spacebar Tab  ← ↑ → ↓ Arrows  ⌃⌥ Arrows"
         eprint(text)
 
         with_tcgetattr = termios.tcgetattr(fileno)
@@ -4431,50 +4448,58 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         if byte0 == b"\x1b":
             byte1 = os.read(fileno, 1)
+
             if byte1 == b"[":
                 byte2 = os.read(fileno, 1)
+
+                assert PuckHeight == 1
+                assert PuckWidth == 2
 
                 # ← ↑ → ↓ Arrows
 
                 if byte2 == b"B":  # ↓ Down
-                    self.puck_step_down_else_wrap()
-                    return
+                    dy, dx = self.find_puck_dy_dx(dy=1, dx=0)
+                    if (dy, dx) != (0, 0):
+                        self.puck_warp_to_dy_dx(dy, dx=dx)
+                        self.puck_stomp_if()
+                        return
                 elif byte2 == b"D":  # ← Left
-                    self.puck_step_left_else_wrap()
-                    return
+                    dy, dx = self.find_puck_dy_dx(dy=0, dx=-2)
+                    if (dy, dx) != (0, 0):
+                        self.puck_warp_to_dy_dx(dy, dx=dx)
+                        self.puck_stomp_if()
+                        return
                 elif byte2 == b"C":  # → Right
-                    self.puck_step_right_else_wrap()
-                    return
+                    dy, dx = self.find_puck_dy_dx(dy=0, dx=2)
+                    if (dy, dx) != (0, 0):
+                        self.puck_warp_to_dy_dx(dy, dx=dx)
+                        self.puck_stomp_if()
+                        return
                 elif byte2 == b"A":  # ↑ Up
-                    self.puck_step_up_else_wrap()
-                    return
+                    dy, dx = self.find_puck_dy_dx(dy=-1, dx=0)
+                    if (dy, dx) != (0, 0):
+                        self.puck_warp_to_dy_dx(dy, dx=dx)
+                        self.puck_stomp_if()
+                        return
 
                 # ⇧ Fn ← ↑ → ↓ Arrows
 
                 elif byte2 == b"6":
                     byte3 = os.read(fileno, 1)
                     if byte3 == b"~":  # ⇧ Fn ↓ Down
-                        if (self.puck_y + 4) <= self.puck_y_max:
-                            self.puck_warp_to_dy_dx(dy=4, dx=0)
-                            self.puck_stomp_if()
-                            return
+                        self.puck_step_down_else_wrap()
+                        return
                 elif byte2 == b"H":  # ⇧ Fn ← Left
-                    if (self.puck_x + -4 * 2) >= self.puck_x_min:
-                        self.puck_warp_to_dy_dx(dy=0, dx=-4 * 2)
-                        self.puck_stomp_if()
-                        return
+                    self.puck_step_left_else_wrap()
+                    return
                 elif byte2 == b"F":  # ⇧ Fn → Right
-                    if (self.puck_x + 4 * 2) <= self.puck_x_max:
-                        self.puck_warp_to_dy_dx(dy=0, dx=4 * 2)
-                        self.puck_stomp_if()
-                        return
+                    self.puck_step_right_else_wrap()
+                    return
                 elif byte2 == b"5":
                     byte3 = os.read(fileno, 1)
                     if byte3 == b"~":  # ⇧ Fn ↑ Up
-                        if (self.puck_y + -4) >= self.puck_y_min:
-                            self.puck_warp_to_dy_dx(dy=-4, dx=0)
-                            self.puck_stomp_if()
-                            return
+                        self.puck_step_up_else_wrap()
+                        return
 
         stdio.write("\a")
 
@@ -4631,8 +4656,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         else:
             self.puck_warp_to_dy_dx(dy=1, dx=0)
 
-        self.puck_stomp_if()
-
     def puck_step_left_else_wrap(self) -> None:
 
         puck_x = self.puck_x
@@ -4645,8 +4668,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             self.puck_warp_to_dy_dx(dy=0, dx=(puck_x_max - 1 - puck_x))
         else:
             self.puck_warp_to_dy_dx(dy=0, dx=-2)
-
-        self.puck_stomp_if()
 
     def puck_step_right_else_wrap(self) -> None:
 
@@ -4661,8 +4682,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         else:
             self.puck_warp_to_dy_dx(dy=0, dx=+2)
 
-        self.puck_stomp_if()
-
     def puck_step_up_else_wrap(self) -> None:
 
         assert PuckHeight == 1
@@ -4675,8 +4694,6 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             self.puck_warp_to_dy_dx(puck_y_max - puck_y, dx=0)
         else:
             self.puck_warp_to_dy_dx(dy=-1, dx=0)
-
-        self.puck_stomp_if()
 
     def puck_stomp_if(self) -> None:
         """Lay down a Trail if on a Coin, on a Jolt, or in a Corridor of Floor"""
@@ -4764,6 +4781,34 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.puck_warp_to_dy_dx(warp_dy, dx=warp_dx)
         self.puck_stomp()
 
+    def find_puck_dy_dx(self, dy: int, dx: int) -> tuple[int, int]:
+        """Find if the Puck can move 1 Spot away, even off the Floor into the Frame"""
+
+        puck_y = self.puck_y
+        puck_x = self.puck_x
+
+        puck_y_min = self.puck_y_min
+        puck_y_max = self.puck_y_max
+        puck_x_min = self.puck_x_min
+        puck_x_max = self.puck_x_max
+
+        assert FrameWidth == 4
+        assert FrameHeight == 2
+
+        paints_by_dy_dx = self.find_puck_moves()
+
+        (wrap_dy, wrap_dx) = self.dy_dx_puck_wrap(dy, dx)
+        if wrap_dy in paints_by_dy_dx.keys():
+            paints_by_dx = paints_by_dy_dx[wrap_dy]
+            if wrap_dx in paints_by_dx.keys():
+
+                if (puck_y_min + 2) <= (puck_y + dy) <= (puck_y_max - 2):
+                    if (puck_x_min + 4) <= (puck_x + dx) <= (puck_x_max - 4):
+
+                        return (wrap_dy, wrap_dx)
+
+        return (0, 0)
+
     def find_puck_moves(self) -> dict[int, dict[int, tuple[Paint, Paint]]]:
         """List how the Puck can move one Spot away, even off the Floor into the Frame"""
 
@@ -4777,6 +4822,9 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert JoltMark == "@", (JoltMark,)
 
         # Look down, left, right, & up - and through the warp to the far edge, if need be
+
+        assert PuckHeight == 1
+        assert PuckWidth == 2
 
         assert FloorMarks == "  ", (FloorMarks,)
 

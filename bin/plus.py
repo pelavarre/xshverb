@@ -127,7 +127,7 @@ def tryme() -> None:
 
     tbp = TerminalBytePacket()
 
-    choice = 4
+    choice = 3
 
     if choice == 4:
 
