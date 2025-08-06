@@ -127,7 +127,21 @@ def tryme() -> None:
 
     tbp = TerminalBytePacket()
 
-    choice = 3
+    choice = 4
+
+    if choice == 4:
+
+        print("Loop Keyboard back to Screen, but as whole Packets")
+
+        with BytesTerminal() as bt:
+            stdio = bt.stdio
+            fileno = bt.fileno
+            while True:
+                tbp = bt.read_byte_packet(timeout=None)
+                idata = tbp.to_bytes()
+                os.write(fileno, idata)
+                if idata == b"\r":
+                    break
 
     if choice == 3:
 
@@ -312,7 +326,11 @@ class BytesTerminal:
         fileno = self.fileno
         extras = self.extras
 
+        # Flush last of Output, before looking for Input
+
         stdio.flush()
+
+        # Fetch 1 whole Packet of Input, else an empty Packet when no Bytes here already
 
         tbp = TerminalBytePacket()
 
@@ -525,7 +543,7 @@ class TerminalBytePacket:
         self._try_closed_(b"\x1b[", b"3;5", b"H")  # CSI Head with Next and Tail
         self._try_closed_(b"\x1b[", b"6", b" q")  # CSI Head with Neck and Back & Tail
 
-        # FIXME: test each Control Flow Return? test each Control Flow Branch?
+        # todo: test each Control Flow Return? test each Control Flow Branch?
 
     def _try_open_(self, *args: bytes) -> None:
         """Require the Eval of the Str of the Packet equals its Bytes"""

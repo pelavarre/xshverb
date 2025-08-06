@@ -3164,30 +3164,33 @@ def do_turtling(argv: list[str]) -> None:
     # todo: edit Input history in Process and across Processes, a la import readline
 
 
-# FIXME: Color Picker even when Floor Color equals Stomp Color
-# FIXME: Also shadow the Background Colors, no longer only the Foreground Colors
-
 # FIXME: persist don't-backtrack momentum through warps by ↑ ↓ → ←, by ⇧ Fn ↑ ↓ → ←, etc
 
-# FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ←
+# FIXME: move the ↑|↓|→|← to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
+
+# FIXME: wrap the out of bounds ⇧ Fn ↑ ↓ → ← (presently capped with Beep)
 # FIXME: report sha version of this Source Code
-
-
-# FIXME: 2nd and 3rd Pucks pop into existence on the A S D F and H J K L Arrows
 
 # FIXME: score the Jolts and Coins eaten
 # FIXME: declare a win when all Corridor Floor Spots stomped
-
-# FIXME: move the ↑|↓|→|← to ⌃⌥ and to ⇧→|⇧←|⌥→|⌥← so ↑ ↓ → ← stop leaping over Walls
+# FIXME: fall on into starting over after a win
+# FIXME: quickly show all Corridor Floor Spots stomped, at ⌥
 
 # FIXME: Backspace or ⌃Z to undo the Spacebar - craft and list the undo actions
 # FIXME: ⇧Tab for 8x Backspace
 
-# FIXME: Snake, Pong
+# FIXME: 2nd and 3rd Pucks pop into existence on the A S D F and H J K L Arrows
+
+
+# FIXME: Snake, Pong, Conway-Life
 # FIXME: Tic-Tac-Toe, Checkers, Chess
 # FIXME: Ghosts!
 # FIXME: Moar Levels!!
 # FIXME: Multiplayer!!
+
+
+# FIXME: Color Picker even when Floor Color equals Stomp Color
+# FIXME: Also shadow the Background Colors, no longer only the Foreground Colors
 
 # FIXME: factor the Puck Game out of the Class TurtleScreen
 # FIXME: deploy Class TerminalBytePacket into XShVerb Py
@@ -3706,7 +3709,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         "Coin": ["\x1b[38;5;214m"],  # 214 == 0o20 + int("5_3_0", base=6)  # Gold
         "Floor": ["\x1b[48;5;232m"],  # 232 == 232 + 0  # 0/24 Black
         "Frame": ["\x1b[48;5;232m"],  # 232 == 232 + 0  # 0/24 Black
-        "Jolt": ["\x1b[38;5;210m"],  # 210 == 0o20 + int("5_2_2", base=6)  # Bright Red
+        "Jolt": ["\x1b[38;5;77m"],  # 77 == 0o20 + int("1_4_1", base=6)  # Green
         "Puck": ["\x1b[38;5;184m"],  # 184 == 0o20 + int("4_4_0", base=6)  # Bright Yellow
         "Stomp": ["\x1b[48;5;240m"],  # 240 == 232 + 8  # 1/3 = 8/24 Dark Gray
         "Wall": ["\x1b[38;5;33m"],  # 33 == 0o20 + int("025", base=6)  # Blue
@@ -4422,7 +4425,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         if byte0 == b"\xc2":
             byte1 = os.read(fileno, 1)
             if byte1 == b"\xa0":  # ⌥Spacebar
-                for _ in range(25):
+                for _ in range(2500):
                     self.puck_move()
                 return
 
