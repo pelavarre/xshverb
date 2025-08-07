@@ -32,7 +32,8 @@ import typing
 if not __debug__:
     raise NotImplementedError([__debug__])  # refuses to run without live Asserts
 
-env_cloud_shell = os.environ.get("CLOUD_SHELL") == "true"
+env_cloud_shell = os.environ.get("CLOUD_SHELL") == "true"  # Google
+sys_platform_darwin = sys.platform == "darwin"  # Apple
 
 
 #
@@ -374,11 +375,19 @@ class ScreenEditor:
         for line in help.splitlines():
             self.print(line)
 
-        if env_cloud_shell:
-            self.print()
-            self.print("Google Cloud Shell ignores ⎋[3⇧J scrollback-erase")
-            self.print("Google Cloud Shell ignores ⎋[d row-go, when without digits")
+        self.print()
 
+        if env_cloud_shell:
+            self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase")
+            self.print("gCloud Shell ignores ⎋[d Row-Leap (but do try ⎋[3d)")
+            self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
+            self.print()
+
+        if sys_platform_darwin:
+            self.print("macOS Shell ⌘K clears Screen and Scrollback")
+            self.print()
+
+        self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
         self.print()
         self.print()
 
@@ -391,7 +400,7 @@ SCREEN_EDITOR_HELP = r"""
 
         ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←
         ⎋[I Tab  ⎋[⇧Z ⇧Tab
-        ⎋[d row-go  ⎋[⇧G column-go  ⎋[⇧H row-column-go
+        ⎋[d row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
         ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
@@ -409,8 +418,6 @@ SCREEN_EDITOR_HELP = r"""
         ⎋[⇧E \r\n but never implies ⎋[⇧S
 
         ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
-
-    Press ⌃D to quit, else Fn F1 for help, else see what happens
 
 """
 
