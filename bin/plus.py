@@ -32,6 +32,8 @@ import typing
 if not __debug__:
     raise NotImplementedError([__debug__])  # refuses to run without live Asserts
 
+env_cloud_shell = os.environ.get("CLOUD_SHELL") == "true"
+
 
 #
 # Exit nonzero into the Pdb-Pm Post-Mortem Debugger, when not KeyboardInterrupt nor SystemExit
@@ -371,6 +373,11 @@ class ScreenEditor:
 
         for line in help.splitlines():
             self.print(line)
+
+        if env_cloud_shell:
+            self.print()
+            self.print("Google Cloud Shell ignores ⎋[3⇧J scrollback-erase")
+            self.print("Google Cloud Shell ignores ⎋[d row-go, when without digits")
 
         self.print()
         self.print()
