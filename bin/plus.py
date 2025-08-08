@@ -133,9 +133,7 @@ def tryme() -> None:
     """Run when called"""
 
     func = try_tbp_self_test
-    func = try_take_one_if
     func = try_read_byte_packet
-    func = try_buffered_loopback
     func = try_screen_editor
 
     func = try_screen_editor  # last choice wins
@@ -153,19 +151,6 @@ def try_screen_editor() -> None:
         se.loopback_awhile()
 
 
-def try_buffered_loopback() -> None:
-    """Loop Keyboard back to Screen, but as whole Packets"""
-
-    with BytesTerminal() as bt:
-        fileno = bt.fileno
-        while True:
-            tbp = bt.read_byte_packet(timeout=None)
-            kdata = tbp.to_bytes()
-            os.write(fileno, kdata)
-            if kdata == b"\r":
-                break
-
-
 def try_read_byte_packet() -> None:
     """Loop over BytesTerminal Read_Byte_Packet"""
 
@@ -176,41 +161,6 @@ def try_read_byte_packet() -> None:
             data = tbp.to_bytes()
 
             print(tbp, end="\r\n", file=stdio)
-
-            if data == b"\r":
-                break
-
-
-def try_take_one_if() -> None:
-    """Loop over TerminalBytePacket Take_One_If"""
-
-    with BytesTerminal() as bt:
-        stdio = bt.stdio
-        fileno = bt.fileno
-
-        data = b""
-        extras = b""
-        while True:
-            tbp = TerminalBytePacket(extras)
-
-            while True:
-                byte = os.read(fileno, 1)
-                print(1, byte, file=stdio, end="\r\n")
-
-                extras = tbp.take_one_if(byte)
-                data = tbp.to_bytes()
-                print(2, tbp, file=stdio, end="\r\n")
-
-                if extras:
-                    print(3, f"{extras=}", file=stdio, end="\r\n")
-                    tbp.close()
-                elif not bt.kbhit(timeout=0.000):
-                    tbp.close()
-
-                if tbp.closed:
-                    break
-
-            print(file=stdio, end="\r\n")
 
             if data == b"\r":
                 break
@@ -257,9 +207,10 @@ MAX_PN_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Termin
 class ScreenEditor:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
-    keyboard_bytes_log: typing.BinaryIO
-    screen_bytes_log: typing.BinaryIO
-    bytes_terminal: BytesTerminal
+    keyboard_bytes_log: typing.BinaryIO  # .klog
+    screen_bytes_log: typing.BinaryIO  # .slog
+    bytes_terminal: BytesTerminal  # .bt
+
     func_by_kdata: dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]] = dict()
 
     #
@@ -383,7 +334,7 @@ class ScreenEditor:
             #
             b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
             b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
-            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert  # not gCloud
+            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert
             b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not gCloud
             b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓
             b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r
@@ -421,8 +372,11 @@ class ScreenEditor:
 
         func_by_kdata = self.func_by_kdata
         klog = self.keyboard_bytes_log
+        slog = self.screen_bytes_log
 
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
+
+        _ = slog  # only needed by some revisions of this Code
 
         assert CSI_PIF_REGEX == r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
         csi_pif_regex_bytes = CSI_PIF_REGEX.encode()
@@ -432,18 +386,21 @@ class ScreenEditor:
         kba = bytearray()
         while True:
             (tbp, n) = self.read_byte_packet_splits()
+            slog.write(f"\n{n=} {tbp=}\n".encode())
+
+            # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
             kdata = tbp.to_bytes()
             assert kdata, (kdata,)  # because .timeout=None
 
-            kba.extend(kdata)  # todo: .kba grows without end
+            kba.extend(kdata)  # todo: .kba and .klog grow without end
             klog.write(kdata)
 
             assert VPA_Y == "\x1b" "[" "{}d"
 
             m = re.fullmatch(csi_pif_regex_bytes, string=kdata)
-            parms = m.group(2) if m else b""
-            final = m.group(4) if m else b""
+            parms: bytes = m.group(2) if m else b""
+            final: bytes = m.group(4) if m else b""
 
             if kdata in func_by_kdata.keys():
 
@@ -456,12 +413,15 @@ class ScreenEditor:
 
             elif (n > 1) and m and (final in csi_final_bytes):
 
-                if final == "I":  # gCloud Shell needs \t for ⎋[ {}I
+                if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
                     pn = int(parms)
+                    assert pn >= 1, (pn,)
                     self.write(pn * "\t")
+
                 elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1d for ⎋[d
                     self.write("\x1b[" "1" "d")
-                else:
+
+                else:  # else loops back Csi Keyboard Bytes on into Screen
                     self.do_write_kdata(tbp)
 
             else:
@@ -604,6 +564,8 @@ class ScreenEditor:
         if env_cloud_shell:
             self.print()
             self.print("gCloud Shell ignores ⌃M (you must press Return)")
+            self.print("gCloud Shell often ignores ⎋[D (you must press ⎋[1D)")
+            self.print("gCloud Shell often ignores ⎋[I (you must press Tab)")
             self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
             self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
             self.print()
@@ -683,8 +645,6 @@ SCREEN_WRITER_HELP = r"""
         ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
 """
-
-# FIXME: prominent prompt/help of ⎋[H⎋[J to clear screen
 
 # FIXME: look up docs for
 #
@@ -835,8 +795,10 @@ class BytesTerminal:
 
         # Wait for first Byte, add in already available Bytes. and declare victory
 
+        t = 0.000_001  # 0.000 works at macOS
+
         if extras or self.kbhit(timeout=timeout):
-            while extras or self.kbhit(timeout=0.000):
+            while extras or self.kbhit(timeout=t):
                 if not extras:
                     byte = os.read(fileno, 1)
                 else:
