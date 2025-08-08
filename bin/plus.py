@@ -20,6 +20,7 @@ import datetime as dt
 import os
 import pathlib
 import pdb
+import re
 import select
 import signal
 import sys
@@ -139,6 +140,9 @@ def tryme() -> None:
 
     func = try_screen_editor  # last choice wins
 
+    print(f"tryme: {func.__qualname__}", file=sys.stderr)
+    print(file=sys.stderr)
+
     func()
 
 
@@ -230,11 +234,22 @@ def try_tbp_self_test() -> None:
 #
 
 
-CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1B" "[" "G"
-LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1B" "[" "B"
+CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1b[" "G"
+LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1b[" "B"
 
-CUU_Y = "\x1b" "[" "{}A"  # CSI 04/01 Cursor Up
-CUP_Y_X = "\x1b" "[" "{};{}H"  # CSI 04/08 Cursor Position
+CUU_Y = "\x1b[" "{}A"  # CSI 04/01 Cursor Up
+CUD_Y = "\x1b[" "{}B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
+CUF_X = "\x1b[" "{}C"  # CSI 04/03 Cursor [Forward] Right
+CUB_X = "\x1b[" "{}D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
+
+CUP_Y_X = "\x1b[" "{};{}H"  # CSI 04/08 Cursor Position
+
+EL_P = "\x1b[" "{}K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
+
+IL_Y = "\x1b[" "{}L"  # CSI 04/12 Insert Line [Row]
+DCH_X = "\x1b[" "{}P"  # CSI 05/00 Delete Character
+
+VPA_Y = "\x1b" "[" "{}d"  # CSI 06/04 Line Position Absolute
 
 MAX_PN_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
@@ -246,6 +261,10 @@ class ScreenEditor:
     screen_bytes_log: typing.BinaryIO
     bytes_terminal: BytesTerminal
     func_by_kdata: dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]] = dict()
+
+    #
+    # Init, Enter, Exit, Print
+    #
 
     def __init__(self) -> None:
 
@@ -259,14 +278,12 @@ class ScreenEditor:
         slog = slog_path.open("ab")
         bt = BytesTerminal()
 
-        func_by_kdata = {
-            b"\x1bOP": self.do_kdata_fn_f1,
-        }
+        func_by_kdata = self.form_func_by_kdata()
 
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
         self.bytes_terminal = bt
-        self.func_by_kdata = dict(func_by_kdata)  # MyPy needs Dict
+        self.func_by_kdata = func_by_kdata  # MyPy needs Dict
 
     def __enter__(self) -> ScreenEditor:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -299,8 +316,8 @@ class ScreenEditor:
 
         fileno = bt.fileno
 
-        assert CUU_Y == "\x1b" "[" "{}A"
-        assert CUP_Y_X == "\x1b" "[" "{};{}H"
+        assert CUU_Y == "\x1b[" "{}A"
+        assert CUP_Y_X == "\x1b[" "{};{}H"
         assert MAX_PN_32100 == 32100
 
         # Exit via 1st Column of 1 Row above the Last Row
@@ -319,39 +336,116 @@ class ScreenEditor:
         return None
 
     def print(self, *args: object, end: str = "\r\n") -> None:
+        """Join the Args by Space, add the End, and write the Encoded Chars"""
+
+        schars = " ".join(str(_) for _ in args) + end
+        self.write(schars)
+
+    def write(self, text: str) -> None:
+        """Write the Bytes, and log them as written"""
 
         bt = self.bytes_terminal
-        stdio = bt.stdio
+        fileno = bt.fileno
+        slog = self.screen_bytes_log
 
-        print(*args, end=end, file=stdio)
+        schars = text
+
+        sdata = schars.encode()
+        os.write(fileno, sdata)
+        slog.write(sdata)
+
+    #
+    # Bind Keyboard Codes to Funcs
+    #
+
+    def form_func_by_kdata(
+        self,
+    ) -> dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]]:
+
+        func_by_literal_kdata = {
+            #
+            b"\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
+            b"\x02": self.do_column_left,  # ⌃B for Emacs
+            b"\x04": self.do_char_delete_right,  # ⌃D for Emacs
+            # b"\x05": self.do_row_end,  # ⌃E for Emacs
+            b"\x06": self.do_column_right,  # ⌃F for Emacs
+            b"\x07": self.do_write_kdata,  # ⌃G \a bell-ring
+            b"\x08": self.do_write_kdata,  # ⌃H \b ←
+            b"\x09": self.do_write_kdata,  # ⌃I \t Tab
+            b"\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
+            b"\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
+            b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # gCloud only \r Return
+            b"\x0e": self.do_row_down,  # ⌃N
+            b"\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost
+            b"\x10": self.do_row_up,  # ⌃P
+            b"\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
+            b"\x16": self.do_quote_one_kdata,  # ⌃V for Vim
+            #
+            b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
+            b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
+            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert  # not gCloud
+            b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not gCloud
+            b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓
+            b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r
+            b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
+            #
+            b"\x1b[" b"A": self.do_write_kdata,  # ⎋[⇧A ↑
+            b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
+            b"\x1b[" b"C": self.do_write_kdata,  # ⎋[⇧C →
+            b"\x1b[" b"D": self.do_write_kdata,  # ⎋[⇧D ←
+            b"\x1b[" b"I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not gCloud
+            b"\x1b[" b"Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
+            #
+            b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
+            #
+            b"\x7f": self.do_char_delete_left,  # ⌃? Delete
+        }
+
+        func_by_kdata = dict(func_by_literal_kdata)
+
+        return func_by_kdata
+
+        # FIXME: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
+        # FIXME: bind ⎋⇧H ⎋⇧M ⎋⇧L ⎋0 ⎋⇧$ ⎋X ⎋⇧X ⎋R etc to Vi Meanings - just don't get stuck there
+        # FIXME: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
+        # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
+
+        # FIXME: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
+
+    #
+    #
+    #
 
     def loopback_awhile(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
-        bt = self.bytes_terminal
         func_by_kdata = self.func_by_kdata
         klog = self.keyboard_bytes_log
-        slog = self.screen_bytes_log
-
-        fileno = bt.fileno
 
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
 
+        assert CSI_PIF_REGEX == r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
+        csi_pif_regex_bytes = CSI_PIF_REGEX.encode()
+
+        csi_final_bytes = b"@ABCDEGHIJKLMPSTZ" + b"dhlmnqt"
+
         kba = bytearray()
         while True:
-            tbp = bt.read_byte_packet(timeout=None)  # todo: log & echo the Bytes as they arrive
+            (tbp, n) = self.read_byte_packet_splits()
+
             kdata = tbp.to_bytes()
+            assert kdata, (kdata,)  # because .timeout=None
 
             kba.extend(kdata)  # todo: .kba grows without end
             klog.write(kdata)
 
-            if kdata not in func_by_kdata.keys():
+            assert VPA_Y == "\x1b" "[" "{}d"
 
-                sdata = kdata
-                os.write(fileno, sdata)  # todo: make unwanted Control Characters visible
-                slog.write(sdata)
+            m = re.fullmatch(csi_pif_regex_bytes, string=kdata)
+            parms = m.group(2) if m else b""
+            final = m.group(4) if m else b""
 
-            else:
+            if kdata in func_by_kdata.keys():
 
                 func = func_by_kdata[kdata]
 
@@ -360,69 +454,248 @@ class ScreenEditor:
                 except SystemExit:
                     break
 
+            elif (n > 1) and m and (final in csi_final_bytes):
+
+                if final == "I":  # gCloud Shell needs \t for ⎋[ {}I
+                    pn = int(parms)
+                    self.write(pn * "\t")
+                elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1d for ⎋[d
+                    self.write("\x1b[" "1" "d")
+                else:
+                    self.do_write_kdata(tbp)
+
+            else:
+
+                if len(kdata) > 1:
+                    self.print(tbp)
+                elif 0x20 <= kdata[-1] <= 0x7E:  # printable 7-bit US Ascii
+                    self.do_write_kdata(tbp)
+                else:
+                    self.print(tbp)
+
+                # FIXME: Pass through Text & Emojis, even when not printable 7-bit US Ascii
+
             if kba.endswith(b"\x04"):  # ⌃D
-                raise SystemExit()
+                return
 
             # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
 
-    def do_kdata_fn_f1(self, tbp: TerminalBytePacket) -> None:
+    def read_byte_packet_splits(self) -> tuple[TerminalBytePacket, int]:
+        """Read 1 TerminalBytePacket, all in one piece, else in  split pieces"""
 
-        help = textwrap.dedent(SCREEN_EDITOR_HELP).strip()
+        bt = self.bytes_terminal
+
+        n = 1
+        tbp = bt.read_byte_packet(timeout=None)  # todo: log & echo the Bytes as they arrive
+
+        while (not tbp.text) and (not tbp.closed) and (not bt.extras):
+            n += 1
+            bt.close_byte_packet_if(tbp, timeout=None)
+
+        return (tbp, n)
+
+    def do_write_kdata(self, tbp: TerminalBytePacket) -> None:
+        """Loop the Keyboard back to the Screen, literally, directly"""
+
+        kdata = tbp.to_bytes()
+
+        bt = self.bytes_terminal
+        fileno = bt.fileno
+        slog = self.screen_bytes_log
+
+        sdata = kdata
+        os.write(fileno, sdata)
+        slog.write(sdata)
+
+    def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
+        """Quote the next 1 Byte of Keyboard Data"""
+
+        (tbp, n) = self.read_byte_packet_splits()
+        self.do_write_kdata(tbp)
+
+        # Emacs ⌃Q  # Vim ⌃V
+
+    def do_column_left(self, tbp: TerminalBytePacket) -> None:
+        """Go left by 1 Column"""
+
+        assert BS == "\b"
+
+        tbp = TerminalBytePacket(b"\b")
+        self.do_write_kdata(tbp)
+
+        # Emacs Delete
+
+    def do_column_right(self, tbp: TerminalBytePacket) -> None:
+        """Go right by 1 Column"""
+
+        assert CUF_X == "\x1b[" "{}C"
+        self.write("\x1b[" "C")
+
+        # Emacs ⌃F
+
+    def do_char_delete_left(self, tbp: TerminalBytePacket) -> None:
+        """Delete the Character at left of the Cursor"""
+
+        assert BS == "\b"
+        assert DCH_X == "\x1b[" "{}P"
+        self.write("\b" "\x1b[" "P")
+
+        # Emacs ⌃B
+
+    def do_char_delete_right(self, tbp: TerminalBytePacket) -> None:
+        """Delete the Character beneath the Cursor"""
+
+        assert DCH_X == "\x1b[" "{}P"
+        self.write("\x1b[" "P")
+
+        # Emacs ⌃D
+
+    def do_column_leap_leftmost(self, tbp: TerminalBytePacket) -> None:
+        """Leap to the Leftmost Column"""
+
+        assert CR == "\r"
+        self.write("\r")
+
+        # Emacs Return
+
+    def do_row_down(self, tbp: TerminalBytePacket) -> None:
+        """Go down by 1 Row, but stop in last Row"""
+
+        assert CUD_Y == "\x1b[" "{}B"
+        self.write("\x1b[" "B")
+
+        # Emacs ⌃N
+
+    def do_row_insert(self, tbp: TerminalBytePacket) -> None:
+        """Insert 1 Row above the Cursor"""
+
+        assert IL_Y == "\x1b[" "{}L"
+        self.write("\x1b[" "L")
+
+        # Emacs ⌃O when leftmost
+
+    def do_row_tail_erase(self, tbp: TerminalBytePacket) -> None:
+        """Erase from the Cursor to the Tail of the Row"""
+
+        assert EL_P == "\x1b[" "{}K"
+        self.write("\x1b[" "K")
+
+        # Emacs ⌃K when not rightmost
+
+    def do_row_up(self, tbp: TerminalBytePacket) -> None:
+        """Go up by 1 Row, but stop in Top Row"""
+
+        assert CUU_Y == "\x1b[" "{}A"
+        self.write("\x1b[" "A")
+
+        # Emacs ⌃P
+
+    def do_kdata_fn_f1(self, tbp: TerminalBytePacket, /) -> None:
+        """Print the many Lines of Screen Writer Help"""
+
+        help_ = textwrap.dedent(SCREEN_WRITER_HELP).strip()
 
         self.print()
         self.print()
 
-        for line in help.splitlines():
+        for line in help_.splitlines():
             self.print(line)
 
-        self.print()
-
         if env_cloud_shell:
-            self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase")
-            self.print("gCloud Shell ignores ⎋[d Row-Leap (but do try ⎋[3d)")
+            self.print()
+            self.print("gCloud Shell ignores ⌃M (you must press Return)")
+            self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
             self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
             self.print()
 
+            # self.print("gCloud Shell ignores ⎋[⇧T Scrolls-Down (but accepts ⎋[⇧L)")
+            # self.print("gCloud Shell ignores ⎋[⇧S Scrolls-Up (but accepts ⌃J)")
+            # self.print("gCloud Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
+
+            # gCloud Shell has ← ↑ → ↓
+            # gCloud Shell has ⌥ ← ↑ → ↓
+            # gCloud Shell has ⌃⌥ ← ↑ → ↓
+            # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as Esc Xms Esc
+
+            # gCloud AltIsMeta has FIXME
+
         if sys_platform_darwin:
-            self.print("macOS Shell ⌘K clears Screen and Scrollback")
             self.print()
+
+            # self.print("macOS Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
+
+            self.print("macOS Shell ⌘K clears Screen & Scrollback (but not Top Row)")
+            self.print()
+
+            # macOS Shell has ← ↑ → ↓
+            # macOS Shell has ⌥ ← → and ⇧ ← →
+            # macOS Shell has ⇧ Fn ← ↑ → ↓
+            # macOS Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
 
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
         self.print()
         self.print()
 
+        # XShVerb F1
 
-SCREEN_EDITOR_HELP = r"""
+        # FIXME: toggle emulations on/off
+        # FIXME: toggle tracing input on/off
+        # FIXME: show loss of \e7 memory because of emulations
 
-    Keycap's here are ⎋ Esc, ⌃ Control, ⌥ Option/ Alt, ⇧ Shift, ⌘ Command/ Os
+        # FIXME: accept lots of quits and movements as per Vim ⌃O & Emacs
 
-    The best-known forms of Csi are ⎋[ ⇧ @ABCDEGHIJKLMPSTZ & dhlmqt
+
+# FIXME: show time gone since last Keyboard Byte
+
+SCREEN_WRITER_HELP = r"""
+
+    Keycap Symbols are ⎋ Esc, ⌃ Control, ⌥ Option/ Alt, ⇧ Shift, ⌘ Command/ Os
+
+        ⌃G ⌃H ⌃I ⌃J ⌃M mean \a \b \t \n \r, and ⌃[ means \e, also known as ⎋ Esc
+        Tab means ⌃I \t, and Return means ⌃M \r
+
+    The famous Esc ⎋ Byte Pairs are ⎋ 7 8 C L ⇧D ⇧E ⇧M
+
+        ⎋7 cursor-checkpoint  ⎋8 cursor-revert (defaults to Y 1 X 1)
+        ⎋C screen-erase  ⎋L row-column-leap
+        ⎋⇧D ↓  ⎋⇧E \r\n else \r  ⎋⇧M ↑
+
+    The famous Csi ⎋[ Sequences are ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z and ⎋[ DHLMNQT
 
         ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←
-        ⎋[I Tab  ⎋[⇧Z ⇧Tab
-        ⎋[d row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap
+        ⎋[I ⌃I  ⎋[⇧Z ⇧Tab
+        ⎋[D row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
         ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
         ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase
         ⎋[⇧T scrolls-down  ⎋[⇧S scrolls-up
 
-        ⎋[4h insert  ⎋[4l replace  ⎋[6 q bar  ⎋[4 q skid  ⎋[ q unstyled
+        ⎋[4H insert  ⎋[4L replace  ⎋[6 Q bar  ⎋[4 Q skid  ⎋[ Q unstyled
 
-        ⎋[1m bold, ⎋[3m italic, ⎋[4m underline, ⎋[7m reverse/inverse
-        ⎋[31m red  ⎋[32m green  ⎋[34m blue  ⎋[38;5;130m orange
-        ⎋[m plain
+        ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
+        ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
+        ⎋[M plain
 
-        ⎋[5n call for reply ⎋[0n
-        ⎋[6n call for reply ⎋[{y};{x}⇧R  ⎋[18t call for reply ⎋[{rows};{columns}t
-        ⎋[⇧E \r\n but never implies ⎋[⇧S
+        ⎋[5N call for reply ⎋[0N  ⎋[6N call for reply ⎋[{y};{x}⇧R
+        ⎋[18T call for reply ⎋[8;{rows};{columns}T
 
         ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
 """
 
-# FIXME: ⎋[H⎋[J to clear screen
+# FIXME: prominent prompt/help of ⎋[H⎋[J to clear screen
 
+# FIXME: look up docs for
+#
+#   \eD	Index (IND)	Move cursor down one line
+#   \eM	Reverse Index (RI)	Move cursor up one line
+#   \eE	Next Line (NEL)	Move cursor to start of next line (CR+LF effect)
+#
+#   \ec	RIS (Reset to Initial State)	Full terminal reset including screen erase
+#   \el Row-Column-Leap-to-Upper-Left
+#           ⎋l row-column-leap (macOS only)
+#
 
 #
 # Amp up Import Tty
@@ -431,8 +704,8 @@ SCREEN_EDITOR_HELP = r"""
 
 BS = "\b"  # 00/08 ⌃H Backspace
 HT = "\t"  # 00/09 ⌃I Character Tabulation
-LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\x1B" "[" "B"
-CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\x1B" "[" "G"
+LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\x1b[" "B"
+CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\x1b[" "G"
 
 ESC = "\x1b"  # 01/11  ⌃[ Escape  # often known as Shell printf '\e', but Python doesn't define \e
 
@@ -440,7 +713,9 @@ DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
 DECRC = "\x1b" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
 SS3 = "\x1b" "O"  # ESC 04/15 Single Shift Three  # in macOS F1 F2 F3 F4
 
-CSI = "\x1b" "["  # ESC 05/11 Control Sequence Introducer
+CSI = "\x1b["  # ESC 05/11 Control Sequence Introducer
+
+CSI_PIF_REGEX = r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
 
 class BytesTerminal:
@@ -540,7 +815,15 @@ class BytesTerminal:
         # 'timeout' is 0.000 for Now, None for Never, else count of Seconds
 
     def read_byte_packet(self, timeout: float | None) -> TerminalBytePacket:
-        """Read 1 TerminalBytePacket"""
+        """Read 1 TerminalBytePacket, closed immediately, or not"""
+
+        tbp = TerminalBytePacket()
+        self.close_byte_packet_if(tbp, timeout=timeout)
+
+        return tbp  # maybe empty
+
+    def close_byte_packet_if(self, tbp: TerminalBytePacket, timeout: float | None) -> None:
+        """Read 0 or more Bytes into the Packet, and close it, or not"""
 
         stdio = self.stdio
         fileno = self.fileno
@@ -550,12 +833,10 @@ class BytesTerminal:
 
         stdio.flush()
 
-        # Fetch 1 whole Packet of Input, else an empty Packet when no Bytes here already
+        # Wait for first Byte, add in already available Bytes. and declare victory
 
-        tbp = TerminalBytePacket()
-
-        if self.kbhit(timeout=timeout):
-            while self.kbhit(timeout=0.000):
+        if extras or self.kbhit(timeout=timeout):
+            while extras or self.kbhit(timeout=0.000):
                 if not extras:
                     byte = os.read(fileno, 1)
                 else:
@@ -569,10 +850,6 @@ class BytesTerminal:
 
                 if tbp.closed:
                     break
-
-        tbp.close()
-
-        return tbp  # maybe empty
 
 
 class TerminalBytePacket:
@@ -990,7 +1267,7 @@ class TerminalBytePacket:
         assert not closed, (closed,)
 
         assert ESC == "\x1b"  # ⎋
-        assert CSI == "\x1b" "["  # ⎋[
+        assert CSI == "\x1b["  # ⎋[
         assert SS3 == "\x1b" "O"  # ⎋O
 
         # Look only outside of Mouse Reports
@@ -1080,22 +1357,22 @@ class TerminalBytePacket:
 
         # Look only at unclosed CSI or Esc CSI Sequence
 
-        assert CSI == "\x1b" "[", (CSI,)  # ⎋[
+        assert CSI == "\x1b[", (CSI,)  # ⎋[
         if not head.startswith(b"\x1b\x1b["):  # ⎋⎋[ Esc CSI
             assert head.startswith(b"\x1b["), (head,)  # ⎋[ CSI
 
         assert not tail, (tail,)
         assert not closed, (closed,)
 
+        byte = chr(ord_).encode()
+        assert byte == encode, (byte, encode)
+
         # Decline 1..4 Bytes of Unprintable or Multi-Byte Char
 
         if ord_ > 0x7F:
-            return encode  # declines 2..4 Bytes of 1 Unprintable or Multi-Byte Char
+            return byte  # declines 2..4 Bytes of 1 Unprintable or Multi-Byte Char
 
         # Accept 1 Byte into Back, into Neck, or as Tail
-
-        byte = chr(ord_).encode()
-        assert byte == encode, (byte, encode)
 
         if not back:
             if 0x30 <= ord_ < 0x40:  # 16 Codes

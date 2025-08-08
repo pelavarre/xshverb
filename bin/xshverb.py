@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+# FIXME: add 'pq datetime'
+# FIXME: add 'pq less'
+# FIXME: add 'pq find' and 'pq f'
+# FIXME: explain more at 'pq python' than at 'pq p'
+# FIXME: add usage: v|vi|vim
+# FIXME: add usage: e|em|emacs
+
 r"""
 usage: xshverb.py [-h] [-V] [HINT ...]
 
@@ -792,6 +799,20 @@ def do_pass(argv: list[str]) -> None:
 
     pass
 
+    # todo: Coin meanings for B M Z
+    #
+    #   usage: b|...
+    #   usage: f|...  # Find  # todo
+    #   usage: l|...
+    #   usage: m|...
+    #   usage: q|...  # Git  # todo
+    #   usage: y|...  # Yes  # todo
+    #   usage: z|...
+    #
+    #   usage: é|...
+    #   usage: ñ|...
+    #
+
 
 #
 # Do work like much of Awk's work, but with more flair
@@ -800,7 +821,7 @@ def do_pass(argv: list[str]) -> None:
 
 AWK_DOC = r"""
 
-    usage: awk [-F ISEP] [-vOFS OSEP] [NUMBER ...]
+    usage: a|awk [-F ISEP] [-vOFS OSEP] [NUMBER ...]
 
     pick one or more columns of words, and drop the rest
 
@@ -934,7 +955,7 @@ def do_awk(argv: list[str]) -> None:
 
 CAT_DOC = """
 
-    usage: cat [-]
+    usage: c|cat [-]
 
     read with prompt from the Terminal, or write to the Terminal
 
@@ -1019,7 +1040,7 @@ def do_cat(argv: list[str]) -> None:
 
 COUNTER_DOC = """
 
-    usage: counter [-k]
+    usage: u|counter [-k]
 
     count or drop duplicate Lines, no sort required
 
@@ -1172,7 +1193,7 @@ def do_dent(argv: list[str]) -> None:
 
 DIFF_DOC = r"""
 
-    usage: diff [A] [B]
+    usage: d|diff [A] [B]
 
     compare and contrast two texts
 
@@ -1239,7 +1260,7 @@ def do_diff(argv: list[str]) -> None:
 
 DOT_DOC = r"""
 
-    usage: dot [HINT]
+    usage: .|dot [HINT]
 
     search out Code to match the Text and run the Code to tweak the Text
 
@@ -1588,9 +1609,12 @@ def dot_wiki(text: str) -> str:
 #
 
 
-DT_DOC = r"""
+# FIXME: Shuffle up 'def do_datetime', up before 'def do_dedent'
 
-    usage: dt [WORD ...]
+
+DATETIME_DOC = r"""
+
+    usage: dt|datetime [WORD ...]
 
     do the thing, but show its date/time and pass/fail details
 
@@ -1613,14 +1637,14 @@ DT_DOC = r"""
 """
 
 
-def do_dt(argv: list[str]) -> None:
+def do_datetime(argv: list[str]) -> None:
     """Do the thing, but show its date/time and pass/fail details"""
 
     assert argparse.ZERO_OR_MORE == "*"
 
     # Form Shell Args Parser
 
-    doc = DT_DOC
+    doc = DATETIME_DOC
     word_help = "a word of command: first the shell verb, and then its options and args"
     parser = ArgDocParser(doc, add_help=False)
     parser.add_argument(dest="words", metavar="WORD", nargs="*", help=word_help)
@@ -1655,7 +1679,7 @@ def do_dt(argv: list[str]) -> None:
     shline = " ".join(shlex.quote(_) for _ in shargv)
     eprint("+", shline)
 
-    run = subprocess.run(shargv, stdin=None)
+    run = subprocess.run(shargv, shell=True, stdin=None)
     returncode = run.returncode
     eprint(f"+ exit {returncode}")  # printed even when zero
 
@@ -1677,7 +1701,7 @@ def do_dt(argv: list[str]) -> None:
 
 EMACS_DOC = r"""
 
-    usage: e [WORD ...]
+    usage: e|em|emacs [WORD ...]
 
     call up Emacs inside the Terminal with no Menu Bar and no Splash
 
@@ -1869,7 +1893,7 @@ def str_expand_plus(text: str) -> str:
 
 GREP_DOC = r"""
 
-    usage: grep [PATTERN ...]
+    usage: g|grep [PATTERN ...]
 
     take Lines that match a Pattern, drop the rest
 
@@ -1975,7 +1999,7 @@ def do_grep(argv: list[str]) -> None:  # Generalized Regular Expression Print
 
 HEAD_DOC = """
 
-    usage: head [-N]
+    usage: h|head [-N]
 
     take only the first few Lines
 
@@ -2096,7 +2120,7 @@ def do_ht(argv: list[str]) -> None:
 
 JQ_DOC = r"""
 
-    usage: jq
+    usage: j|jq
 
     drop the Style out of Json Data
 
@@ -2148,7 +2172,7 @@ def do_jq(argv: list[str]) -> None:
 
 LESS_DOC = r"""
 
-    usage: k [WORD ...]
+    usage: k|less [WORD ...]
 
     call up Less inside the Terminal, only if larger than Screen, and don't clear the Screen
 
@@ -2291,7 +2315,7 @@ def do_lstrip(argv: list[str]) -> None:
 
 NL_DOC = """
 
-    usage: nl [+N]
+    usage: n|nl [+N]
 
     number the Lines, up from one, or up from zero
 
@@ -2357,7 +2381,7 @@ def do_nl(argv: list[str]) -> None:
 
 PYTHON_DOC = r"""
 
-    usage: python
+    usage: p|python
 
     launch a chat with Python
 
@@ -2530,7 +2554,7 @@ assert len(PYTHON_IMPORTS) == 201, (len(PYTHON_IMPORTS), 201)
 
 REVERSE_DOC = """
 
-    usage: reverse
+    usage: r|reverse
 
     reverse the order of Lines
 
@@ -2688,7 +2712,7 @@ def do_set(argv: list[str]) -> None:
 
 SORT_DOC = """
 
-    usage: sort [-n] [-r]
+    usage: s|sort [-n] [-r]
 
     change the order of Lines
 
@@ -2780,7 +2804,7 @@ def do_sort(argv: list[str]) -> None:
 
 SPLIT_DOC = r"""
 
-    usage: split [--sep SEP]
+    usage: i|split [--sep SEP]
 
     break Lines apart into Words
 
@@ -2875,7 +2899,7 @@ def do_str_strip(argv: list[str]) -> None:
 
 STRIP_DOC = r"""
 
-    usage: strip [--charset CHARSET]
+    usage: o|strip [--charset CHARSET]
 
     drop leading and trailing Blanks in each Line, or leading/ trailing Chars of some other Set
 
@@ -2929,7 +2953,7 @@ def do_strip(argv: list[str]) -> None:
 
 TAIL_DOC = """
 
-    usage: tail [-N|+N]
+    usage: t|tail [-N|+N]
 
     take only the last few Lines, or take only a chosen Line and what follows
 
@@ -5318,7 +5342,7 @@ def do_urllib(argv: list[str]) -> None:
 
 VI_DOC = r"""
 
-    usage: v [WORD ...]
+    usage: v|vi|vim [WORD ...]
 
     call up Vi
 
@@ -5370,7 +5394,7 @@ def do_vi(argv: list[str]) -> None:
 
 WCL_DOC = r"""
 
-    usage: wcl
+    usage: w|wcl
 
     count the Lines
 
@@ -5419,7 +5443,7 @@ def do_wcl(argv: list[str]) -> None:
 
 XARGS_DOC = r"""
 
-    usage: xargs [--sep SEP]
+    usage: x|xargs [--sep SEP]
 
     join the Lines into a single Line
 
@@ -5984,7 +6008,7 @@ DOC_BY_VERB = dict(
     dent=DENT_DOC,
     diff=DIFF_DOC,
     dot=DOT_DOC,
-    dt=DT_DOC,
+    dt=DATETIME_DOC,
     emacs=EMACS_DOC,
     expand=EXPAND_DOC,
     grep=GREP_DOC,
@@ -6027,7 +6051,7 @@ FUNC_BY_VERB = dict(
     dent=do_dent,
     diff=do_diff,
     dot=do_dot,
-    dt=do_dt,
+    dt=do_datetime,
     emacs=do_emacs,
     expand=do_expand,
     grep=do_grep,

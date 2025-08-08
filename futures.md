@@ -2,6 +2,16 @@ things to do, futures to build
 
 lately
 
+    make a kind of dt that just does elapsed and not before/after
+        like for our 'dt :' triggered by 'ssh-add -D'
+
+    paragraph-break's and a __pycache__ archive for:  dt ...
+
+    macOS Terminal launch profile could eat the first .py delay
+        try:  python3 /dev/null
+
+    qsis could wc -l its __pycache__ mentions
+
     $ touch a b && d <(cat a |sed 's,p,x,g') <(cat b |sed 's,q,x,g')
     + diff -brpu /dev/fd/63 /dev/fd/62
     diff: /dev/fd/63: No such file or directory
