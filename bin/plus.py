@@ -184,6 +184,7 @@ def try_tbp_self_test() -> None:
 #
 
 
+TAB = "\t"  # 00/09 Horizontal Tab
 CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1b[" "G"
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1b[" "B"
 
@@ -325,7 +326,7 @@ class ScreenEditor:
             b"\x09": self.do_write_kdata,  # ⌃I \t Tab
             b"\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
             b"\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
-            b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # gCloud only \r Return
+            b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
             b"\x0e": self.do_row_down,  # ⌃N
             b"\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost
             b"\x10": self.do_row_up,  # ⌃P
@@ -335,7 +336,7 @@ class ScreenEditor:
             b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
             b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
             b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert
-            b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not gCloud
+            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud
             b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓
             b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r
             b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
@@ -344,7 +345,7 @@ class ScreenEditor:
             b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
             b"\x1b[" b"C": self.do_write_kdata,  # ⎋[⇧C →
             b"\x1b[" b"D": self.do_write_kdata,  # ⎋[⇧D ←
-            b"\x1b[" b"I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not gCloud
+            # b"\x1b[" b"I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not at gCloud
             b"\x1b[" b"Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
             #
             b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
@@ -396,7 +397,9 @@ class ScreenEditor:
             kba.extend(kdata)  # todo: .kba and .klog grow without end
             klog.write(kdata)
 
+            assert TAB == "\t"
             assert VPA_Y == "\x1b" "[" "{}d"
+            assert CUP_Y_X == "\x1b" "[" "{};{}H"
 
             m = re.fullmatch(csi_pif_regex_bytes, string=kdata)
             parms: bytes = m.group(2) if m else b""
@@ -414,12 +417,15 @@ class ScreenEditor:
             elif (n > 1) and m and (final in csi_final_bytes):
 
                 if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
-                    pn = int(parms)
+                    pn = int(parms) if parms else 1
                     assert pn >= 1, (pn,)
                     self.write(pn * "\t")
 
                 elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1d for ⎋[d
                     self.write("\x1b[" "1" "d")
+
+                elif kdata == b"\x1b[" b"l":  # gCloud Shell needs ⎋[1;1H for ⎋[l
+                    self.write("\x1b[" "1;1" "H")
 
                 else:  # else loops back Csi Keyboard Bytes on into Screen
                     self.do_write_kdata(tbp)
