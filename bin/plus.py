@@ -59,10 +59,12 @@ def excepthook(
     exc_value: BaseException,
     exc_traceback: types.TracebackType | None,
 ) -> None:
+    """Run at Process Exit, when not bypassed by raisingSystemExit"""
 
     # Clean up after Terminal Writes, if need be
 
-    with_stderr.write("\x1b[m")  # clears Select Graphic Rendition (SGR)
+    with_stderr.write("\x1b[" "m")  # clears Select Graphic Rendition via SGR
+    with_stderr.write("\x1b[" "4" "l")  # restores Replace (not Insert) via RM_IRM
 
     when = termios.TCSADRAIN
     attributes = with_tcgetattr  # undoes tty.setraw
@@ -188,21 +190,26 @@ TAB = "\t"  # 00/09 Horizontal Tab
 CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1b[" "G"
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1b[" "B"
 
-CUU_Y = "\x1b[" "{}A"  # CSI 04/01 Cursor Up
-CUD_Y = "\x1b[" "{}B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
-CUF_X = "\x1b[" "{}C"  # CSI 04/03 Cursor [Forward] Right
-CUB_X = "\x1b[" "{}D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
+CUU_Y = "\x1b[" "{}" "A"  # CSI 04/01 Cursor Up
+CUD_Y = "\x1b[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
+CUF_X = "\x1b[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
+CUB_X = "\x1b[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
 
-CUP_Y_X = "\x1b[" "{};{}H"  # CSI 04/08 Cursor Position
+CUP_Y_X = "\x1b[" "{};{}" "H"  # CSI 04/08 Cursor Position
 
-EL_P = "\x1b[" "{}K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
+EL_P = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
-IL_Y = "\x1b[" "{}L"  # CSI 04/12 Insert Line [Row]
-DCH_X = "\x1b[" "{}P"  # CSI 05/00 Delete Character
+IL_Y = "\x1b[" "{}" "L"  # CSI 04/12 Insert Line [Row]
+DCH_X = "\x1b[" "{}" "P"  # CSI 05/00 Delete Character
 
-VPA_Y = "\x1b" "[" "{}d"  # CSI 06/04 Line Position Absolute
+VPA_Y = "\x1b" "[" "{}" "d"  # CSI 06/04 Line Position Absolute
 
-MAX_PN_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
+SM_IRM = "\x1b" "[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
+RM_IRM = "\x1b" "[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+
+SGR = "\x1b" "[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
+
+PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
 
 class ScreenEditor:
@@ -268,13 +275,15 @@ class ScreenEditor:
 
         fileno = bt.fileno
 
-        assert CUU_Y == "\x1b[" "{}A"
-        assert CUP_Y_X == "\x1b[" "{};{}H"
-        assert MAX_PN_32100 == 32100
+        assert CUU_Y == "\x1b[" "{}" "A"
+        assert CUP_Y_X == "\x1b[" "{}" ";{}H"
+        assert SGR == "\x1b[" "{}" "m"
+        assert RM_IRM == "\x1b[" "4" "l"
+        assert PN_MAX_32100 == 32100
 
         # Exit via 1st Column of 1 Row above the Last Row
 
-        sdata = b"\x1b[32100H" + b"\x1b[A"
+        sdata = b"\x1b[32100H" + b"\x1b[A" + b"\x1b[m" + b"\x1b[4l"
         os.write(fileno, sdata)
 
         # Exit each, in reverse order of Enter's
@@ -304,6 +313,7 @@ class ScreenEditor:
 
         sdata = schars.encode()
         os.write(fileno, sdata)
+
         slog.write(sdata)
 
     #
@@ -318,8 +328,8 @@ class ScreenEditor:
             #
             b"\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
             b"\x02": self.do_column_left,  # ⌃B for Emacs
-            b"\x04": self.do_char_delete_right,  # ⌃D for Emacs
-            # b"\x05": self.do_row_end,  # ⌃E for Emacs
+            b"\x04": self.do_char_delete_here,  # ⌃D for Emacs
+            b"\x05": self.do_column_leap_rightmost,  # ⌃E for Emacs
             b"\x06": self.do_column_right,  # ⌃F for Emacs
             b"\x07": self.do_write_kdata,  # ⌃G \a bell-ring
             b"\x08": self.do_write_kdata,  # ⌃H \b ←
@@ -332,14 +342,35 @@ class ScreenEditor:
             b"\x10": self.do_row_up,  # ⌃P
             b"\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
             b"\x16": self.do_quote_one_kdata,  # ⌃V for Vim
+            # FIXME: ⌃U for Emacs
+            # FIXME: ⌃X⌃C ⌃X⌃S for Emacs
             #
             b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
             b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
-            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert
-            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud
+            # FIXME: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
+            #
             b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓
             b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r
+            # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # FIXME: Delete Row if at 1st Column
             b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
+            b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
+            b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
+            b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
+            # FIXME: ⎋⇧S for Vim
+            # FIXME: ⎋⇧Q for Vim as its Assert False
+            # FIXME: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
+            #
+            b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
+            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert
+            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud
+            b"\x1b" b"h": self.do_column_left,  # ⎋H for Vim
+            b"\x1b" b"i": self.do_inserting_start,  # ⎋I for Vim
+            b"\x1b" b"j": self.do_row_down,  # ⎋J for Vim
+            b"\x1b" b"k": self.do_row_up,  # ⎋K for Vim
+            b"\x1b" b"l": self.do_column_right,  # ⎋L for Vim
+            b"\x1b" b"o": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
+            b"\x1b" b"x": self.do_char_delete_here,  # ⎋X for Vim
+            # FIXME: ⎋R ⎋S for Vim
             #
             b"\x1b[" b"A": self.do_write_kdata,  # ⎋[⇧A ↑
             b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
@@ -350,7 +381,7 @@ class ScreenEditor:
             #
             b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
             #
-            b"\x7f": self.do_char_delete_left,  # ⌃? Delete
+            b"\x7f": self.do_char_delete_left,  # ⌃? Delete  # FIXME: Delete Row if at 1st Column
         }
 
         func_by_kdata = dict(func_by_literal_kdata)
@@ -388,7 +419,6 @@ class ScreenEditor:
         kba = bytearray()
         while True:
             (tbp, n) = self.read_byte_packet_splits()
-            slog.write(f"\n{n=} {tbp=}\n".encode())
 
             # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
@@ -399,8 +429,8 @@ class ScreenEditor:
             klog.write(kdata)
 
             assert TAB == "\t"
-            assert VPA_Y == "\x1b" "[" "{}d"
-            assert CUP_Y_X == "\x1b" "[" "{};{}H"
+            assert VPA_Y == "\x1b" "[" "{}" "d"
+            assert CUP_Y_X == "\x1b" "[" "{};{}" "H"
 
             m = re.fullmatch(csi_pif_regex_bytes, string=kdata)
             parms: bytes = m.group(2) if m else b""
@@ -415,7 +445,6 @@ class ScreenEditor:
             if kdata in func_by_kdata.keys():
 
                 func = func_by_kdata[kdata]
-
                 try:
                     func(tbp)
                 except SystemExit:
@@ -460,7 +489,7 @@ class ScreenEditor:
             # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
 
     def read_byte_packet_splits(self) -> tuple[TerminalBytePacket, int]:
-        """Read 1 TerminalBytePacket, all in one piece, else in  split pieces"""
+        """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
 
         bt = self.bytes_terminal
 
@@ -468,6 +497,9 @@ class ScreenEditor:
         tbp = bt.read_byte_packet(timeout=None)  # todo: log & echo the Bytes as they arrive
 
         while (not tbp.text) and (not tbp.closed) and (not bt.extras):
+            kdata = tbp.to_bytes()
+            if kdata == b"\x1bO":  # ⎋⇧O for Vim
+                break
             n += 1
             bt.close_byte_packet_if(tbp, timeout=None)
 
@@ -484,6 +516,7 @@ class ScreenEditor:
 
         sdata = kdata
         os.write(fileno, sdata)
+
         slog.write(sdata)
 
     def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
@@ -507,27 +540,37 @@ class ScreenEditor:
     def do_column_right(self, tbp: TerminalBytePacket) -> None:
         """Go right by 1 Column"""
 
-        assert CUF_X == "\x1b[" "{}C"
+        assert CUF_X == "\x1b[" "{}" "C"
         self.write("\x1b[" "C")
 
         # Emacs ⌃F
+
+    def do_column_right_inserting_start(self, tbp: TerminalBytePacket) -> None:
+        """Insert 1 Space at the Cursor, then go right by 1 Column"""
+
+        self.do_column_right(tbp)  # Vim L
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim A
+
+    def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
+        """Delete the Character beneath the Cursor"""
+
+        assert DCH_X == "\x1b[" "{}" "P"
+        self.write("\x1b[" "P")
+
+        # Emacs ⌃D  # Vim X
 
     def do_char_delete_left(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character at left of the Cursor"""
 
         assert BS == "\b"
-        assert DCH_X == "\x1b[" "{}P"
+        assert DCH_X == "\x1b[" "{}" "P"
         self.write("\b" "\x1b[" "P")
 
-        # Emacs ⌃B
+        # Emacs ⌃B  # Vim ⇧X
 
-    def do_char_delete_right(self, tbp: TerminalBytePacket) -> None:
-        """Delete the Character beneath the Cursor"""
-
-        assert DCH_X == "\x1b[" "{}P"
-        self.write("\x1b[" "P")
-
-        # Emacs ⌃D
+        # FIXME: Delete Left only when it exists
 
     def do_column_leap_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column"""
@@ -537,18 +580,63 @@ class ScreenEditor:
 
         # Emacs Return
 
+    def do_column_leap_rightmost(self, tbp: TerminalBytePacket) -> None:
+        """Leap to the Rightmost Column"""
+
+        assert CUF_X == "\x1b[" "{}" "C"
+        assert PN_MAX_32100 == 32100
+        self.write("\x1b[" "32100" "C")
+
+        # Emacs ⌃E
+
+    def do_inserting_start(self, tbp: TerminalBytePacket) -> None:
+        """Start Inserting Characters at the Cursor"""
+
+        assert SM_IRM == "\x1b[" "4h"
+        self.write("\x1b[" "4h")
+
+        # Vim I
+
+        # FIXME: Show Inserting while Inserting
+
+    def do_replacing_start(self, tbp: TerminalBytePacket) -> None:
+        """Start Replacing Characters at the Cursor"""
+
+        assert RM_IRM == "\x1b[" "4l"
+        self.write("\x1b[" "4l")
+
+        # Vim ⇧R
+
+        # FIXME: Show Replacing while Replacing
+
     def do_row_down(self, tbp: TerminalBytePacket) -> None:
         """Go down by 1 Row, but stop in last Row"""
 
-        assert CUD_Y == "\x1b[" "{}B"
+        assert CUD_Y == "\x1b[" "{}" "B"
         self.write("\x1b[" "B")
 
         # Emacs ⌃N
 
+    def do_row_down_insert_inserting_start(self, tbp: TerminalBytePacket) -> None:
+        """Insert 1 Row below the Cursor"""
+
+        self.do_row_down(tbp)  # Vim J
+        self.do_row_insert(tbp)  # Emacs ⌃O when leftmost
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim O
+
+    def do_row_insert_inserting_start(self, tbp: TerminalBytePacket) -> None:
+
+        self.do_row_insert(tbp)  # Emacs ⌃O when leftmost
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim ⇧O
+
     def do_row_insert(self, tbp: TerminalBytePacket) -> None:
         """Insert 1 Row above the Cursor"""
 
-        assert IL_Y == "\x1b[" "{}L"
+        assert IL_Y == "\x1b[" "{}" "L"
         self.write("\x1b[" "L")
 
         # Emacs ⌃O when leftmost
@@ -556,7 +644,7 @@ class ScreenEditor:
     def do_row_tail_erase(self, tbp: TerminalBytePacket) -> None:
         """Erase from the Cursor to the Tail of the Row"""
 
-        assert EL_P == "\x1b[" "{}K"
+        assert EL_P == "\x1b[" "{}" "K"
         self.write("\x1b[" "K")
 
         # Emacs ⌃K when not rightmost
@@ -564,10 +652,14 @@ class ScreenEditor:
     def do_row_up(self, tbp: TerminalBytePacket) -> None:
         """Go up by 1 Row, but stop in Top Row"""
 
-        assert CUU_Y == "\x1b[" "{}A"
+        assert CUU_Y == "\x1b[" "{}" "A"
         self.write("\x1b[" "A")
 
         # Emacs ⌃P
+
+    #
+    #
+    #
 
     def do_kdata_fn_f1(self, tbp: TerminalBytePacket, /) -> None:
         """Print the many Lines of Screen Writer Help"""
@@ -583,7 +675,7 @@ class ScreenEditor:
         if env_cloud_shell:
             self.print()
             self.print("gCloud Shell ignores ⌃M (you must press Return)")
-            self.print("gCloud Shell often ignores ⎋[D (you must press ⎋[1D)")
+            self.print("gCloud Shell ignores a quick ⎋[D (you must press ⎋[1D)")
             self.print("gCloud Shell often ignores ⎋[I (you must press Tab)")
             self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
             self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
@@ -665,6 +757,8 @@ SCREEN_WRITER_HELP = r"""
 
 """
 
+# FIXME: help for Emacs, help for Vim
+
 # FIXME: look up docs for
 #
 #   \eD	Index (IND)	Move cursor down one line
@@ -687,12 +781,11 @@ LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\x1b[" "B"
 CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\x1b[" "G"
 
 ESC = "\x1b"  # 01/11  ⌃[ Escape  # often known as Shell printf '\e', but Python doesn't define \e
+SS3 = "\x1bO"  # ESC 04/15 Single Shift Three  # in macOS F1 F2 F3 F4
+CSI = "\x1b["  # ESC 05/11 Control Sequence Introducer
 
 DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
 DECRC = "\x1b" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
-SS3 = "\x1b" "O"  # ESC 04/15 Single Shift Three  # in macOS F1 F2 F3 F4
-
-CSI = "\x1b["  # ESC 05/11 Control Sequence Introducer
 
 CSI_PIF_REGEX = r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
@@ -818,6 +911,7 @@ class BytesTerminal:
 
         if extras or self.kbhit(timeout=timeout):
             while extras or self.kbhit(timeout=t):
+
                 if not extras:
                     byte = os.read(fileno, 1)
                 else:
@@ -831,6 +925,14 @@ class BytesTerminal:
 
                 if tbp.closed:
                     break
+
+                kdata = tbp.to_bytes()
+                if not extras:
+                    if kdata == b"\x1bO":  # ⎋⇧O for Vim
+                        if not self.kbhit(
+                            timeout=0.333
+                        ):  # rejects slow SS3 b"\x1bO" "P" of Fn F1..F4
+                            break
 
 
 class TerminalBytePacket:
@@ -1249,7 +1351,7 @@ class TerminalBytePacket:
 
         assert ESC == "\x1b"  # ⎋
         assert CSI == "\x1b["  # ⎋[
-        assert SS3 == "\x1b" "O"  # ⎋O
+        assert SS3 == "\x1bO"  # ⎋O
 
         # Look only outside of Mouse Reports
 
@@ -1378,6 +1480,26 @@ class TerminalBytePacket:
         # todo: limit the length of a CSI Escape Sequence
 
     # todo: limit rate of input so livelocks go less wild, like in Keyboard/ Screen loopback
+
+
+#
+# Trace what's going on
+#
+
+
+tprinting = False
+if tprinting:
+
+    tlog_path = pathlib.Path("__pycache__/t.trace")
+    tlog_path.parent.mkdir(exist_ok=True)
+    tlog = tlog_path.open("a")
+
+    def tprint(*args: object) -> None:
+        """Trace what's going on"""
+
+        text = " ".join(str(_) for _ in args)
+
+        tlog.write(text + "\n")
 
 
 #
