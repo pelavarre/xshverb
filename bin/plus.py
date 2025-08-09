@@ -382,7 +382,8 @@ class ScreenEditor:
         assert CSI_PIF_REGEX == r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
         csi_pif_regex_bytes = CSI_PIF_REGEX.encode()
 
-        csi_final_bytes = b"@ABCDEGHIJKLMPSTZ" + b"dhlmnqt"
+        csi_timeless_finals = b"@ABCDEGHIJKLMPSTZ" + b"dhlmq"  # not b"R" b"nt"
+        csi_slow_finals = b"nt"  # still not b"R"
 
         kba = bytearray()
         while True:
@@ -405,6 +406,10 @@ class ScreenEditor:
             parms: bytes = m.group(2) if m else b""
             final: bytes = m.group(4) if m else b""
 
+            csi_fullmatch = m and (final in csi_timeless_finals)
+            if (n > 1) and m and (final in csi_slow_finals):
+                csi_fullmatch = True
+
             # Call a Func Def, if possible
 
             if kdata in func_by_kdata.keys():
@@ -418,12 +423,12 @@ class ScreenEditor:
 
             # Emulate some slow moving Esc Byte Pairs
 
-            elif (n > 1) and (kdata == b"\x1b" b"l"):  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
+            elif kdata == b"\x1b" b"l":  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
                 self.write("\x1b[" "1;1" "H")
 
             # Loop back (or emulate) some slow moving Csi Keyboard Chords
 
-            elif (n > 1) and m and (final in csi_final_bytes):
+            elif csi_fullmatch:
 
                 if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
                     pn = int(parms) if parms else 1
