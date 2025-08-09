@@ -405,6 +405,8 @@ class ScreenEditor:
             parms: bytes = m.group(2) if m else b""
             final: bytes = m.group(4) if m else b""
 
+            # Call a Func Def, if possible
+
             if kdata in func_by_kdata.keys():
 
                 func = func_by_kdata[kdata]
@@ -414,6 +416,13 @@ class ScreenEditor:
                 except SystemExit:
                     break
 
+            # Emulate some slow moving Esc Byte Pairs
+
+            elif (n > 1) and (kdata == b"\x1b" b"l"):  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
+                self.write("\x1b[" "1;1" "H")
+
+            # Loop back (or emulate) some slow moving Csi Keyboard Chords
+
             elif (n > 1) and m and (final in csi_final_bytes):
 
                 if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
@@ -421,14 +430,13 @@ class ScreenEditor:
                     assert pn >= 1, (pn,)
                     self.write(pn * "\t")
 
-                elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1d for ⎋[d
+                elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1D for ⎋[D
                     self.write("\x1b[" "1" "d")
-
-                elif kdata == b"\x1b[" b"l":  # gCloud Shell needs ⎋[1;1H for ⎋[l
-                    self.write("\x1b[" "1;1" "H")
 
                 else:  # else loops back Csi Keyboard Bytes on into Screen
                     self.do_write_kdata(tbp)
+
+            # Pass through Text, including Emojis, but bounce anything else
 
             else:
 
