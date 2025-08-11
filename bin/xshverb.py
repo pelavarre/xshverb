@@ -3491,7 +3491,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         penscapes_by_tile = ts.penscapes_by_tile
 
         tile_keys = list(penscapes_by_tile.keys())
-        assert tiles == tile_keys, (tiles, tile_keys, list_diffs(tiles, b=tile_keys))
+        assert tiles == tile_keys, (tiles, tile_keys, list_str_diffs(tiles, b=tile_keys))
 
         # Decode the Penscape
 
@@ -3885,7 +3885,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         stdio = self.stdio
 
         tiles = self.tiles
-        assert sorted(tiles) == tiles, (sorted(tiles), tiles, list_diffs(sorted(tiles), b=tiles))
+        assert sorted(tiles) == tiles, (sorted(tiles), tiles, list_str_diffs(sorted(tiles), b=tiles))
 
         self.chat_clear()
         self.chat_clear_count = 0  # todo: messy?
@@ -5806,18 +5806,34 @@ def bytes_textify(bytes_: bytes) -> bytes:
 
 
 #
-# Amp up Import BuiltsIns List
+# Amp up Import BuiltsIns List[Object] and List[Str]
 #
 
 
-def list_diffs(a: list[str], b: list[str]) -> list[str]:
-    """List the Changes needed to remake the Ordered List at A into B"""
+def list_object_str_diffs(a: list[object], b: list[object]) -> list[str]:
+    """Convert both to List[Str] from List[Object] and then list the Diff's"""
+
+    a_list = list(str(_) for _ in a)
+    b_list = list(str(_) for _ in b)
+    diffs = list_str_diffs(a=a_list, b=b_list)
+
+    return diffs
+
+    # todo: more test of .list_object_str_diffs
+
+
+def list_str_diffs(a: list[str], b: list[str]) -> list[str]:
+    """List the Diff's, but without adding in Lines of Context, and without Line-Break's"""
 
     diffs = list(difflib.unified_diff(a=a, b=b, lineterm=""))
     diffs = list(_ for _ in diffs if _[0] in ("+", "-"))
     diffs = list(_ for _ in diffs if _ not in ("--- ", "+++ "))
 
     return diffs
+
+    # >>> list_str_diffs("abcde", "cdefg")
+    # ['-a', '-b', '+f', '+g']
+    # >>>
 
 
 #
