@@ -212,6 +212,11 @@ SGR = "\x1b" "[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
 
+# FIXME: .get_terminal_size to power ⎋⇧M
+# FIXME: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
+# FIXME: .get_terminal_row_column for Vim ⇧X and Vim/ Emacs Delete at Leftmost
+
+
 class ScreenEditor:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
@@ -352,12 +357,15 @@ class ScreenEditor:
             b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓
             b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r
             # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # FIXME: Delete Row if at 1st Column
+            b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
+            b"\x1b" b"L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
             b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
             b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
+            b"\x1bQ": self.do_assert_false,  # ⎋⇧Q for Vim
             b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
+            b"\x1b" b"S": self.do_row_delete_insert_start_inserting,  # ⎋S for Vim
             b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
-            # FIXME: ⎋⇧S for Vim
-            # FIXME: ⎋⇧Q for Vim as its Assert False
+            # FIXME: ⎋⇧M for Vim
             # FIXME: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
@@ -369,8 +377,9 @@ class ScreenEditor:
             b"\x1b" b"k": self.do_row_up,  # ⎋K for Vim
             b"\x1b" b"l": self.do_column_right,  # ⎋L for Vim
             b"\x1b" b"o": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
+            b"\x1b" b"r": self.do_replacing_one_kdata,  # ⎋R for Vim
+            b"\x1b" b"s": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
             b"\x1b" b"x": self.do_char_delete_here,  # ⎋X for Vim
-            # FIXME: ⎋R ⎋S for Vim
             #
             b"\x1b[" b"A": self.do_write_kdata,  # ⎋[⇧A ↑
             b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
@@ -388,10 +397,14 @@ class ScreenEditor:
 
         return func_by_kdata
 
-        # FIXME: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
-        # FIXME: bind ⎋⇧H ⎋⇧M ⎋⇧L ⎋0 ⎋⇧$ ⎋X ⎋⇧X ⎋R etc to Vi Meanings - just don't get stuck there
+        # FIXME: bind ⎋⇧M ⎋0 ⎋⇧$ ⎋R etc to Vi Meanings - but don't get stuck inside ⎋-Lock
+
+        # FIXME: bind ⌃C ⇧O for Emacs overwrite-mode, or something
+
         # FIXME: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
         # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
+
+        # FIXME: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
 
         # FIXME: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
 
@@ -415,6 +428,13 @@ class ScreenEditor:
 
         csi_timeless_finals = b"@ABCDEGHIJKLMPSTZ" + b"dhlmq"  # not b"R" b"nt"
         csi_slow_finals = b"nt"  # still not b"R"
+
+        # Default to Inserting, not Replacing
+
+        tbp = TerminalBytePacket()
+        self.do_inserting_start(tbp)
+
+        # Reply to each Keyboard Chord Input
 
         kba = bytearray()
         while True:
@@ -520,12 +540,25 @@ class ScreenEditor:
         slog.write(sdata)
 
     def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
-        """Quote the next 1 Byte of Keyboard Data"""
+        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
         (tbp, n) = self.read_byte_packet_splits()
         self.do_write_kdata(tbp)
 
         # Emacs ⌃Q  # Vim ⌃V
+
+    def do_replacing_one_kdata(self, tbp: TerminalBytePacket) -> None:
+        """Start replacing, quote 1 Keyboard Chord, then start inserting"""
+
+        self.do_replacing_start(tbp)  # Vim ⇧R
+        self.do_quote_one_kdata(tbp)  # Emacs ⌃Q  # Vim ⌃V
+        self.do_inserting_start(tbp)  # Vim I
+
+        # todo: Shadow the Terminal Inserting/ Replacing and restore it, don't force Inserting
+
+    #
+    #
+    #
 
     def do_column_left(self, tbp: TerminalBytePacket) -> None:
         """Go left by 1 Column"""
@@ -561,6 +594,19 @@ class ScreenEditor:
 
         # Emacs ⌃D  # Vim X
 
+    def do_assert_false(self, tbp: TerminalBytePacket) -> None:
+        """Assert False"""
+
+        assert False
+
+    def do_char_delete_here_start_inserting(self, tbp: TerminalBytePacket) -> None:
+        """Delete the Character beneath the Cursor, and Start Inserting"""
+
+        self.do_char_delete_here(tbp)  # Emacs ⌃D  # Vim X
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim S
+
     def do_char_delete_left(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character at left of the Cursor"""
 
@@ -570,7 +616,7 @@ class ScreenEditor:
 
         # Emacs ⌃B  # Vim ⇧X
 
-        # FIXME: Delete Left only when it exists
+        # FIXME: Delete Leftmost only when it exists
 
     def do_column_leap_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column"""
@@ -578,7 +624,7 @@ class ScreenEditor:
         assert CR == "\r"
         self.write("\r")
 
-        # Emacs Return
+        # Emacs ⌃A  # Vim 0
 
     def do_column_leap_rightmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Rightmost Column"""
@@ -608,6 +654,17 @@ class ScreenEditor:
         # Vim ⇧R
 
         # FIXME: Show Replacing while Replacing
+
+    def do_row_delete_insert_start_inserting(self, tbp: TerminalBytePacket) -> None:
+        """Empty the Row beneath the Cursor, and Start Inserting"""
+
+        assert EL_P == "\x1b[" "{}" "K"  # 2 Row
+        self.write("\x1b[" "2" "K")
+
+        self.do_column_leap_leftmost(tbp)  # Emacs ⌃A  # Vim 0
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim ⇧S
 
     def do_row_down(self, tbp: TerminalBytePacket) -> None:
         """Go down by 1 Row, but stop in last Row"""
@@ -640,6 +697,23 @@ class ScreenEditor:
         self.write("\x1b[" "L")
 
         # Emacs ⌃O when leftmost
+
+    def do_row_leap_first_column_leftmost(self, tbp: TerminalBytePacket) -> None:
+        """Leap to the Leftmost Column of the First Row"""
+
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        self.write("\x1b[" "1;1" "H")
+
+        # Vim ⇧H
+
+    def do_row_leap_last_column_leftmost(self, tbp: TerminalBytePacket) -> None:
+        """Leap to the Leftmost Column of the Last Row"""
+
+        assert PN_MAX_32100 == 32100
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        self.write("\x1b[" "32100;1" "H")
+
+        # Vim ⇧H
 
     def do_row_tail_erase(self, tbp: TerminalBytePacket) -> None:
         """Erase from the Cursor to the Tail of the Row"""
