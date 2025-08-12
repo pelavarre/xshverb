@@ -174,7 +174,7 @@ def try_tbp_self_test() -> None:
     tbp = TerminalBytePacket()
 
     t0 = dt.datetime.now()
-    tbp._try_()
+    tbp._try_terminal_byte_packet_()
     t1 = dt.datetime.now()
 
     print(t0)
@@ -450,12 +450,13 @@ class ScreenEditor:
         self.do_inserting_start(tbp)
 
         # Reply to each Keyboard Chord Input
+        # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
         kba = bytearray()
         while True:
             (tbp, n) = self.read_some_byte_packets()
-
-            # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
+            tprint(f"{n=} {tbp=}  # loopback_awhile")
+            assert tbp, (tbp, n)  # because .timeout=None
 
             kdata = tbp.to_bytes()
             assert kdata, (kdata,)  # because .timeout=None
@@ -480,29 +481,38 @@ class ScreenEditor:
             if kdata in func_by_kdata.keys():
 
                 func = func_by_kdata[kdata]
+                tprint(f"{func=}  # loopback_awhile")
                 try:
                     func(tbp)
                 except SystemExit:
                     break
 
-            # Emulate some slow moving Esc Byte Pairs
+            # Emulate some Esc Byte Pairs, no matter if quick or slow
 
             elif kdata == b"\x1b" b"l":  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
+                tprint(f"{kdata=}  # loopback_awhile")
+
                 self.write("\x1b[" "1;1" "H")
 
-            # Loop back (or emulate) some slow moving Csi Keyboard Chords
+            # Loop back (or emulate) Csi Keyboard Chords, especially when quick
 
             elif csi_fullmatch:
 
                 if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
+                    tprint(f"⎋[...I {final=} {parms=} {kdata=}  # loopback_awhile")
+
                     pn = int(parms) if parms else 1
                     assert pn >= 1, (pn,)
                     self.write(pn * "\t")
 
                 elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1D for ⎋[D
+                    tprint(f"⎋[d {kdata=}   # loopback_awhile")
+
                     self.write("\x1b[" "1" "d")
 
                 else:  # else loops back Csi Keyboard Bytes on into Screen
+                    tprint(f"else csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
+
                     self.do_write_kdata(tbp)
 
             # Pass through Text, including Emojis, but bounce anything else
@@ -510,10 +520,13 @@ class ScreenEditor:
             else:
 
                 if len(kdata) > 1:
+                    tprint(f"(len > 1) {kdata=} {str(tbp)=}   # loopback_awhile")
                     self.print(tbp)
                 elif 0x20 <= kdata[-1] <= 0x7E:  # printable 7-bit US Ascii
+                    tprint(f"0x20..0x7E {kdata=}   # loopback_awhile")
                     self.do_write_kdata(tbp)
                 else:
+                    tprint(f"else not csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
                     self.print(tbp)
 
                 # FIXME: Pass through Text & Emojis, even when not printable 7-bit US Ascii
@@ -1188,10 +1201,10 @@ class TerminalBytePacket:
 
         if text:
             if stash_:
-                return text + " " + str(stash_)
-            return text
+                return repr(text) + " " + str(stash_)
+            return repr(text)
 
-            # "abc b'\xc0'"
+            # "'abc' b'\xc0'"
 
         if not head_:
             if stash_:
@@ -1259,13 +1272,16 @@ class TerminalBytePacket:
     # Tests, to run slowly and thoroughly across like 211ms
     #
 
-    def _try_(self) -> None:  # todo: add Code to call this slow thorough Self-Test
+    def _try_terminal_byte_packet_(self) -> None:  # todo: call this slow Self-Test more often
         """Try some Packets open to, or closed against, taking more Bytes"""
 
         # Try some Packets left open to taking more Bytes
 
         tbp = TerminalBytePacket(b"Superb")
-        assert str(tbp) == "Superb" and not tbp.closed, (tbp,)
+        assert str(tbp) == "'Superb'" and not tbp.closed, (tbp,)
+        extras = tbp.take_one_if(b"\xc2")
+        assert not extras and not tbp.closed, (extras, tbp.closed, tbp)
+        assert str(tbp) == r"'Superb' b'\xc2'", (repr(str(tbp)), tbp)
 
         self._try_open_(b"")  # empty
         self._try_open_(b"\x1b")  # first Byte of Esc Sequence
@@ -1654,7 +1670,7 @@ class TerminalBytePacket:
 #
 
 
-tprinting = False
+tprinting = True
 if tprinting:
 
     tlog_path = pathlib.Path("__pycache__/t.trace")
