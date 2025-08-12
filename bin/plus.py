@@ -444,12 +444,14 @@ class ScreenEditor:
         csi_timeless_finals = b"@ABCDEGHIJKLMPSTZ" + b"dhlmq"  # not b"R" b"nt"
         csi_slow_finals = b"nt"  # still not b"R"
 
-        # Default to Inserting, not Replacing
+        # Default to Inserting, not Replacing  # FIXME: Shadow Terminal to allow Replacing default
 
         tbp = TerminalBytePacket()
         self.do_inserting_start(tbp)
 
         # Reply to each Keyboard Chord Input
+
+        # FIXME: Read Str not Bytes from Keyboard, and then List[Str]
         # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
         kba = bytearray()
@@ -519,9 +521,10 @@ class ScreenEditor:
 
             else:
 
-                if len(kdata) > 1:
+                if len(kdata) > 1:  # Emojis, etc
                     tprint(f"(len > 1) {kdata=} {str(tbp)=}   # loopback_awhile")
-                    self.print(tbp)
+                    # self.print(tbp)
+                    self.do_write_kdata(tbp)
                 elif 0x20 <= kdata[-1] <= 0x7E:  # printable 7-bit US Ascii
                     tprint(f"0x20..0x7E {kdata=}   # loopback_awhile")
                     self.do_write_kdata(tbp)
@@ -529,7 +532,7 @@ class ScreenEditor:
                     tprint(f"else not csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
                     self.print(tbp)
 
-                # FIXME: Pass through Text & Emojis, even when not printable 7-bit US Ascii
+                # FIXME: stop wrongly passing through multibyte Control Characters
 
             if kba.endswith(b"\x04"):  # ⌃D
                 return
@@ -582,7 +585,7 @@ class ScreenEditor:
         self.do_quote_one_kdata(tbp)  # Emacs ⌃Q  # Vim ⌃V
         self.do_inserting_start(tbp)  # Vim I
 
-        # todo: Shadow the Terminal Inserting/ Replacing and restore it, don't force Inserting
+        # FIXME: Shadow the Terminal Inserting/ Replacing and restore it, don't force Inserting
 
     #
     #
@@ -1670,7 +1673,9 @@ class TerminalBytePacket:
 #
 
 
-tprinting = True
+tprinting = False
+# tprinting = True  # last wins
+
 if tprinting:
 
     tlog_path = pathlib.Path("__pycache__/t.trace")
