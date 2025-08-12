@@ -190,6 +190,15 @@ TAB = "\t"  # 00/09 Horizontal Tab
 CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1b[" "G"
 LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1b[" "B"
 
+
+IND = "\x1b" "D"  # ESC 04/04 Index (IND) = C1 Control U+0084 IND (formerly known as INDEX)
+NEL = "\x1b" "E"  # ESC 04/05 Next Line (NEL) = C1 Control U+0085 NEXT LINE (NEL)
+RI = "\x1b" "M"  # ESC 04/06 Reverse Index (RI) = C1 Control U+0086 REVERSE LINE FEED (RI)
+
+ICF_RIS = "\x1b" "c"  # ESC 06/03 Reset To Initial State (RIS) [an Independent Control Function]
+ICF_CUP = "\x1b" "l"  # ESC 06/12 Cursor Position (CUP) [an Independent Control Function]
+
+
 CUU_Y = "\x1b[" "{}" "A"  # CSI 04/01 Cursor Up
 CUD_Y = "\x1b[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
 CUF_X = "\x1b[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
@@ -209,11 +218,17 @@ RM_IRM = "\x1b" "[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
 
 SGR = "\x1b" "[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
+DSR_6 = "\x1b" "[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
+CPR_Y_X_REGEX = r"\x1b\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
+
+
+DEL = "\x7f"  # 00/7F Delete [Control Character]  # aka ⌃?
+
+
 PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
 
 # FIXME: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
-# FIXME: .get_terminal_row_column for Vim ⇧X and Vim/ Emacs Delete at Leftmost
 
 
 class ScreenEditor:
@@ -336,7 +351,7 @@ class ScreenEditor:
             b"\x05": self.do_column_leap_rightmost,  # ⌃E for Emacs
             b"\x06": self.do_column_right,  # ⌃F for Emacs
             b"\x07": self.do_write_kdata,  # ⌃G \a bell-ring
-            b"\x08": self.do_write_kdata,  # ⌃H \b ←
+            b"\x08": self.do_write_kdata,  # ⌃H \b ←  # todo: where does Windows Backspace land?
             b"\x09": self.do_write_kdata,  # ⌃I \t Tab
             b"\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
             b"\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
@@ -346,31 +361,31 @@ class ScreenEditor:
             b"\x10": self.do_row_up,  # ⌃P
             b"\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
             b"\x16": self.do_quote_one_kdata,  # ⌃V for Vim
-            # FIXME: ⌃U for Emacs
             # FIXME: ⌃X⌃C ⌃X⌃S for Emacs
+            b"\x1b" b"$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
             #
+            b"\x1b" b"0": self.do_column_leap_leftmost,  # ⎋0 for Vim
             b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
             b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
             # FIXME: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
-            b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓
-            b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r
+            b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
+            b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
             # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # FIXME: Delete Row if at 1st Column
             b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
             b"\x1b" b"L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
-            # b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
+            # b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑ (RI)
             b"\x1b" b"M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
             b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
             b"\x1bQ": self.do_assert_false,  # ⎋⇧Q for Vim
             b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
             b"\x1b" b"S": self.do_row_delete_insert_start_inserting,  # ⎋S for Vim
             b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
-            # FIXME: ⎋⇧M for Vim
             # FIXME: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
-            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert
-            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud
+            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (ICF_RIS)
+            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (ICF_CUP)
             b"\x1b" b"h": self.do_column_left,  # ⎋H for Vim
             b"\x1b" b"i": self.do_inserting_start,  # ⎋I for Vim
             b"\x1b" b"j": self.do_row_down,  # ⎋J for Vim
@@ -397,11 +412,11 @@ class ScreenEditor:
 
         return func_by_kdata
 
-        # FIXME: bind ⎋⇧M ⎋0 ⎋⇧$ ⎋R etc to Vi Meanings - but don't get stuck inside ⎋-Lock
+        # FIXME: ⌃U for Emacs
+        # FIXME: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
+        # FIXME: bind ⎋0 etc to Vi Meanings - but don't get stuck inside ⎋-Lock
 
         # FIXME: bind ⌃C ⇧O for Emacs overwrite-mode, or something
-
-        # FIXME: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
         # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
 
         # FIXME: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
@@ -612,11 +627,14 @@ class ScreenEditor:
 
         assert BS == "\b"
         assert DCH_X == "\x1b[" "{}" "P"
-        self.write("\b" "\x1b[" "P")
 
-        # Emacs ⌃B  # Vim ⇧X
+        x = self.bytes_terminal.read_column_x()
+        if x > 1:
+            self.write("\b" "\x1b[" "P")
 
-        # FIXME: Delete Leftmost only when it exists
+        # Emacs Delete  # Vim ⇧X
+
+        # FIXME: Show .do_char_delete_left bouncing off the Left Edge
 
     def do_column_leap_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column"""
@@ -633,7 +651,7 @@ class ScreenEditor:
         assert PN_MAX_32100 == 32100
         self.write("\x1b[" "32100" "C")
 
-        # Emacs ⌃E
+        # Emacs ⌃E  # Vim ⇧$
 
     def do_inserting_start(self, tbp: TerminalBytePacket) -> None:
         """Start Inserting Characters at the Cursor"""
@@ -846,16 +864,6 @@ SCREEN_WRITER_HELP = r"""
 
 # FIXME: help for Emacs, help for Vim
 
-# FIXME: look up docs for
-#
-#   \eD	Index (IND)	Move cursor down one line
-#   \eM	Reverse Index (RI)	Move cursor up one line
-#   \eE	Next Line (NEL)	Move cursor to start of next line (CR+LF effect)
-#
-#   \ec	RIS (Reset to Initial State)	Full terminal reset including screen erase
-#   \el Row-Column-Leap-to-Upper-Left
-#           ⎋l row-column-leap (macOS only)
-#
 
 #
 # Amp up Import Tty
@@ -1053,6 +1061,45 @@ class BytesTerminal:
         return width
 
         # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
+
+    def read_column_x(self) -> int:
+        """Find the Terminal Cursor Column"""
+
+        (y, x) = self.read_row_y_column_x()
+
+        return x
+
+    def read_row_y_column_x(self) -> tuple[int, int]:
+        """Find the Terminal Cursor"""
+
+        stdio = self.stdio
+
+        assert DSR_6 == "\x1b" "[" "6n"
+        assert CPR_Y_X_REGEX == r"\x1b\[([0-9]+);([0-9]+)R"
+
+        kbhit = self.kbhit(timeout=0.000)  # flushes output, then polls input
+        assert not kbhit  # todo: cope when Mouse or Paste work disrupts os.read
+
+        stdio.write("\x1b[6n")  # bypass Screen Logs & Screen Shadows above
+        tbp = self.read_byte_packet(timeout=None)
+        kdata = tbp.to_bytes()
+
+        m = re.fullmatch(rb"\x1b\[([0-9]+);([0-9]+)R", string=kdata)
+        assert m, (m, kdata, tbp)
+
+        y_bytes = m.group(1)
+        x_bytes = m.group(2)
+
+        y = int(y_bytes)
+        x = int(x_bytes)
+
+        assert 1 <= y <= PN_MAX_32100, (y, x, kdata, tbp)
+        assert 1 <= x <= PN_MAX_32100, (y, x, kdata, tbp)
+
+        assert y >= 1, (y, y_bytes, kdata, tbp)
+        assert x >= 1, (x, x_bytes, kdata, tbp)
+
+        return (y, x)
 
 
 class TerminalBytePacket:
