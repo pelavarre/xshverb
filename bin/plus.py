@@ -212,7 +212,6 @@ SGR = "\x1b" "[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
 
-# FIXME: .get_terminal_size to power ⎋⇧M
 # FIXME: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
 # FIXME: .get_terminal_row_column for Vim ⇧X and Vim/ Emacs Delete at Leftmost
 
@@ -359,7 +358,8 @@ class ScreenEditor:
             # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # FIXME: Delete Row if at 1st Column
             b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
             b"\x1b" b"L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
-            b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
+            # b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑
+            b"\x1b" b"M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
             b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
             b"\x1bQ": self.do_assert_false,  # ⎋⇧Q for Vim
             b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
@@ -438,7 +438,7 @@ class ScreenEditor:
 
         kba = bytearray()
         while True:
-            (tbp, n) = self.read_byte_packet_splits()
+            (tbp, n) = self.read_some_byte_packets()
 
             # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
@@ -508,7 +508,7 @@ class ScreenEditor:
 
             # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
 
-    def read_byte_packet_splits(self) -> tuple[TerminalBytePacket, int]:
+    def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
 
         bt = self.bytes_terminal
@@ -542,7 +542,7 @@ class ScreenEditor:
     def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
         """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
-        (tbp, n) = self.read_byte_packet_splits()
+        (tbp, n) = self.read_some_byte_packets()
         self.do_write_kdata(tbp)
 
         # Emacs ⌃Q  # Vim ⌃V
@@ -715,6 +715,19 @@ class ScreenEditor:
 
         # Vim ⇧H
 
+    def do_row_leap_middle_column_leftmost(self, tbp: TerminalBytePacket) -> None:
+        """Leap to the Leftmost Column of the Middle Row"""
+
+        bt = self.bytes_terminal
+
+        height = bt.read_height()
+        middle = (height // 2) + (height % 2)
+
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        self.write(f"\x1b[{middle};1" "H")
+
+        # Vim ⎋⇧M
+
     def do_row_tail_erase(self, tbp: TerminalBytePacket) -> None:
         """Erase from the Cursor to the Tail of the Row"""
 
@@ -876,6 +889,9 @@ class BytesTerminal:
 
     extras: bytearray  # Bytes from 'os.read' not yet returned inside some TerminalBytePacket
 
+    height: int  # Terminal Screen Pane Rows, else -1
+    width: int  # Terminal Screen Pane Columns, else -1
+
     #
     # Init, enter, exit, flush, and stop
     #
@@ -893,6 +909,9 @@ class BytesTerminal:
         self.after = termios.TCSADRAIN  # for writing at Exit  # todo: .TCSAFLUSH vs large Paste
 
         self.extras = bytearray()
+
+        self.height = -1
+        self.width = -1
 
     def __enter__(self) -> BytesTerminal:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -1007,6 +1026,33 @@ class BytesTerminal:
                             timeout=0.333
                         ):  # rejects slow SS3 b"\x1bO" "P" of Fn F1..F4
                             break
+
+    def read_height(self) -> int:
+        """Count Terminal Screen Pane Rows"""
+
+        fileno = self.fileno
+        size = os.get_terminal_size(fileno)
+        assert 5 <= size.lines <= PN_MAX_32100, (size,)
+
+        height = size.lines
+
+        return height
+
+        # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
+
+    def read_width(self) -> int:
+        """Count Terminal Screen Pane Columns"""
+
+        fileno = self.fileno
+        size = os.get_terminal_size(fileno)
+
+        assert 20 <= size.columns <= PN_MAX_32100, (size,)
+
+        width = size.columns
+
+        return width
+
+        # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
 
 
 class TerminalBytePacket:
