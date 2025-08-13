@@ -449,7 +449,8 @@ class ScreenEditor:
         csi_timeless_finals = b"@ABCDEFGHIJKLMPSTXZ" + b"`dfhlmqr"  # not b"R" b"nt"  # nor "NOQUVWY"
         csi_slow_finals = b"cntx"  # still not b"R" and not "abegijknopstuvwyz"
 
-        # Default to Inserting, not Replacing  # FIXME: Shadow Terminal to allow Replacing default
+        # Default to Inserting, not Replacing
+        # FIXME: FIXME: Shadow Terminal with default Replacing
 
         tbp = TerminalBytePacket()
         self.do_inserting_start(tbp)
@@ -510,11 +511,18 @@ class ScreenEditor:
                 self.write("\x1b[" "1;1" "H")
 
             # Else loop back (or emulate) some Csi Keyboard Chords (especially when quick)
-            # FIXME: emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
+            # FIXME: FIXME: emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
             elif csi_famous:
 
-                if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
+                kchars = kdata.decode()  # may raise UnicodeDecodeError
+                if kchars in KCAP_BY_KCHARS.keys():  # already handled above
+                    tprint(f"KCaps {kchars=} {str(tbp)=}   # loopback_awhile")
+
+                    kcaps = kdata_to_kcaps(kdata)
+                    self.print(kcaps, tbp, end="  ")
+
+                elif final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
                     tprint(f"⎋[...I {final=} {parms=} {kdata=}  # loopback_awhile")
 
                     pn = int(parms) if parms else 1
@@ -536,7 +544,8 @@ class ScreenEditor:
             else:
                 tprint(f"else {kdata=} {str(tbp)=}   # loopback_awhile")
 
-                self.print(tbp)
+                kcaps = kdata_to_kcaps(kdata)
+                self.print(kcaps, tbp, end="  ")
 
             # Quit after ⌃D
             # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
@@ -598,7 +607,7 @@ class ScreenEditor:
         self.do_quote_one_kdata(tbp)  # Emacs ⌃Q  # Vim ⌃V
         self.do_inserting_start(tbp)  # Vim I
 
-        # FIXME: Shadow the Terminal Inserting/ Replacing and restore it, don't force Inserting
+        # FIXME: FIXME: Shadow Terminal with default Replacing
 
     #
     #
