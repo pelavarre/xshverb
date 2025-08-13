@@ -356,7 +356,8 @@ class ScreenEditor:
             b"\x09": self.do_write_kdata,  # ⌃I \t Tab
             b"\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
             b"\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
-            b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
+            # b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
+            b"\x0d": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
             b"\x0e": self.do_row_down,  # ⌃N
             b"\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost
             b"\x10": self.do_row_up,  # ⌃P
@@ -485,13 +486,21 @@ class ScreenEditor:
             # Call a Func Def
 
             if kdata in func_by_kdata.keys():
-
                 func = func_by_kdata[kdata]
                 tprint(f"{func=}  # loopback_awhile")
+
                 try:
                     func(tbp)
                 except SystemExit:
                     break
+
+            # Else pass through Unicode Characters
+            # FIXME: stop wrongly passing through multibyte Control Characters
+
+            elif tbp.text:
+                tprint(f"tbp.text {kdata=}  # loopback_awhile")
+
+                self.do_write_kdata(tbp)
 
             # Else emulate an Esc Byte Pair, no matter if quick or slow
 
@@ -501,6 +510,7 @@ class ScreenEditor:
                 self.write("\x1b[" "1;1" "H")
 
             # Else loop back (or emulate) some Csi Keyboard Chords (especially when quick)
+            # FIXME: emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
             elif csi_famous:
 
@@ -521,29 +531,12 @@ class ScreenEditor:
 
                     self.do_write_kdata(tbp)
 
-            # Else show the Csi Split of a Csi Keyboard Chord
-
-            elif csi_fullmatch:
-                tprint(f"csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
-
-                self.print(tbp)
-
-            # Else pass through Text, including Emojis, but bounce anything else
+            # Else show the Terminal Byte Packet
 
             else:
+                tprint(f"else {kdata=} {str(tbp)=}   # loopback_awhile")
 
-                if len(kdata) > 1:  # Emojis, etc
-                    tprint(f"(len > 1) {kdata=} {str(tbp)=}   # loopback_awhile")
-                    # self.print(tbp)
-                    self.do_write_kdata(tbp)
-                elif 0x20 <= kdata[-1] <= 0x7E:  # printable 7-bit US Ascii
-                    tprint(f"0x20..0x7E {kdata=}   # loopback_awhile")
-                    self.do_write_kdata(tbp)
-                else:
-                    tprint(f"else not csi_famous {kdata=} {str(tbp)=}   # loopback_awhile")
-                    self.print(tbp)
-
-                # FIXME: stop wrongly passing through multibyte Control Characters
+                self.print(tbp)
 
             # Quit after ⌃D
             # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
@@ -567,6 +560,14 @@ class ScreenEditor:
             bt.close_byte_packet_if(tbp, timeout=None)
 
         return (tbp, n)
+
+    def do_write_cr_lf(self, tbp: TerminalBytePacket) -> None:
+        """Write CR LF"""
+
+        assert CR == "\r"
+        assert LF == "\n"
+
+        self.write("\r\n")
 
     def do_write_kdata(self, tbp: TerminalBytePacket) -> None:
         """Loop the Keyboard back to the Screen, literally, directly"""
