@@ -438,7 +438,7 @@ class ScreenEditor:
 
         _ = slog  # only needed by some revisions of this Code
 
-        assert CSI_PIF_REGEX == r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
+        assert CSI_PIF_REGEX == r"(\x1b\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
         csi_pif_regex_bytes = CSI_PIF_REGEX.encode()
 
         csi_timeless_finals = b"@ABCDEGHIJKLMPSTZ" + b"dhlmq"  # not b"R" b"nt"
@@ -898,7 +898,7 @@ CSI = "\x1b["  # ESC 05/11 Control Sequence Introducer
 DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
 DECRC = "\x1b" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
 
-CSI_PIF_REGEX = r"(\x1B\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
+CSI_PIF_REGEX = r"(\x1b\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
 
 class BytesTerminal:
@@ -1155,12 +1155,12 @@ class TerminalBytePacket:
 
         extras = self.take_some_if(data)
         if extras:
-            raise ValueError(extras)  # for example, raises the b'\x80' of b'\xC0\x80'
+            raise ValueError(extras)  # for example, raises the b'\x80' of b'\xc0\x80'
 
         self._require_simple_()
 
-        # doesn't take bytes([0x80 | 0x0B]) as meaning b"\x1B\x5B" CSI ⎋[
-        # doesn't take bytes([0x80 | 0x0F]) as meaning b"\x1B\x4F" SS3 ⎋O
+        # doesn't take bytes([0x80 | 0x0B]) as meaning b"\x1b\x5b" CSI ⎋[
+        # doesn't take bytes([0x80 | 0x0F]) as meaning b"\x1b\x4f" SS3 ⎋O
 
     def __bool__(self) -> bool:
         truthy = bool(
@@ -1475,7 +1475,7 @@ class TerminalBytePacket:
 
         return ""
 
-        # b"\xC2\x80", b"\xE0\xA0\x80", b"\xF0\x90\x80\x80" .. b"\xF4\x8F\xBF\xBF"
+        # b"\xc2\x80", b"\xe0\xa0\x80", b"\xf0\x90\x80\x80" .. b"\xf4\x8f\xbf\xbf"
         # todo: invent UTF-8'ish Encoding beyond 1..4 Bytes for Unicode Codes < 0x110000
 
     def _take_some_mouse_if_(self, data: bytes) -> bytes:
@@ -1572,7 +1572,7 @@ class TerminalBytePacket:
                 self.closed = True
                 return b""  # takes & closes Unprintable Chars or 1..4 Undecodable Bytes
 
-            # takes \b \t \n \r \x7F etc
+            # takes \b \t \n \r \x7f etc
 
         # Take & close 1 Escaped Printable Decoded Char, as Tail
         #
@@ -1592,10 +1592,10 @@ class TerminalBytePacket:
             self.closed = True
             return b""  # takes & closes Unprintable Chars or 1..4 Undecodable Bytes
 
-            # does take ⎋\x10 ⎋\b ⎋\t ⎋\n ⎋\r ⎋\x7F etc
+            # does take ⎋\x10 ⎋\b ⎋\t ⎋\n ⎋\r ⎋\x7f etc
 
-            # doesn't take bytes([0x80 | 0x0B]) as meaning b"\x1B\x5B" CSI ⎋[
-            # doesn't take bytes([0x80 | 0x0F]) as meaning b"\x1B\x4F" SS3 ⎋O
+            # doesn't take bytes([0x80 | 0x0B]) as meaning b"\x1b\x5b" CSI ⎋[
+            # doesn't take bytes([0x80 | 0x0F]) as meaning b"\x1b\x4f" SS3 ⎋O
 
         # Decline 1..4 Undecodable Bytes, when escaped by CSI or Esc CSI
 
@@ -1659,7 +1659,7 @@ class TerminalBytePacket:
 
         # Decline 1 Byte of Unprintable Char
 
-        return byte  # declines 1 Byte <= b"\x7F" of Unprintable Char
+        return byte  # declines 1 Byte <= b"\x7f" of Unprintable Char
 
         # splits '⎋[200~' and '⎋[201~' away from enclosed Bracketed Paste
 
@@ -1697,7 +1697,6 @@ if tprinting:
 
 if __name__ == "__main__":
     main()
-
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
 
