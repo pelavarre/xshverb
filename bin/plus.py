@@ -206,6 +206,7 @@ CUF_X = "\x1b[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
 CUB_X = "\x1b[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
 
 CUP_Y_X = "\x1b[" "{};{}" "H"  # CSI 04/08 Cursor Position
+CHT_X = "\x1b" "[" "{}I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
 
 EL_P = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
@@ -432,35 +433,17 @@ class ScreenEditor:
     def loopback_awhile(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
-        func_by_kdata = self.func_by_kdata
-        klog = self.keyboard_bytes_log
-        slog = self.screen_bytes_log
-
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
 
-        _ = slog  # only needed by some revisions of this Code
-
-        # Choose when to pass through Csi Sequences,
-        # a bit differently than our Screen_Writer_Help of @ABCDEGHIJKLMPSTZ DHLMNQT
-
-        assert CSI_PIF_REGEX == r"(\x1b\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
-        csi_pif_regex_bytes = CSI_PIF_REGEX.encode()
-
-        csi_timeless_finals = b"@ABCDEFGHIJKLMPSTXZ" + b"`dfhlmqr"  # not b"R" b"nt"  # nor "NOQUVWY"
-        csi_slow_finals = b"cntx"  # still not b"R" and not "abegijknopstuvwyz"
-
         # Default to Inserting, not Replacing
-        # FIXME: FIXME: Shadow Terminal with default Replacing
 
         tbp = TerminalBytePacket()
         self.do_inserting_start(tbp)
 
-        # Reply to each Keyboard Chord Input
+        # Reply to each Keyboard Chord Input, till quit
+        # FIXME: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
+        # FIXME: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
 
-        # FIXME: Read Str not Bytes from Keyboard, and then List[Str]
-        # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
-
-        kba = bytearray()
         while True:
             (tbp, n) = self.read_some_byte_packets()
             tprint(f"{n=} {tbp=}  # loopback_awhile")
@@ -469,89 +452,169 @@ class ScreenEditor:
             kdata = tbp.to_bytes()
             assert kdata, (kdata,)  # because .timeout=None
 
-            kba.extend(kdata)  # todo: .kba and .klog grow without end
-            klog.write(kdata)
+            try:
+                self.reply_to_kdata(tbp, n=n)
+            except SystemExit:
+                break
 
-            assert TAB == "\t"
-            assert VPA_Y == "\x1b" "[" "{}" "d"
-            assert CUP_Y_X == "\x1b" "[" "{};{}" "H"
+            if kdata == b"\x04":  # ⌃D
+                break
 
-            csi_fullmatch = re.fullmatch(csi_pif_regex_bytes, string=kdata)
-            parms: bytes = csi_fullmatch.group(2) if csi_fullmatch else b""
-            final: bytes = csi_fullmatch.group(4) if csi_fullmatch else b""
+        # FIXME: FIXME: Shadow Terminal with default Replacing
+        # FIXME: Read Str not Bytes from Keyboard, and then List[Str]
+        # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
-            csi_famous = csi_fullmatch and (final in csi_timeless_finals)
-            if (n > 1) and csi_fullmatch and (final in csi_slow_finals):
-                csi_famous = True
+    def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
+        """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
 
-            # Call a Func Def
+        func_by_kdata = self.func_by_kdata
+        klog = self.keyboard_bytes_log
 
-            if kdata in func_by_kdata.keys():
-                func = func_by_kdata[kdata]
-                tprint(f"{func=}  # loopback_awhile")
+        # Append to our __pycache__/k.keyboard Keylogger Keylogging File
 
-                try:
-                    func(tbp)
-                except SystemExit:
-                    break
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
 
-            # Else pass through Unicode Characters
-            # FIXME: stop wrongly passing through multibyte Control Characters
+        klog.write(kdata)
 
-            elif tbp.text:
-                tprint(f"tbp.text {kdata=}  # loopback_awhile")
+        # Call 1 Func Def
 
-                self.do_write_kdata(tbp)
+        if kdata in func_by_kdata.keys():
+            func = func_by_kdata[kdata]
+            tprint(f"{func=}  # loopback_awhile")
 
-            # Else emulate an Esc Byte Pair, no matter if quick or slow
+            func(tbp)  # may raise SystemExit
 
-            elif kdata == b"\x1b" b"l":  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
-                tprint(f"{kdata=}  # loopback_awhile")
+            return
 
-                self.write("\x1b[" "1;1" "H")
+        # Write the KData, but as Keycaps, when it is a Keycap but not a Func Def
 
-            # Else loop back (or emulate) some Csi Keyboard Chords (especially when quick)
-            # FIXME: FIXME: emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
+        kchars = kdata.decode()  # may raise UnicodeDecodeError
+        if kchars in KCAP_BY_KCHARS.keys():  # already handled above
+            tprint(f"Keycap {kchars=} {str(tbp)=}   # reply_to_kdata")
 
-            elif csi_famous:
-
-                kchars = kdata.decode()  # may raise UnicodeDecodeError
-                if kchars in KCAP_BY_KCHARS.keys():  # already handled above
-                    tprint(f"KCaps {kchars=} {str(tbp)=}   # loopback_awhile")
-
-                    kcaps = kdata_to_kcaps(kdata)
-                    self.print(kcaps, tbp, end="  ")
-
-                elif final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
-                    tprint(f"⎋[...I {final=} {parms=} {kdata=}  # loopback_awhile")
-
-                    pn = int(parms) if parms else 1
-                    assert pn >= 1, (pn,)
-                    self.write(pn * "\t")
-
-                elif kdata == b"\x1b[" b"d":  # gCloud Shell needs ⎋[1D for ⎋[D
-                    tprint(f"⎋[d {kdata=}   # loopback_awhile")
-
-                    self.write("\x1b[" "1" "d")
-
-                else:  # else loops back Csi Keyboard Bytes on into Screen
-                    tprint(f"else csi_famous {kdata=} {str(tbp)=}   # loopback_awhile")
-
-                    self.do_write_kdata(tbp)
-
-            # Else show the Terminal Byte Packet
-
-            else:
-                tprint(f"else {kdata=} {str(tbp)=}   # loopback_awhile")
+            if tbp.tail != b"H":  # falls-through to pass-through ⎋[⇧H CUP_Y_X
 
                 kcaps = kdata_to_kcaps(kdata)
-                self.print(kcaps, tbp, end="  ")
+                self.print(kcaps, end=" ")
 
-            # Quit after ⌃D
-            # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
-
-            if kba.endswith(b"\x04"):  # ⌃D
                 return
+
+        # Pass through 1 Unicode Character
+
+        if tbp.text:
+            tprint(f"tbp.text {kdata=}  # reply_to_kdata")
+
+            self.do_write_kdata(tbp)
+
+            return
+
+            # FIXME: stop wrongly passing through multibyte Control Characters
+
+        # Emulate some Control Byte Sequences promoted by less than all our Terminals
+
+        famous_kdata = self.reply_to_famous_kdata(tbp, n=n)
+        if famous_kdata:
+            return
+
+        # Show the Keycaps to send the Terminal Byte Packet slowly from Keyboard
+
+        tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
+
+        kcaps = kdata_to_kcaps(kdata)
+        self.print(kcaps, end=" ")
+
+    def reply_to_famous_kdata(self, tbp: TerminalBytePacket, n: int) -> bytes:
+        """Emulate the KData Control Sequence and return it, else return empty bytes()"""
+
+        kdata = tbp.to_bytes()  # already logged by caller, we trust
+        assert kdata, (kdata,)  # because .timeout=None
+
+        # Emulate Famous Esc Byte Pairs, no matter if quick or slow
+
+        esc_pair_famous = kdata == b"\x1b" b"l"
+        if esc_pair_famous:  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
+            tprint(f"{kdata=}  # reply_to_kdata")
+
+            self.write("\x1b[" "1;1" "H")
+
+            return kdata
+
+        # Emulate famous Csi Control Byte Sequences,
+        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
+        # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        csi_timeless_tails = b"@ABCDEFGHIJKLMPSTXZ" + b"`dfhlmqr" + b"}~"
+        csi_slow_tails = b"cntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
+
+        csi_famous = csi and tbp.tail and (tbp.tail in csi_timeless_tails)
+        if (n > 1) and csi and tbp.tail and (tbp.tail in csi_slow_tails):
+            csi_famous = True
+
+        if not csi_famous:
+            return b""
+
+        # Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1
+
+        assert TAB == "\t"
+        assert CHT_X == "\x1b" "[" "{}I"
+
+        if tbp.tail == b"I":
+            tprint(f"⎋[...I {tbp=} {kdata=}  # reply_to_kdata")
+
+            pn = int(tbp.neck) if tbp.neck else 1
+            assert pn >= 1, (pn,)
+            self.write(pn * "\t")
+
+            return kdata
+
+            # gCloud Shell needs \t for ⎋[ {}I
+
+        # Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1
+
+        assert VPA_Y == "\x1b" "[" "{}" "d"
+
+        if kdata == b"\x1b[" b"d":
+            tprint(f"⎋[d {kdata=}   # reply_to_kdata")
+
+            self.write("\x1b[" "1" "d")
+
+            return kdata
+
+            # gCloud Shell needs ⎋[1D for ⎋[D
+
+        # Emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete  # FIXME: FIXME #
+
+        if tbp.tail == b"}":
+            if tbp.back != b"'":
+                return b""
+
+            tprint("⎋['⇧} cols-insert" f" {tbp=} {kdata=}   # reply_to_kdata")
+
+            self.print(tbp, end="  ")
+
+            return kdata
+
+        if tbp.tail == b"~":
+            if tbp.back != b"'":
+                return b""
+
+            tprint("⎋['⇧~ cols-delete" f" {tbp=} {kdata=}   # reply_to_kdata")
+
+            self.print(tbp, end="  ")
+
+            return kdata
+
+        # Pass through the .csi_timeless_tails, be they quick or slow,
+        # and pass through the .csi_slow_tails but only when slow
+
+        tprint(f"Pass-through {kdata=} {str(tbp)=}   # reply_to_kdata")
+
+        self.do_write_kdata(tbp)
+
+        return kdata
 
     def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
@@ -876,7 +939,7 @@ SCREEN_WRITER_HELP = r"""
         ⎋C screen-erase  ⎋L row-column-leap
         ⎋⇧D ↓  ⎋⇧E \r\n else \r  ⎋⇧M ↑
 
-    The famous Csi ⎋[ Sequences are ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z and ⎋[ DHLMNQT
+    The famous Csi ⎋[ Sequences are ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT
 
         ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←
         ⎋[I ⌃I  ⎋[⇧Z ⇧Tab
