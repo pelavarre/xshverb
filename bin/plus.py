@@ -29,6 +29,7 @@ import textwrap
 import tty
 import types
 import typing
+import unicodedata
 
 if not __debug__:
     raise NotImplementedError([__debug__])  # refuses to run without live Asserts
@@ -438,11 +439,14 @@ class ScreenEditor:
 
         _ = slog  # only needed by some revisions of this Code
 
+        # Choose when to pass through Csi Sequences,
+        # a bit differently than our Screen_Writer_Help of @ABCDEGHIJKLMPSTZ DHLMNQT
+
         assert CSI_PIF_REGEX == r"(\x1b\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"
         csi_pif_regex_bytes = CSI_PIF_REGEX.encode()
 
-        csi_timeless_finals = b"@ABCDEGHIJKLMPSTZ" + b"dhlmq"  # not b"R" b"nt"
-        csi_slow_finals = b"nt"  # still not b"R"
+        csi_timeless_finals = b"@ABCDEFGHIJKLMPSTXZ" + b"`dfhlmqr"  # not b"R" b"nt"  # nor "NOQUVWY"
+        csi_slow_finals = b"cntx"  # still not b"R" and not "abegijknopstuvwyz"
 
         # Default to Inserting, not Replacing  # FIXME: Shadow Terminal to allow Replacing default
 
@@ -470,15 +474,15 @@ class ScreenEditor:
             assert VPA_Y == "\x1b" "[" "{}" "d"
             assert CUP_Y_X == "\x1b" "[" "{};{}" "H"
 
-            m = re.fullmatch(csi_pif_regex_bytes, string=kdata)
-            parms: bytes = m.group(2) if m else b""
-            final: bytes = m.group(4) if m else b""
+            csi_fullmatch = re.fullmatch(csi_pif_regex_bytes, string=kdata)
+            parms: bytes = csi_fullmatch.group(2) if csi_fullmatch else b""
+            final: bytes = csi_fullmatch.group(4) if csi_fullmatch else b""
 
-            csi_fullmatch = m and (final in csi_timeless_finals)
-            if (n > 1) and m and (final in csi_slow_finals):
-                csi_fullmatch = True
+            csi_famous = csi_fullmatch and (final in csi_timeless_finals)
+            if (n > 1) and csi_fullmatch and (final in csi_slow_finals):
+                csi_famous = True
 
-            # Call a Func Def, if possible
+            # Call a Func Def
 
             if kdata in func_by_kdata.keys():
 
@@ -489,16 +493,16 @@ class ScreenEditor:
                 except SystemExit:
                     break
 
-            # Emulate some Esc Byte Pairs, no matter if quick or slow
+            # Else emulate an Esc Byte Pair, no matter if quick or slow
 
             elif kdata == b"\x1b" b"l":  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
                 tprint(f"{kdata=}  # loopback_awhile")
 
                 self.write("\x1b[" "1;1" "H")
 
-            # Loop back (or emulate) Csi Keyboard Chords, especially when quick
+            # Else loop back (or emulate) some Csi Keyboard Chords (especially when quick)
 
-            elif csi_fullmatch:
+            elif csi_famous:
 
                 if final == b"I":  # gCloud Shell needs \t for ⎋[ {}I
                     tprint(f"⎋[...I {final=} {parms=} {kdata=}  # loopback_awhile")
@@ -513,11 +517,18 @@ class ScreenEditor:
                     self.write("\x1b[" "1" "d")
 
                 else:  # else loops back Csi Keyboard Bytes on into Screen
-                    tprint(f"else csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
+                    tprint(f"else csi_famous {kdata=} {str(tbp)=}   # loopback_awhile")
 
                     self.do_write_kdata(tbp)
 
-            # Pass through Text, including Emojis, but bounce anything else
+            # Else show the Csi Split of a Csi Keyboard Chord
+
+            elif csi_fullmatch:
+                tprint(f"csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
+
+                self.print(tbp)
+
+            # Else pass through Text, including Emojis, but bounce anything else
 
             else:
 
@@ -529,15 +540,16 @@ class ScreenEditor:
                     tprint(f"0x20..0x7E {kdata=}   # loopback_awhile")
                     self.do_write_kdata(tbp)
                 else:
-                    tprint(f"else not csi_fullmatch {kdata=} {str(tbp)=}   # loopback_awhile")
+                    tprint(f"else not csi_famous {kdata=} {str(tbp)=}   # loopback_awhile")
                     self.print(tbp)
 
                 # FIXME: stop wrongly passing through multibyte Control Characters
 
+            # Quit after ⌃D
+            # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
+
             if kba.endswith(b"\x04"):  # ⌃D
                 return
-
-            # todo: quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
 
     def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
@@ -862,7 +874,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
         ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
-        ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase
+        ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase  ⎋[⇧X columns-erase
         ⎋[⇧T scrolls-down  ⎋[⇧S scrolls-up
 
         ⎋[4H insert  ⎋[4L replace  ⎋[6 Q bar  ⎋[4 Q skid  ⎋[ Q unstyled
@@ -871,12 +883,22 @@ SCREEN_WRITER_HELP = r"""
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
         ⎋[M plain
 
-        ⎋[5N call for reply ⎋[0N  ⎋[6N call for reply ⎋[{y};{x}⇧R
+        ⎋[5N call for reply ⎋[0N
+        ⎋[6N call for reply ⎋[{y};{x}⇧R
         ⎋[18T call for reply ⎋[8;{rows};{columns}T
 
         ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
 """
+
+# ⎋[` near alias of ⎋[⇧G column-leap  # macOS
+# ⎋[F near alias of ⎋[⇧H row-column-leap
+# ⎋[R near alias of ⎋L row-column-leap
+
+# ⎋[C call for reply ⎋[?1;2C  # ⎋[=C also works at macOS
+# ⎋[>C call for reply ⎋[>1;95;0C macOS or ⎋[>84;0;0C gCloud Shell
+# ⎋[X call for reply ⎋[2;1;1;112;112;1;0X  # macOS
+
 
 # FIXME: help for Emacs, help for Vim
 
@@ -1668,13 +1690,285 @@ class TerminalBytePacket:
     # todo: limit rate of input so livelocks go less wild, like in Keyboard/ Screen loopback
 
 
+# Name the Shifting Keys
+
+Meta = unicodedata.lookup("Broken Circle With Northwest Arrow")  # ⎋
+Control = unicodedata.lookup("Up Arrowhead")  # ⌃
+Option = unicodedata.lookup("Option Key")  # ⌥
+Shift = unicodedata.lookup("Upwards White Arrow")  # ⇧
+Command = unicodedata.lookup("Place of Interest Sign")  # ⌘  # Super  # Windows
+# 'Fn'
+
+# note: Meta hides inside macOS Terminal > Settings > Keyboard > Use Option as Meta Key
+# note: Meta hides inside gloud Shell > Settings > Keyboard > Alt is Meta
+
+
+# Encode each Key Chord as a Str without a " " Space in it
+
+KCAP_SEP = " "  # separates '⇧Tab' from '⇧T a b', '⎋⇧FnX' from '⎋⇧Fn X', etc
+
+KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
+    "\x00": "⌃Spacebar",  # ⌃@  # ⌃⇧2
+    "\x09": "Tab",  # '\t' ⇥
+    "\x0d": "Return",  # '\r' ⏎
+    "\x1b": "⎋",  # Esc  # Meta  # includes ⎋Spacebar ⎋Tab ⎋Return ⎋Delete without ⌥
+    "\x1b" "\x01": "⌥⇧Fn←",  # ⎋⇧Fn←   # coded with ⌃A
+    "\x1b" "\x03": "⎋FnReturn",  # coded with ⌃C  # not ⌥FnReturn
+    "\x1b" "\x04": "⌥⇧Fn→",  # ⎋⇧Fn→   # coded with ⌃D
+    "\x1b" "\x08": "⎋⌃Delete",  # ⎋⌃Delete  # coded with ⌃H  # aka \b
+    "\x1b" "\x0b": "⌥⇧Fn↑",  # ⎋⇧Fn↑   # coded with ⌃K
+    "\x1b" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
+    "\x1b" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of Fn F1..F12  # not ⌥⇧Fn  # coded with ⌃P
+    "\x1b" "\x1b": "⎋⎋",  # Meta Esc  # not ⌥⎋
+    "\x1b" "\x1b" "OA": "⌃⌥↑",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧A  # gCloud Shell
+    "\x1b" "\x1b" "OB": "⌃⌥↓",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧B  # gCloud Shell
+    "\x1b" "\x1b" "OC": "⌃⌥→",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧C  # gCloud Shell
+    "\x1b" "\x1b" "OD": "⌃⌥←",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧D  # gCloud Shell
+    "\x1b" "\x1b" "[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
+    "\x1b" "\x1b" "[" "A": "⎋↑",  # CSI 04/01 Cursor Up (CUU)  # not ⌥↑
+    "\x1b" "\x1b" "[" "B": "⎋↓",  # CSI 04/02 Cursor Down (CUD)  # not ⌥↓
+    "\x1b" "\x1b" "[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
+    "\x1b" "\x28": "⎋FnDelete",  # not ⌥FnDelete
+    "\x1b" "OP": "F1",  # ESC 04/15 Single-Shift Three (SS3)  # SS3 ⇧P
+    "\x1b" "OQ": "F2",  # SS3 ⇧Q
+    "\x1b" "OR": "F3",  # SS3 ⇧R
+    "\x1b" "OS": "F4",  # SS3 ⇧S
+    "\x1b" "[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
+    "\x1b" "[" "17~": "F6",  # ⌥F1  # ⎋F1
+    "\x1b" "[" "18~": "F7",  # ⌥F2  # ⎋F2
+    "\x1b" "[" "19~": "F8",  # ⌥F3  # ⎋F3
+    "\x1b" "[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2
+    "\x1b" "[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2
+    "\x1b" "[" "20~": "F9",  # ⌥F4  # ⎋F4
+    "\x1b" "[" "21~": "F10",  # ⌥F5  # ⎋F5
+    "\x1b" "[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
+    "\x1b" "[" "24~": "F12",  # ⌥F7  # ⎋F7
+    "\x1b" "[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
+    "\x1b" "[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
+    "\x1b" "[" "28~": "⇧F7",  # ⌥F10  # ⎋F10
+    "\x1b" "[" "29~": "⇧F8",  # ⌥F11  # ⎋F11
+    "\x1b" "[" "31~": "⇧F9",  # ⌥F12  # ⎋F12
+    "\x1b" "[" "32~": "⇧F10",
+    "\x1b" "[" "33~": "⇧F11",
+    "\x1b" "[" "34~": "⇧F12",
+    "\x1b" "[" "3;2~": "⇧FnDelete",
+    "\x1b" "[" "3;5~": "⌃FnDelete",
+    "\x1b" "[" "3~": "FnDelete",
+    "\x1b" "[" "5~": "⇧Fn↑",  # macOS
+    "\x1b" "[" "6~": "⇧Fn↓",  # macOS
+    "\x1b" "[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)
+    "\x1b" "[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)
+    "\x1b" "[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)
+    "\x1b" "[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)
+    "\x1b" "[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
+    "\x1b" "[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
+    "\x1b" "[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
+    "\x1b" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word
+    "\x1b" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word
+    "\x20": "Spacebar",  # ' ' ␠ ␣ ␢
+    "\x7f": "Delete",  # ␡ ⌫ ⌦
+    "\xa0": "⌥Spacebar",  # '\N{No-Break Space}'
+}
+
+assert list(KCAP_BY_KCHARS.keys()) == sorted(KCAP_BY_KCHARS.keys())
+
+assert KCAP_SEP == " "
+for _KCAP in KCAP_BY_KCHARS.values():
+    assert " " not in _KCAP, (_KCAP,)
+
+# the ⌥⇧Fn Key Cap quotes only the Shifting Keys, dropping the substantive final Key Cap,
+# except that four Shifted Arrows exist at ⎋⇧Fn← ⎋⇧Fn→ ⎋⇧Fn↑ ⎋⇧Fn↓
+
+
+OPTION_KSTR_BY_1_KCHAR = {
+    "á": "⌥EA",  # E
+    "é": "⌥EE",
+    "í": "⌥EI",
+    # without the "j́" of ⌥EJ here (because its Combining Accent comes after as a 2nd K Char)
+    "ó": "⌥EO",
+    "ú": "⌥EU",
+    "´": "⌥ESpacebar",
+    "é": "⌥EE",
+    "â": "⌥IA",  # I
+    "ê": "⌥IE",
+    "î": "⌥II",
+    "ô": "⌥IO",
+    "û": "⌥IU",
+    "ˆ": "⌥ISpacebar",
+    "ã": "⌥NA",  # N
+    "ñ": "⌥NN",
+    "õ": "⌥NO",
+    "˜": "⌥NSpacebar",
+    "ä": "⌥UA",  # U
+    "ë": "⌥UE",
+    "ï": "⌥UI",
+    "ö": "⌥UO",
+    "ü": "⌥UU",
+    "ÿ": "⌥UY",
+    "¨": "⌥USpacebar",
+    "à": "⌥`A",  # `
+    "è": "⌥`E",
+    "ì": "⌥`I",
+    "ò": "⌥`O",
+    "ù": "⌥`U",
+    "`": "⌥`Spacebar",  # comes out as ⌥~
+}
+
+# hand-sorted by ⌥E ⌥I ⌥N ⌥U ⌥` order
+
+
+OPTION_KTEXT = """
+     ⁄Æ‹›ﬁ‡æ·‚°±≤–≥÷º¡™£¢∞§¶•ªÚ…¯≠˘¿
+    €ÅıÇÎ Ï˝Ó Ô\uf8ffÒÂ Ø∏Œ‰Íˇ ◊„˛Á¸“«‘ﬂ—
+     å∫ç∂ ƒ©˙ ∆˚¬µ øπœ®ß† √∑≈¥Ω”»’
+"""
+
+# ⌥⇧K is Apple Icon  is \uF8FF is in the U+E000..U+F8FF Private Use Area (PUA)
+
+OPTION_KCHARS = " " + textwrap.dedent(OPTION_KTEXT).strip() + " "
+OPTION_KCHARS = OPTION_KCHARS.replace("\n", "")
+
+assert len(OPTION_KCHARS) == (0x7E - 0x20) + 1
+
+OPTION_KCHARS_SPACELESS = OPTION_KCHARS.replace(" ", "")
+
+
+# Give out each Key Cap once, never more than once
+
+_KCHARS_LISTS = [
+    list(KCAP_BY_KCHARS.keys()),
+    list(OPTION_KSTR_BY_1_KCHAR.keys()),
+    list(OPTION_KCHARS_SPACELESS),
+]
+
+_KCHARS_LIST = list(_KCHARS for _KL in _KCHARS_LISTS for _KCHARS in _KL)
+assert KCAP_SEP == " "
+for _KCHARS, _COUNT in collections.Counter(_KCHARS_LIST).items():
+    assert _COUNT == 1, (_COUNT, _KCHARS)
+
+
+def kdata_to_kcaps(kdata: bytes) -> str:
+    """Choose Keycaps to speak of the Bytes of 1 Keyboard Chord"""
+
+    kchars = kdata.decode()  # may raise UnicodeDecodeError
+
+    kcap_by_kchars = KCAP_BY_KCHARS  # '\e\e[A' for ⎋↑ etc
+
+    if kchars in kcap_by_kchars.keys():
+        kcaps = kcap_by_kchars[kchars]
+    else:
+        kcaps = ""
+        for kch in kchars:  # often 'len(kchars) == 1'
+            s = _kch_to_kcap_(kch)
+            kcaps += s
+
+            # '⎋[25;80R' Cursor-Position-Report (CPR)
+            # '⎋[25;80t' Rows x Column Terminal Size Report
+            # '⎋[200~' and '⎋[201~' before/ after Paste to bracket it
+
+        # ⌥Y often comes through as \ U+005C Reverse-Solidus aka Backslash  # not ¥ Yen-Sign
+
+    # Succeed
+
+    assert KCAP_SEP == " "  # solves '⇧Tab' vs '⇧T a b', '⎋⇧FnX' vs '⎋⇧Fn X', etc
+    assert " " not in kcaps, (kcaps,)
+
+    return kcaps
+
+    # '⌃L'  # '⇧Z'
+    # '⎋A' from ⌥A while macOS Keyboard > Option as Meta Key
+
+
+def _kch_to_kcap_(ch: str) -> str:  # noqa C901
+    """Choose a Key Cap to speak of 1 Char read from the Keyboard"""
+
+    o = ord(ch)
+
+    option_kchars_spaceless = OPTION_KCHARS_SPACELESS  # '∂' for ⌥D
+    option_kstr_by_1_kchar = OPTION_KSTR_BY_1_KCHAR  # 'é' for ⌥EE
+    kcap_by_kchars = KCAP_BY_KCHARS  # '\x7F' for 'Delete'
+
+    # Show more Key Caps than US-Ascii mentions
+
+    if ch in kcap_by_kchars.keys():  # Mac US Key Caps for Spacebar, F12, etc
+        s = kcap_by_kchars[ch]  # '⌃Spacebar', 'Return', 'Delete', etc
+
+    elif ch in option_kstr_by_1_kchar.keys():  # Mac US Option Accents
+        s = option_kstr_by_1_kchar[ch]
+
+    elif ch in option_kchars_spaceless:  # Mac US Option Key Caps
+        s = _spaceless_ch_to_option_kstr_(ch)
+
+    # Show the Key Caps of US-Ascii, plus the ⌃ ⇧ Control/ Shift Key Caps
+
+    elif (o < 0x20) or (o == 0x7F):  # C0 Control Bytes, or \x7F Delete (DEL)
+        s = "⌃" + chr(o ^ 0x40)  # '^ 0x40' speaks of ⌃ with one of @ A..Z [\]^_ ?
+
+        # '^ 0x40' speaks of ⌃@ but not ⌃⇧@ and not ⌃⇧2 and not ⌃Spacebar at b"\x00"
+        # '^ 0x40' speaks of ⌃M but not Return at b"\x0D"
+        # '^ 0x40' speaks of ⌃[ ⌃\ ⌃] ⌃_ but not ⎋ and not ⌃⇧_ and not ⌃⇧{ ⌃⇧| ⌃⇧} ⌃-
+        # '^ 0x40' speaks of ⌃? but not Delete at b"\x7F"
+
+        # ^` ^2 ^6 ^⇧~ don't work
+
+        # todo: can we more quickly decide that ⌃[ is only ⎋ by itself not continued?
+        # todo: should we push ⌃- above ⌃⇧_
+
+    elif "A" <= ch <= "Z":  # printable Upper Case English
+        s = "⇧" + chr(o)  # shifted Key Cap '⇧A' from b'A'
+
+    elif "a" <= ch <= "z":  # printable Lower Case English
+        s = chr(o ^ 0x20)  # plain Key Cap 'A' from b'a'
+
+    # Test that no Keyboard sends the C1 Control Bytes, nor the Quasi-C1 Bytes
+
+    elif o in range(0x80, 0xA0):  # C1 Control Bytes
+        assert False, (o, ch)
+    elif o == 0xA0:  # 'No-Break Space'
+        s = "⌥Spacebar"
+        assert False, (o, ch)  # unreached because 'kcap_by_kchars'
+    elif o == 0xAD:  # 'Soft Hyphen'
+        assert False, (o, ch)
+
+    # Show the US-Ascii or Unicode Char as if its own Key Cap
+
+    else:
+        assert o < 0x11_0000, (o, ch)
+        s = chr(o)  # '!', '¡', etc
+
+    # Succeed, but insist that Blank Space is never a Key Cap
+
+    assert s.isprintable(), (s, o, ch)  # has no \x00..\x1f, \x7f, \xa0, \xad, etc
+    assert " " not in s, (s, o, ch)
+
+    return s
+
+    # '⌃L'  # '⇧Z'
+
+
+def _spaceless_ch_to_option_kstr_(ch: str) -> str:
+    """Convert to Mac US Option Key Caps from any of OPTION_KCHARS_SPACELESS"""
+
+    option_kchars = OPTION_KCHARS  # '∂' for ⌥D
+
+    index = option_kchars.index(ch)
+    asc = chr(0x20 + index)
+    if "A" <= asc <= "Z":
+        asc = "⇧" + asc  # '⇧A'
+    if "a" <= asc <= "z":
+        asc = chr(ord(asc) ^ 0x20)  # 'A'
+    s = "⌥" + asc  # '⌥⇧P'
+
+    return s
+
+
 #
 # Trace what's going on
 #
 
 
 tprinting = False
-# tprinting = True  # last wins
+tprinting = True  # last wins
 
 if tprinting:
 
@@ -1682,11 +1976,13 @@ if tprinting:
     tlog_path.parent.mkdir(exist_ok=True)
     tlog = tlog_path.open("a")
 
-    def tprint(*args: object) -> None:
-        """Trace what's going on"""
 
-        text = " ".join(str(_) for _ in args)
+def tprint(*args: object) -> None:
+    """Trace what's going on"""
 
+    text = " ".join(str(_) for _ in args)
+
+    if tprinting:
         tlog.write(text + "\n")
 
 
