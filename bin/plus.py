@@ -26,6 +26,7 @@ import signal
 import sys
 import termios
 import textwrap
+import time
 import tty
 import types
 import typing
@@ -445,8 +446,12 @@ class ScreenEditor:
         # FIXME: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
 
         while True:
+            t0 = time.time()
             (tbp, n) = self.read_some_byte_packets()
-            tprint(f"{n=} {tbp=}  # loopback_awhile")
+            t1 = time.time()
+            t1t0 = t1 - t0
+
+            tprint(f"{n=} t1t0={t1t0:.6f} {tbp=}  # loopback_awhile")
             assert tbp, (tbp, n)  # because .timeout=None
 
             kdata = tbp.to_bytes()
@@ -481,7 +486,7 @@ class ScreenEditor:
 
         if kdata in func_by_kdata.keys():
             func = func_by_kdata[kdata]
-            tprint(f"{func=}  # loopback_awhile")
+            tprint(f"{func.__qualname__=}  # loopback_awhile")
 
             func(tbp)  # may raise SystemExit
 
@@ -546,8 +551,8 @@ class ScreenEditor:
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        csi_timeless_tails = b"@ABCDEFGHIJKLMPSTXZ" + b"`dfhlmqr" + b"}~"
-        csi_slow_tails = b"cntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
+        csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
+        csi_slow_tails = b"M" b"mcntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
 
         csi_famous = csi and tbp.tail and (tbp.tail in csi_timeless_tails)
         if (n > 1) and csi and tbp.tail and (tbp.tail in csi_slow_tails):
@@ -887,8 +892,10 @@ class ScreenEditor:
             self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
             self.print()
 
-            # self.print("gCloud Shell ignores ⎋[⇧T Scrolls-Down (but accepts ⎋[⇧L)")
-            # self.print("gCloud Shell ignores ⎋[⇧S Scrolls-Up (but accepts ⌃J)")
+            # FIXME: FIXME: emulate ⎋[⇧T Rows-Down and ⎋[⇧S Rows-Up at gCloud Shell
+
+            # self.print("gCloud Shell ignores ⎋[⇧T Rows-Down (but accepts ⎋[⇧L)")
+            # self.print("gCloud Shell ignores ⎋[⇧S Rows-Up (but accepts ⌃J)")
             # self.print("gCloud Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
 
             # gCloud Shell has ← ↑ → ↓
@@ -948,7 +955,7 @@ SCREEN_WRITER_HELP = r"""
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
         ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
         ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase  ⎋[⇧X columns-erase
-        ⎋[⇧T scrolls-down  ⎋[⇧S scrolls-up
+        ⎋[⇧T rows-down  ⎋[⇧S rows-up  ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
         ⎋[4H insert  ⎋[4L replace  ⎋[6 Q bar  ⎋[4 Q skid  ⎋[ Q unstyled
 
@@ -960,9 +967,17 @@ SCREEN_WRITER_HELP = r"""
         ⎋[6N call for reply ⎋[{y};{x}⇧R
         ⎋[18T call for reply ⎋[8;{rows};{columns}T
 
-        ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
+        ⎋[?1000;1006H till ⎋[?1000;1006L for mouse ⎋[<{f}};{x};{y} ⇧M to M with f = 0b⌃⌥⇧00
+        or ⎋[?1000 H L by itself, or 1005, or 1015
 
 """
+
+# FIXME: FIXME: Guess when Mouse must be sending the Arrows
+
+# FIXME: FIXME: Put Conway Life on Screen, edit with Mouse Clicks
+
+# FIXME: doc the Alt Screen Toggle
+# FIXME: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
 
 # ⎋[` near alias of ⎋[⇧G column-leap  # macOS
 # ⎋[F near alias of ⎋[⇧H row-column-leap
@@ -1896,7 +1911,7 @@ OPTION_KTEXT = """
      å∫ç∂ ƒ©˙ ∆˚¬µ øπœ®ß† √∑≈¥Ω”»’
 """
 
-# ⌥⇧K is Apple Icon  is \uF8FF is in the U+E000..U+F8FF Private Use Area (PUA)
+# ⌥⇧K is Apple Logo Icon  is \uF8FF is in the U+E000..U+F8FF Private Use Area (PUA)
 
 OPTION_KCHARS = " " + textwrap.dedent(OPTION_KTEXT).strip() + " "
 OPTION_KCHARS = OPTION_KCHARS.replace("\n", "")
@@ -1996,18 +2011,20 @@ def _kch_to_kcap_(ch: str) -> str:  # noqa C901
     # Test that no Keyboard sends the C1 Control Bytes, nor the Quasi-C1 Bytes
 
     elif o in range(0x80, 0xA0):  # C1 Control Bytes
-        assert False, (o, ch)
+        s = repr(bytes([o]))  # b'\x80'
     elif o == 0xA0:  # 'No-Break Space'
         s = "⌥Spacebar"
         assert False, (o, ch)  # unreached because 'kcap_by_kchars'
-    elif o == 0xAD:  # 'Soft Hyphen'
-        assert False, (o, ch)
+    elif o == 0xAD:  # 'Soft Hyphen'  # near to a C1 Control Byte
+        s = repr(bytes([o]))  # b'\xad'
 
     # Show the US-Ascii or Unicode Char as if its own Key Cap
 
     else:
         assert o < 0x11_0000, (o, ch)
         s = chr(o)  # '!', '¡', etc
+
+        # todo: have we fuzzed b"\xA1" .. FF vs "\u00A1" .. 00FF like we want?
 
     # Succeed, but insist that Blank Space is never a Key Cap
 
