@@ -376,7 +376,10 @@ class ScreenEditor:
             b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
             # FIXME: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
-            b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
+            b"\x1b" b"A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
+            b"\x1b" b"C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
+            # b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
+            b"\x1b" b"D": self.do_row_tail_erase,  # Vim ⇧D
             b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
             # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # FIXME: Delete Row if at 1st Column
             b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
@@ -386,7 +389,7 @@ class ScreenEditor:
             b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
             b"\x1bQ": self.do_assert_false,  # ⎋⇧Q for Vim
             b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
-            b"\x1b" b"S": self.do_row_delete_insert_start_inserting,  # ⎋S for Vim
+            b"\x1b" b"S": self.do_row_delete_start_inserting,  # ⎋S for Vim
             b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
             # FIXME: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
@@ -815,9 +818,9 @@ class ScreenEditor:
         self.do_column_right(tbp)  # Vim L
         self.do_inserting_start(tbp)  # Vim I
 
-        # Vim A
+        # Vim A = Vim L I
 
-        # FIXME: FIXME: FIXME: Vim ⇧A ⇧C ⇧D and its I ⌃O
+        # FIXME: FIXME: FIXME: Vim I ⌃O
         # FIXME: FIXME: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
 
     def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
@@ -839,7 +842,7 @@ class ScreenEditor:
         self.do_char_delete_here(tbp)  # Emacs ⌃D  # Vim X
         self.do_inserting_start(tbp)  # Vim I
 
-        # Vim S
+        # Vim S = Vim X I
 
     def do_char_delete_left(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character at left of the Cursor"""
@@ -874,6 +877,14 @@ class ScreenEditor:
 
         # Emacs ⌃E  # Vim ⇧$
 
+    def do_column_leap_rightmost_inserting_start(self, tbp: TerminalBytePacket) -> None:
+        """Leap to the Rightmost Column, and Start Inserting"""
+
+        self.do_column_leap_rightmost(tbp)  # Emacs ⌃E  # Vim ⇧$
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim ⇧A = Vim ⇧$ I
+
     def do_inserting_start(self, tbp: TerminalBytePacket) -> None:
         """Start Inserting Characters at the Cursor"""
 
@@ -894,16 +905,16 @@ class ScreenEditor:
 
         # FIXME: Show Replacing while Replacing
 
-    def do_row_delete_insert_start_inserting(self, tbp: TerminalBytePacket) -> None:
+    def do_row_delete_start_inserting(self, tbp: TerminalBytePacket) -> None:
         """Empty the Row beneath the Cursor, and Start Inserting"""
 
-        assert EL_P == "\x1b[" "{}" "K"  # 2 Row
-        self.write("\x1b[" "2" "K")
-
         self.do_column_leap_leftmost(tbp)  # Emacs ⌃A  # Vim 0
+        self.do_row_tail_erase(tbp)  # Vim ⇧D
         self.do_inserting_start(tbp)  # Vim I
 
-        # Vim ⇧S
+        # could be coded as ⎋[2K like a .do_row_tail_erase but without moving the Cursor
+
+        # Vim ⇧S = Vim 0 D I
 
     def do_row_down(self, tbp: TerminalBytePacket) -> None:
         """Go down by 1 Row, but stop in last Row"""
@@ -917,17 +928,17 @@ class ScreenEditor:
         """Insert 1 Row below the Cursor"""
 
         self.do_row_down(tbp)  # Vim J
-        self.do_row_insert(tbp)  # Emacs ⌃O when leftmost
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_row_insert_inserting_start(tbp)  # Vim ⇧O
 
-        # Vim O
+        # Vim O = J ⇧O
 
     def do_row_insert_inserting_start(self, tbp: TerminalBytePacket) -> None:
 
         self.do_row_insert(tbp)  # Emacs ⌃O when leftmost
+        self.do_column_leap_leftmost(tbp)  # Emacs ⌃A  # Vim 0
         self.do_inserting_start(tbp)  # Vim I
 
-        # Vim ⇧O
+        # Vim ⇧O = Emacs ⌃A ⌃O + Vim I
 
     def do_row_insert(self, tbp: TerminalBytePacket) -> None:
         """Insert 1 Row above the Cursor"""
@@ -977,7 +988,15 @@ class ScreenEditor:
         assert EL_P == "\x1b[" "{}" "K"
         self.write("\x1b[" "K")
 
-        # Emacs ⌃K when not rightmost
+        # Vim ⇧D  # Emacs ⌃K when not rightmost
+
+    def do_row_tail_erase_inserting_start(self, tbp: TerminalBytePacket) -> None:
+        """Erase from the Cursor to the Tail of the Row, and Start Inserting"""
+
+        self.do_row_tail_erase(tbp)  # Vim ⇧D  # Emacs ⌃K when not rightmost
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim ⇧C = # Vim ⇧D I
 
     def do_row_up(self, tbp: TerminalBytePacket) -> None:
         """Go up by 1 Row, but stop in Top Row"""
@@ -1069,7 +1088,7 @@ SCREEN_WRITER_HELP = r"""
         Tab means ⌃I \t, and Return means ⌃M \r
 
         Minimal Emacs is ⌃A ⌃B ⌃D ⌃E ⌃F ⌃G ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V
-        Minimal Vim is ⎋ I ⌃O ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧H ⇧L ⇧M ⇧O ⇧Q ⇧R ⇧S ⇧X
+        Minimal Vim is ⎋ I ⌃O ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧A ⇧C ⇧D ⇧H ⇧L ⇧M ⇧O ⇧Q ⇧R ⇧S ⇧X
 
     Esc ⎋ Byte Pairs
 
