@@ -242,6 +242,7 @@ class ScreenEditor:
     bytes_terminal: BytesTerminal  # .bt
 
     func_by_kdata: dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]] = dict()
+    arrows: int
 
     #
     # Init, Enter, Exit, Print
@@ -260,11 +261,13 @@ class ScreenEditor:
         bt = BytesTerminal()
 
         func_by_kdata = self.form_func_by_kdata()
+        arrows = 0
 
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
         self.bytes_terminal = bt
         self.func_by_kdata = func_by_kdata  # MyPy needs Dict
+        self.arrows = arrows
 
     def __enter__(self) -> ScreenEditor:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -451,7 +454,8 @@ class ScreenEditor:
             t1 = time.time()
             t1t0 = t1 - t0
 
-            tprint(f"{n=} t1t0={t1t0:.6f} {tbp=}  # loopback_awhile")
+            arrows = self.arrows
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # loopback_awhile")
             assert tbp, (tbp, n)  # because .timeout=None
 
             kdata = tbp.to_bytes()
@@ -486,7 +490,8 @@ class ScreenEditor:
 
         if kdata in func_by_kdata.keys():
             func = func_by_kdata[kdata]
-            tprint(f"{func.__qualname__=}  # loopback_awhile")
+            # tprint(f"{func.__qualname__=}  # loopback_awhile")
+            tprint(f"{func.__name__=}  # loopback_awhile")
 
             func(tbp)  # may raise SystemExit
 
@@ -559,6 +564,31 @@ class ScreenEditor:
             csi_famous = True
 
         if not csi_famous:
+
+            if (n == 1) and csi and tbp.tail and (tbp.tail == b"M"):
+                return kdata  # drops first 1/2 or 2/3 of Sgr Mouse
+
+            if (n == 1) and csi and tbp.tail and (tbp.tail == b"m"):
+                splits = tbp.neck.removeprefix(b"<").split(b";")
+                assert len(splits) == 3, (splits, tbp.neck, kdata, tbp)
+                (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f}};{x};{y}
+
+                self.print(f"\x1b[{y};{x}H", end="")
+
+                if f == 0:
+                    self.print("*", end="")
+
+                if f & 0x10:
+                    self.print("⌃", end="")
+                if f & 8:
+                    self.print("⌥", end="")
+                if f & 4:
+                    self.print("⇧", end="")
+
+                return kdata  # drops first 1/2 or 2/3 of Sgr Mouse
+
+                # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
+
             return b""
 
         # Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1
@@ -590,7 +620,7 @@ class ScreenEditor:
 
             # gCloud Shell needs ⎋[1D for ⎋[D
 
-        # Emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete  # FIXME: FIXME #
+        # Emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete  # FIXME: FIXME: #
 
         if tbp.tail == b"}":
             if tbp.back != b"'":
@@ -624,10 +654,37 @@ class ScreenEditor:
     def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
 
+        arrows = self.arrows
         bt = self.bytes_terminal
 
+        # Count out a rapid burst of >= 2 Arrows
+
+        arrows_timeout = 0.010
+
         n = 1
-        tbp = bt.read_byte_packet(timeout=None)  # todo: log & echo the Bytes as they arrive
+
+        t0 = time.time()
+
+        if not arrows:
+            tbp = bt.read_byte_packet(timeout=None)
+        else:
+            tbp = bt.read_byte_packet(timeout=arrows_timeout)
+            if not tbp:
+                self.arrows = 0
+                self.print("⌥", end="")
+                tbp = bt.read_byte_packet(timeout=None)
+
+        t1 = time.time()
+
+        kdata = tbp.to_bytes()
+        t1t0 = t1 - t0
+
+        if kdata not in (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D"):
+            self.arrows = 0
+        elif t1t0 >= arrows_timeout:
+            self.arrows = 0
+        else:
+            self.arrows += 1
 
         while (not tbp.text) and (not tbp.closed) and (not bt.extras):
             kdata = tbp.to_bytes()
@@ -636,7 +693,11 @@ class ScreenEditor:
             n += 1
             bt.close_byte_packet_if(tbp, timeout=None)
 
+        # Succeed
+
         return (tbp, n)
+
+        # todo: log & echo the Bytes as they arrive
 
     def do_write_cr_lf(self, tbp: TerminalBytePacket) -> None:
         """Write CR LF"""
@@ -972,9 +1033,8 @@ SCREEN_WRITER_HELP = r"""
 
 """
 
-# FIXME: FIXME: Guess when Mouse must be sending the Arrows
-
-# FIXME: FIXME: Put Conway Life on Screen, edit with Mouse Clicks
+# FIXME: FIXME: Put Conway Life on Screen, toggle with Mouse Clicks, time by Spacebar
+# FIXME: FIXME: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
 
 # FIXME: doc the Alt Screen Toggle
 # FIXME: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
