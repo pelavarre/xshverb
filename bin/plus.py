@@ -521,34 +521,26 @@ class ScreenEditor:
 
             # FIXME: stop wrongly passing through multibyte Control Characters
 
-        # Emulate some Control Byte Sequences promoted by less than all our Terminals
+        # Pass-Through, or emulate, the famous Control Byte Sequences
 
-        famous_kdata = self.reply_to_famous_kdata(tbp, n=n)
-        if famous_kdata:
+        if self.take_tbp_n_kdata_if(tbp, n=n, kdata=kdata):
+
             return
 
-        # Show the Keycaps to send the Terminal Byte Packet slowly from Keyboard
+        # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
         tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
 
         kcaps = kdata_to_kcaps(kdata)
         self.print(kcaps, end=" ")
 
-    def reply_to_famous_kdata(self, tbp: TerminalBytePacket, n: int) -> bytes:
+    def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
         """Emulate the KData Control Sequence and return it, else return empty bytes()"""
 
-        kdata = tbp.to_bytes()  # already logged by caller, we trust
-        assert kdata, (kdata,)  # because .timeout=None
+        # Emulate famous Esc Byte Pairs
 
-        # Emulate Famous Esc Byte Pairs, no matter if quick or slow
-
-        esc_pair_famous = kdata == b"\x1b" b"l"
-        if esc_pair_famous:  # gCloud Shell needs ⎋[1;1⇧H for ⎋L
-            tprint(f"{kdata=}  # reply_to_kdata")
-
-            self.write("\x1b[" "1;1" "H")
-
-            return kdata
+        if self.take_csi_row_1_column_1_leap_if(kdata):  # ⎋L
+            return True
 
         # Emulate famous Csi Control Byte Sequences,
         # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
@@ -557,99 +549,154 @@ class ScreenEditor:
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
-        csi_slow_tails = b"M" b"mcntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
+        csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
 
         csi_famous = csi and tbp.tail and (tbp.tail in csi_timeless_tails)
         if (n > 1) and csi and tbp.tail and (tbp.tail in csi_slow_tails):
             csi_famous = True
 
+        # Shrug off a Mouse Press if quick
+        # Reply to a Mouse Release, no matter if slow or quick
+        # And kick back on anything else that's not Csi Famous
+
         if not csi_famous:
+            if self.take_csi_mouse_press_if(tbp, n=n):
+                return True
+            if self.take_csi_mouse_release_if(tbp):
+                return True
 
-            if (n == 1) and csi and tbp.tail and (tbp.tail == b"M"):
-                return kdata  # drops first 1/2 or 2/3 of Sgr Mouse
+            return False
 
-            if (n == 1) and csi and tbp.tail and (tbp.tail == b"m"):
-                splits = tbp.neck.removeprefix(b"<").split(b";")
-                assert len(splits) == 3, (splits, tbp.neck, kdata, tbp)
-                (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f}};{x};{y}
+        # Emulate the Csi Famous that don't work so well when passed through
 
-                self.print(f"\x1b[{y};{x}H", end="")
+        if self.take_csi_tab_right_leap_if(tbp):  # ⎋[{}⇧I
+            return True
 
-                if f == 0:
-                    self.print("*", end="")
+        if self.take_csi_row_default_leap_if(kdata):  # ⎋[d
+            return True
 
-                if f & 0x10:
-                    self.print("⌃", end="")
-                if f & 8:
-                    self.print("⌥", end="")
-                if f & 4:
-                    self.print("⇧", end="")
+        if tbp.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
+            self.take_csi_cols_insert_if(tbp)
+            return True
 
-                return kdata  # drops first 1/2 or 2/3 of Sgr Mouse
+        if tbp.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
+            self.take_csi_cols_insert_if(tbp)
+            return True
 
-                # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
+        # Pass-through the .csi_slow_tails when slow.
+        # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
 
-            return b""
+        tprint(f"Pass-through {kdata=} {str(tbp)=}   # reply_to_kdata")
+        self.do_write_kdata(tbp)
 
-        # Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1
+        return True
+
+    def take_csi_row_1_column_1_leap_if(self, kdata: bytes) -> bool:
+        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
+
+        if kdata != b"\x1b" b"l":
+            return False
+
+        tprint(f"{kdata=}  # reply_to_famous_esc_byte_pairs")
+
+        self.write("\x1b[" "H")  # for ⎋L
+
+        return True
+
+        # gCloud Shell needs ⎋[⇧H for ⎋L
+
+    def take_csi_tab_right_leap_if(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
         assert TAB == "\t"
         assert CHT_X == "\x1b" "[" "{}I"
 
-        if tbp.tail == b"I":
-            tprint(f"⎋[...I {tbp=} {kdata=}  # reply_to_kdata")
+        if tbp.tail != b"I":
+            return False
 
-            pn = int(tbp.neck) if tbp.neck else 1
-            assert pn >= 1, (pn,)
-            self.write(pn * "\t")
+        tprint(f"⎋[...I {tbp=}  # tab_right_leap_if")
 
-            return kdata
+        pn = int(tbp.neck) if tbp.neck else 1
+        assert pn >= 1, (pn,)
+        self.write(pn * "\t")
 
-            # gCloud Shell needs \t for ⎋[ {}I
+        return True
 
-        # Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1
+        # gCloud Shell needs \t for ⎋[ {}I
+
+    def take_csi_row_default_leap_if(self, kdata: bytes) -> bool:
+        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
 
         assert VPA_Y == "\x1b" "[" "{}" "d"
 
-        if kdata == b"\x1b[" b"d":
-            tprint(f"⎋[d {kdata=}   # reply_to_kdata")
+        if kdata != b"\x1b[" b"d":
+            return False
 
-            self.write("\x1b[" "1" "d")
+        tprint(f"⎋[d {kdata=}   # row_default_leap_if")
 
-            return kdata
+        self.write("\x1b[" "1" "d")
 
-            # gCloud Shell needs ⎋[1D for ⎋[D
+        return True
 
-        # Emulate ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete  # FIXME: FIXME: #
+        # gCloud Shell needs ⎋[1D for ⎋[D
 
-        if tbp.tail == b"}":
-            if tbp.back != b"'":
-                return b""
+    def take_csi_cols_insert_if(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧} cols-insert"""  # FIXME: FIXME: #
 
-            tprint("⎋['⇧} cols-insert" f" {tbp=} {kdata=}   # reply_to_kdata")
+        if (tbp.back + tbp.tail) != b"'}":
+            return False
 
-            self.print(tbp, end="  ")
+        tprint("⎋['⇧} cols-insert" f" {tbp=}   # cols_insert_if")
+        self.print(tbp, end="  ")
 
-            return kdata
+        return True
 
-        if tbp.tail == b"~":
-            if tbp.back != b"'":
-                return b""
+    def take_csi_cols_delete_if(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧~ cols-delete"""  # FIXME: FIXME: #
 
-            tprint("⎋['⇧~ cols-delete" f" {tbp=} {kdata=}   # reply_to_kdata")
+        if (tbp.back + tbp.tail) != b"'~":
+            return False
 
-            self.print(tbp, end="  ")
+        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # reply_to_kdata")
+        self.print(tbp, end="  ")
 
-            return kdata
+        return True
 
-        # Pass through the .csi_timeless_tails, be they quick or slow,
-        # and pass through the .csi_slow_tails but only when slow
+    def take_csi_mouse_press_if(self, tbp: TerminalBytePacket, n: int) -> bool:
+        """Shrug off a Mouse Press if quick"""
 
-        tprint(f"Pass-through {kdata=} {str(tbp)=}   # reply_to_kdata")
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if (n == 1) and csi and tbp.tail and (tbp.tail == b"M"):
+            return True  # drops first 1/2 or 2/3 of Sgr Mouse
 
-        self.do_write_kdata(tbp)
+        return False
 
-        return kdata
+    def take_csi_mouse_release_if(self, tbp: TerminalBytePacket) -> bool:
+        """Reply to a Mouse Release, no matter if slow or quick"""
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and tbp.tail and (tbp.tail == b"m")):
+            return False
+
+        splits = tbp.neck.removeprefix(b"<").split(b";")
+        assert len(splits) == 3, (splits, tbp.neck, tbp)
+        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f}};{x};{y}
+
+        self.print(f"\x1b[{y};{x}H", end="")  # for Mouse Csi ⎋[M
+
+        if f == 0:
+            self.print("*", end="")
+
+        if f & 0x10:
+            self.print("⌃", end="")
+        if f & 8:
+            self.print("⌥", end="")
+        if f & 4:
+            self.print("⇧", end="")
+
+        return True
+
+        # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
 
     def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
@@ -736,6 +783,8 @@ class ScreenEditor:
         self.do_quote_one_kdata(tbp)  # Emacs ⌃Q  # Vim ⌃V
         self.do_inserting_start(tbp)  # Vim I
 
+        # Vim R
+
         # FIXME: FIXME: Shadow Terminal with default Replacing
 
     #
@@ -767,6 +816,9 @@ class ScreenEditor:
         self.do_inserting_start(tbp)  # Vim I
 
         # Vim A
+
+        # FIXME: FIXME: FIXME: Vim ⇧A ⇧C ⇧D and its I ⌃O
+        # FIXME: FIXME: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
 
     def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character beneath the Cursor"""
@@ -816,7 +868,9 @@ class ScreenEditor:
 
         assert CUF_X == "\x1b[" "{}" "C"
         assert PN_MAX_32100 == 32100
-        self.write("\x1b[" "32100" "C")
+        self.write("\x1b[" "32100" "C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
+
+        # FIXME: FIXME: Leap to Rightmost Shadow, if Row Shadowed
 
         # Emacs ⌃E  # Vim ⇧$
 
@@ -887,18 +941,22 @@ class ScreenEditor:
         """Leap to the Leftmost Column of the First Row"""
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write("\x1b[" "1;1" "H")
+        self.write("\x1b[" "H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
 
         # Vim ⇧H
+
+        # FIXME: FIXME: Leap to First Shadow Row, if Column Shadowed
 
     def do_row_leap_last_column_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column of the Last Row"""
 
         assert PN_MAX_32100 == 32100
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write("\x1b[" "32100;1" "H")
+        self.write("\x1b[" "32100" "H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
 
-        # Vim ⇧H
+        # FIXME: FIXME: Leap to Last Shadow Row, if Column Shadowed
+
+        # Vim ⇧L
 
     def do_row_leap_middle_column_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column of the Middle Row"""
@@ -909,9 +967,9 @@ class ScreenEditor:
         middle = (height // 2) + (height % 2)
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write(f"\x1b[{middle};1" "H")
+        self.write(f"\x1b[{middle}" "H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
 
-        # Vim ⎋⇧M
+        # Vim ⇧M
 
     def do_row_tail_erase(self, tbp: TerminalBytePacket) -> None:
         """Erase from the Cursor to the Tail of the Row"""
@@ -992,7 +1050,16 @@ class ScreenEditor:
         # FIXME: accept lots of quits and movements as per Vim ⌃O & Emacs
 
 
-# FIXME: show time gone since last Keyboard Byte
+# FIXME: F1 F2 F3 F4 for the different pages and pages of Help
+# FIXME: Put a Menu of Games at F1, but first move Screen_Writer_Help to F2
+
+# FIXME: elapsed time logs into k.keyboard and s.screen for record/replay
+
+# FIXME: Vim C0 C⇧$ D0 D⇧$ . . . Yea, sample Y X before/ after and do it
+
+
+# Help with famous ⎋ 7 8 C L ⇧D ⇧E ⇧M (when not taken by Vim)
+# Help with famous Csi ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT
 
 SCREEN_WRITER_HELP = r"""
 
@@ -1001,13 +1068,16 @@ SCREEN_WRITER_HELP = r"""
         ⌃G ⌃H ⌃I ⌃J ⌃M mean \a \b \t \n \r, and ⌃[ means \e, also known as ⎋ Esc
         Tab means ⌃I \t, and Return means ⌃M \r
 
-    The famous Esc ⎋ Byte Pairs are ⎋ 7 8 C L ⇧D ⇧E ⇧M
+        Minimal Emacs is ⌃A ⌃B ⌃D ⌃E ⌃F ⌃G ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V
+        Minimal Vim is ⎋ I ⌃O ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧H ⇧L ⇧M ⇧O ⇧Q ⇧R ⇧S ⇧X
+
+    Esc ⎋ Byte Pairs
 
         ⎋7 cursor-checkpoint  ⎋8 cursor-revert (defaults to Y 1 X 1)
         ⎋C screen-erase  ⎋L row-column-leap
         ⎋⇧D ↓  ⎋⇧E \r\n else \r  ⎋⇧M ↑
 
-    The famous Csi ⎋[ Sequences are ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT
+    Csi ⎋[ Sequences
 
         ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←
         ⎋[I ⌃I  ⎋[⇧Z ⇧Tab
@@ -1033,8 +1103,11 @@ SCREEN_WRITER_HELP = r"""
 
 """
 
-# FIXME: FIXME: Put Conway Life on Screen, toggle with Mouse Clicks, time by Spacebar
-# FIXME: FIXME: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
+# FIXME: FIXME: FIXME: Put Conway Life on Screen, toggle with Mouse Clicks, time by Spacebar
+# FIXME: FIXME: FIXME: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
+
+# FIXME: FIXME: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
+# FIXME: FIXME: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
 
 # FIXME: doc the Alt Screen Toggle
 # FIXME: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
