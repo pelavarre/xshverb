@@ -218,10 +218,14 @@ CHT_X = "\x1b" "[" "{}I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # 
 ED_P = "\x1b" "[" "{}" "J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
 EL_P = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
+ICH_X = "\x1b[" "{}" "@"  # CSI 04/00 Insert Character
 IL_Y = "\x1b[" "{}" "L"  # CSI 04/12 Insert Line [Row]
 DCH_X = "\x1b[" "{}" "P"  # CSI 05/00 Delete Character
 
 VPA_Y = "\x1b" "[" "{}" "d"  # CSI 06/04 Line Position Absolute
+
+DECIC_X = "\x1b[" "{}" "'}}"  # CSI 02/07 07/13 VT420 DECIC_X  # "}}" to mean "}"
+DECDC_X = "\x1b[" "{}" "'~"  # CSI 02/07 07/14 VT420 DECDC_X
 
 SM_IRM = "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
 RM_IRM = "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
@@ -378,8 +382,8 @@ class ScreenEditor:
 
         settings = self.settings
 
-        assert SM_IRM == "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
-        assert RM_IRM == "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+        assert SM_IRM == "\x1b[" "4h"
+        assert RM_IRM == "\x1b[" "4l"
 
         toggle_pairs = [
             (b"\x1b[" b"4h", b"\x1b[" b"4l"),
@@ -630,7 +634,7 @@ class ScreenEditor:
         self.print(kcaps, end=" ")
 
     def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
-        """Emulate the KData Control Sequence and return it, else return empty bytes()"""
+        """Emulate the KData Control Sequence and return it, else return False"""
 
         # Emulate famous Esc Byte Pairs
 
@@ -675,7 +679,7 @@ class ScreenEditor:
             return True
 
         if tbp.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
-            self._take_csi_cols_insert_if_(tbp)
+            self._take_csi_cols_delete_if_(tbp)
             return True
 
         # Pass-through the .csi_slow_tails when slow.
@@ -737,25 +741,54 @@ class ScreenEditor:
 
         # gCloud Shell needs ⎋[1D for ⎋[D
 
-    def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧} cols-insert"""  # todo5: #
-
-        if (tbp.back + tbp.tail) != b"'}":
-            return False
-
-        tprint("⎋['⇧} cols-insert" f" {tbp=}   # _take_csi_cols_insert_if_")
-        self.print(tbp, end="  ")
-
-        return True
-
     def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧~ cols-delete"""  # todo5: #
+        """Emulate ⎋['⇧~ cols-delete"""
+
+        bt = self.bytes_terminal
+
+        assert DCH_X == "\x1b[" "{}" "P"
+        assert VPA_Y == "\x1b[" "{}" "d"
+        assert DECDC_X == "\x1b[" "{}" "'~"
 
         if (tbp.back + tbp.tail) != b"'~":
             return False
 
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
-        self.print(tbp, end="  ")
+
+        n = int(tbp.neck) if tbp.neck else 1
+        height = bt.read_height()
+        (row_y, column_x) = bt.read_row_y_column_x()
+
+        for y in range(1, height + 1):
+            self.write(f"\x1b[{y}d")  # for .columns_delete_n
+            self.write(f"\x1b[{n}P")  # for .columns_delete_n
+        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
+
+        return True
+
+    def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧} cols-insert"""
+
+        bt = self.bytes_terminal
+
+        assert ICH_X == "\x1b[" "{}" "@"
+        assert VPA_Y == "\x1b[" "{}" "d"
+        assert DECDC_X == "\x1b[" "{}" "'~"
+        assert DECIC_X == "\x1b[" "{}" "'}}"
+
+        if (tbp.back + tbp.tail) != b"'}":
+            return False
+
+        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
+
+        n = int(tbp.neck) if tbp.neck else 1
+        height = bt.read_height()
+        (row_y, column_x) = bt.read_row_y_column_x()
+
+        for y in range(1, height + 1):
+            self.write(f"\x1b[{y}d")  # for .columns_delete_n
+            self.write(f"\x1b[{n}@")  # for .columns_delete_n
+        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
 
         return True
 
@@ -1145,8 +1178,8 @@ class ScreenEditor:
 
         # Default to Replacing, not Inserting
 
-        assert SM_IRM == "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
-        assert RM_IRM == "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+        assert SM_IRM == "\x1b[" "4h"
+        assert RM_IRM == "\x1b[" "4l"
 
         irm_bytes = self.read_shadow_settings(b"\x1b[4h", sdata1=b"\x1b[4l")
         restore_inserting_replacing = irm_bytes.decode()  # doesn't raise UnicodeDecodeError
