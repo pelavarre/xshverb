@@ -367,6 +367,7 @@ class ScreenEditor:
 
         # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
         # FIXME: FIXME: FIXME: bind Keycaps in place of Keyboard Encodings where possible
+        # FIXME: FIXME: FIXME: bind Keycaps separately to Funcs of 1 Arg or 0 Args
 
     def form_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
         """Bind Keyboard Encodings to Funcs"""
@@ -830,7 +831,7 @@ class ScreenEditor:
         # FIXME: FIXME: Shadow Terminal with default Replacing
 
     #
-    #
+    # Reply to Keyboard Chords
     #
 
     def do_column_left(self, tbp: TerminalBytePacket) -> None:
@@ -1227,13 +1228,11 @@ class ScreenEditor:
         self.yx_board = (y0, x0)
         self.yx_puck = (y0, x0)
 
-        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
-        self.conway_print_some("⚪🔴⚪🔴⚪⚪⚪")
-        self.conway_print_some("⚪⚪🔴🔴⚪⚪⚪")
-        self.conway_print_some("⚪⚪🔴⚪⚪⚪⚪")
-        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
-        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
-        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
+        self.conway_print_some("⚪⚪⚪⚪⚪")
+        self.conway_print_some("⚪🔴⚪🔴⚪")
+        self.conway_print_some("⚪⚪🔴🔴⚪")
+        self.conway_print_some("..⚪🔴⚪⚪")
+        self.conway_print_some("..⚪⚪⚪..")
 
         self._leap_conway_between_half_steps_()
 
@@ -1319,60 +1318,89 @@ class ScreenEditor:
         steps += 1
         self.steps = steps
 
+        yx_list = list()
         for y in str_by_y_x.keys():
             for x in str_by_y_x[y].keys():
-                syx = str_by_y_x[y][x]
+                yx = (y, x)
+                yx_list.append(yx)
 
-                if steps % 2 == 0:
-                    n = self.y_x_count_around(y, x)
+        for y, x in yx_list:
+            syx = str_by_y_x[y][x]
 
-                    if (n < 2) and (syx == "🔴"):
-                        self.conway_print_y_x_syx(y, x=x, syx="🟥")
-                    elif (n == 3) and (syx == "⚪"):
-                        self.conway_print_y_x_syx(y, x=x, syx="⚫")
-                    elif (n > 3) and (syx == "🔴"):
-                        self.conway_print_y_x_syx(y, x=x, syx="🟥")
+            if steps % 2 == 0:
+                assert syx in ("⚪", "🔴"), (syx,)
+                n = self.y_x_count_around(y, x)
 
-                else:
+                if (n < 2) and (syx == "🔴"):
+                    self.conway_print_y_x_syx(y, x=x, syx="🟥")
+                elif (n == 3) and (syx == "⚪"):
+                    self.conway_print_y_x_syx(y, x=x, syx="⚫")
+                    self.y_x_count_around(y, x)  # adds its Next Spots
+                elif (n > 3) and (syx == "🔴"):
+                    self.conway_print_y_x_syx(y, x=x, syx="🟥")
 
-                    if syx == "⚫":
-                        self.conway_print_y_x_syx(y, x=x, syx="🔴")
-                    elif syx in ("🟥"):
-                        self.conway_print_y_x_syx(y, x=x, syx="⚪")
+            else:
+                assert syx in ("⚪", "⚫", "🔴", "🟥"), (syx,)
+
+                if syx == "⚫":
+                    self.conway_print_y_x_syx(y, x=x, syx="🔴")
+                elif syx in ("🟥"):
+                    self.conway_print_y_x_syx(y, x=x, syx="⚪")
 
     def y_x_count_around(self, y: int, x: int) -> int:
         """Count the Neighbors of a Cell"""
 
         str_by_y_x = self.str_by_y_x
 
-        count = 0
+        syx = str_by_y_x[y][x]
 
-        for dy in range(-1, 2):
-            for dx in range(-2, 4, 2):
+        dydx_list = list()
+        for dy in range(-1, 1 + 1):
+            for dx in range(-2, 2 + 1, 2):
                 if dy == 0 and dx == 0:
                     continue
 
-                y1 = y + dy
-                x1 = x + dx
+                dydx = (dy, dx)
+                dydx_list.append(dydx)
+
+        count = 0
+        for dy, dx in dydx_list:
+            y1 = y + dy
+            x1 = x + dx
+
+            if syx == "⚪":
                 if y1 not in str_by_y_x.keys():
                     continue
                 if x1 not in str_by_y_x[y1].keys():
                     continue
 
-                sy1x1 = str_by_y_x[y1][x1]
-                if sy1x1 in ("🔴", "🟥"):
-                    count += 1
+            if y1 not in str_by_y_x.keys():
+                str_by_y_x[y1] = dict()
+            if x1 not in str_by_y_x[y1].keys():
+                sy1x1 = "⚪"
+                self.conway_print_y_x_syx(y1, x=x1, syx=sy1x1)
+                assert str_by_y_x[y1][x1] == sy1x1, (str_by_y_x[y1][x1], y1, x1, sy1x1)
+
+            sy1x1 = str_by_y_x[y1][x1]
+            if sy1x1 in ("🔴", "🟥"):
+                count += 1
 
         return count
 
     def conway_print_y_x_syx(self, y: int, x: int, syx: str) -> None:
         """Print each Character"""
 
+        assert CUF_X == "\x1b[" "{}" "C"
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
+
         self.write(f"\x1b[{y};{x}H")  # for .conway_print_some
 
-        self.write(syx)
-        self.shadow_y_x_syx(y, x=x, syx=syx)
+        if syx == ".":
+            self.write("\x1b[" "C")
+        else:
+            self.write(syx)
+            self.shadow_y_x_syx(y, x=x, syx=syx)
+
         x += 2
 
         self.yx_puck = (y, x)
