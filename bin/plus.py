@@ -15,7 +15,8 @@ examples:
 
 from __future__ import annotations  # backports new datatype syntaxes into old Pythons
 
-import collections.abc
+import collections
+import collections.abc as abc
 import datetime as dt
 import os
 import pathlib
@@ -152,7 +153,21 @@ def try_screen_editor() -> None:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
     with ScreenEditor() as se:
-        se.loopback_awhile()
+
+        se.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
+
+        # Default to Inserting, not Replacing
+
+        tbp = TerminalBytePacket()
+        se.do_inserting_start(tbp)
+
+        # Walk one step after another
+
+        while True:
+            try:
+                se.read_eval_print_once()
+            except SystemExit:
+                break
 
 
 def try_read_byte_packet() -> None:
@@ -237,12 +252,13 @@ PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Termin
 class ScreenEditor:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
-    keyboard_bytes_log: typing.BinaryIO  # .klog
-    screen_bytes_log: typing.BinaryIO  # .slog
-    bytes_terminal: BytesTerminal  # .bt
+    keyboard_bytes_log: typing.BinaryIO  # .klog  # logs Keyboard Delays & Bytes
+    screen_bytes_log: typing.BinaryIO  # .slog  # logs Screen Delays & Bytes
+    bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
+    arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
 
-    func_by_kdata: dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]] = dict()
-    arrows: int
+    func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
+    func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
 
     #
     # Init, Enter, Exit, Print
@@ -259,13 +275,15 @@ class ScreenEditor:
         klog = klog_path.open("ab")
         slog = slog_path.open("ab")
         bt = BytesTerminal()
-
-        func_by_kdata = self.form_func_by_kdata()
         arrows = 0
+
+        func_by_str = self.form_func_by_str()
+        func_by_kdata = self.form_func_by_kdata()
 
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
         self.bytes_terminal = bt
+        self.func_by_str = func_by_str
         self.func_by_kdata = func_by_kdata  # MyPy needs Dict
         self.arrows = arrows
 
@@ -342,14 +360,21 @@ class ScreenEditor:
         slog.write(sdata)
 
     #
-    # Bind Keyboard Codes to Funcs
+    # Bind Keyboard Chords to Funcs
     #
 
-    def form_func_by_kdata(
-        self,
-    ) -> dict[bytes, collections.abc.Callable[[TerminalBytePacket], None]]:
+    def form_func_by_str(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
+        """Bind Keycaps to Funcs"""
 
-        func_by_literal_kdata = {
+        return dict()
+
+        # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
+        # FIXME: FIXME: FIXME: bind Keycaps in place of Keyboard Encodings where possible
+
+    def form_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
+        """Bind Keyboard Encodings to Funcs"""
+
+        func_by_kdata = {
             #
             b"\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
             b"\x02": self.do_column_left,  # ⌃B for Emacs
@@ -414,11 +439,11 @@ class ScreenEditor:
             b"\x1b[" b"Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
             #
             b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
+            b"\x1bO" b"Q": self.do_kdata_fn_f2,  # Fn F2
+            b"\x1b" b"[" b"20~": self.do_kdata_fn_f9,  # Fn F9
             #
             b"\x7f": self.do_char_delete_left,  # ⌃? Delete  # FIXME: Delete Row if at 1st Column
         }
-
-        func_by_kdata = dict(func_by_literal_kdata)
 
         return func_by_kdata
 
@@ -427,7 +452,6 @@ class ScreenEditor:
         # FIXME: bind ⎋0 etc to Vi Meanings - but don't get stuck inside ⎋-Lock
 
         # FIXME: bind ⌃C ⇧O for Emacs overwrite-mode, or something
-        # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
 
         # FIXME: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
 
@@ -437,40 +461,30 @@ class ScreenEditor:
     #
     #
 
-    def loopback_awhile(self) -> None:
+    def read_eval_print_once(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
-        self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
-
-        # Default to Inserting, not Replacing
-
-        tbp = TerminalBytePacket()
-        self.do_inserting_start(tbp)
-
         # Reply to each Keyboard Chord Input, till quit
+
         # FIXME: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
         # FIXME: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
 
-        while True:
-            t0 = time.time()
-            (tbp, n) = self.read_some_byte_packets()
-            t1 = time.time()
-            t1t0 = t1 - t0
+        t0 = time.time()
+        (tbp, n) = self.read_some_byte_packets()
+        t1 = time.time()
+        t1t0 = t1 - t0
 
-            arrows = self.arrows
-            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # loopback_awhile")
-            assert tbp, (tbp, n)  # because .timeout=None
+        arrows = self.arrows
+        tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once")
+        assert tbp, (tbp, n)  # because .timeout=None
 
-            kdata = tbp.to_bytes()
-            assert kdata, (kdata,)  # because .timeout=None
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
 
-            try:
-                self.reply_to_kdata(tbp, n=n)
-            except SystemExit:
-                break
+        self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
 
-            if kdata == b"\x04":  # ⌃D
-                break
+        if kdata == b"\x04":  # ⌃D
+            raise SystemExit()
 
         # FIXME: FIXME: Shadow Terminal with default Replacing
         # FIXME: Read Str not Bytes from Keyboard, and then List[Str]
@@ -493,8 +507,8 @@ class ScreenEditor:
 
         if kdata in func_by_kdata.keys():
             func = func_by_kdata[kdata]
-            # tprint(f"{func.__qualname__=}  # loopback_awhile")
-            tprint(f"{func.__name__=}  # loopback_awhile")
+            # tprint(f"{func.__qualname__=}  # reply_to_kdata")
+            tprint(f"{func.__name__=}  # reply_to_kdata")
 
             func(tbp)  # may raise SystemExit
 
@@ -542,7 +556,7 @@ class ScreenEditor:
 
         # Emulate famous Esc Byte Pairs
 
-        if self.take_csi_row_1_column_1_leap_if(kdata):  # ⎋L
+        if self._take_csi_row_1_column_1_leap_if_(kdata):  # ⎋L
             return True
 
         # Emulate famous Csi Control Byte Sequences,
@@ -563,44 +577,44 @@ class ScreenEditor:
         # And kick back on anything else that's not Csi Famous
 
         if not csi_famous:
-            if self.take_csi_mouse_press_if(tbp, n=n):
+            if self._take_csi_mouse_press_if_(tbp, n=n):
                 return True
-            if self.take_csi_mouse_release_if(tbp):
+            if self._take_csi_mouse_release_if_(tbp):
                 return True
 
             return False
 
         # Emulate the Csi Famous that don't work so well when passed through
 
-        if self.take_csi_tab_right_leap_if(tbp):  # ⎋[{}⇧I
+        if self._take_csi_tab_right_leap_if_(tbp):  # ⎋[{}⇧I
             return True
 
-        if self.take_csi_row_default_leap_if(kdata):  # ⎋[d
+        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
             return True
 
         if tbp.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
-            self.take_csi_cols_insert_if(tbp)
+            self._take_csi_cols_insert_if_(tbp)
             return True
 
         if tbp.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
-            self.take_csi_cols_insert_if(tbp)
+            self._take_csi_cols_insert_if_(tbp)
             return True
 
         # Pass-through the .csi_slow_tails when slow.
         # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
 
-        tprint(f"Pass-through {kdata=} {str(tbp)=}   # reply_to_kdata")
+        tprint(f"Pass-through {kdata=} {str(tbp)=}   # take_tbp_n_kdata_if")
         self.do_write_kdata(tbp)
 
         return True
 
-    def take_csi_row_1_column_1_leap_if(self, kdata: bytes) -> bool:
+    def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
 
         if kdata != b"\x1b" b"l":
             return False
 
-        tprint(f"{kdata=}  # reply_to_famous_esc_byte_pairs")
+        tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
 
         self.write("\x1b[" "H")  # for ⎋L
 
@@ -608,7 +622,7 @@ class ScreenEditor:
 
         # gCloud Shell needs ⎋[⇧H for ⎋L
 
-    def take_csi_tab_right_leap_if(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
         assert TAB == "\t"
@@ -617,7 +631,7 @@ class ScreenEditor:
         if tbp.tail != b"I":
             return False
 
-        tprint(f"⎋[...I {tbp=}  # tab_right_leap_if")
+        tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
 
         pn = int(tbp.neck) if tbp.neck else 1
         assert pn >= 1, (pn,)
@@ -627,7 +641,7 @@ class ScreenEditor:
 
         # gCloud Shell needs \t for ⎋[ {}I
 
-    def take_csi_row_default_leap_if(self, kdata: bytes) -> bool:
+    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
 
         assert VPA_Y == "\x1b" "[" "{}" "d"
@@ -635,7 +649,7 @@ class ScreenEditor:
         if kdata != b"\x1b[" b"d":
             return False
 
-        tprint(f"⎋[d {kdata=}   # row_default_leap_if")
+        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
 
         self.write("\x1b[" "1" "d")
 
@@ -643,29 +657,29 @@ class ScreenEditor:
 
         # gCloud Shell needs ⎋[1D for ⎋[D
 
-    def take_csi_cols_insert_if(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧} cols-insert"""  # FIXME: FIXME: #
 
         if (tbp.back + tbp.tail) != b"'}":
             return False
 
-        tprint("⎋['⇧} cols-insert" f" {tbp=}   # cols_insert_if")
+        tprint("⎋['⇧} cols-insert" f" {tbp=}   # _take_csi_cols_insert_if_")
         self.print(tbp, end="  ")
 
         return True
 
-    def take_csi_cols_delete_if(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧~ cols-delete"""  # FIXME: FIXME: #
 
         if (tbp.back + tbp.tail) != b"'~":
             return False
 
-        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # reply_to_kdata")
+        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
         self.print(tbp, end="  ")
 
         return True
 
-    def take_csi_mouse_press_if(self, tbp: TerminalBytePacket, n: int) -> bool:
+    def _take_csi_mouse_press_if_(self, tbp: TerminalBytePacket, n: int) -> bool:
         """Shrug off a Mouse Press if quick"""
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -674,7 +688,7 @@ class ScreenEditor:
 
         return False
 
-    def take_csi_mouse_release_if(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_mouse_release_if_(self, tbp: TerminalBytePacket) -> bool:
         """Reply to a Mouse Release, no matter if slow or quick"""
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -835,6 +849,17 @@ class ScreenEditor:
         """Assert False"""
 
         assert False
+
+        # Vim ⇧Q  # (traditionally swaps Ex Key Bindings in place of Vim Key Bindings)
+
+    def do_raise_system_exit(self, tbp: TerminalBytePacket) -> None:
+        """Raise SystemExit"""
+
+        raise SystemExit()
+
+        # Emacs ⎋ X revert-buffer Return ⌃X ⌃C
+        # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
+        # Vim ⇧Z⇧Q
 
     def do_char_delete_here_start_inserting(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character beneath the Cursor, and Start Inserting"""
@@ -1011,7 +1036,76 @@ class ScreenEditor:
     #
 
     def do_kdata_fn_f1(self, tbp: TerminalBytePacket, /) -> None:
-        """Print the many Lines of Screen Writer Help"""
+        """Print Lines of main top Help for F1"""
+
+        f1_text = """
+            Shall we play a game?
+
+            F2 - Conway's Game-of-Life
+            F9 - Screen Editor
+
+            ⌃D - Quit
+        """
+
+        f1_text = textwrap.dedent(f1_text).strip()
+
+        self.print()
+        self.print()
+
+        self.print(f1_text.replace("\n", "\r\n"))
+
+        self.print()
+        self.print()
+
+    def do_kdata_fn_f2(self, tbp: TerminalBytePacket, /) -> None:
+        """Play Conway's Game-of-Life for F2"""
+
+        func_by_kdata = self.func_by_kdata
+        func_by_str = self.form_conway_func_by_keycaps()
+
+        # Say Hello
+
+        self.print()
+        self.print("Hello from Conway's Game-of-Life")
+
+        # Default to the most famous Life Glider  # FIXME: FIXME: FIXME:
+
+        # go to the middle
+        # lay down + - +, - + +, - + -
+
+        # Default to Replacing, not Inserting
+
+        tbp = TerminalBytePacket()
+        self.do_replacing_start(tbp)
+
+        # Walk one step after another
+
+        self.func_by_kdata = self.form_conway_func_by_kdata()
+        self.func_by_str = self.form_conway_func_by_keycaps()
+
+        try:
+
+            while True:
+                try:
+                    self.read_eval_print_once()
+                except SystemExit:
+                    break
+
+        finally:
+            self.func_by_kdata = func_by_kdata  # replaces
+            self.func_by_str = func_by_str  # replaces
+
+        # Default to Inserting, not Replacing
+
+        tbp = TerminalBytePacket()
+        self.do_inserting_start(tbp)  # FIXME: restore Replacing/ Inserting after ConwayLife
+
+        # Say Goodbye
+
+        self.print("Goodbye from Conway's Game-of-Life")
+
+    def do_kdata_fn_f9(self, tbp: TerminalBytePacket, /) -> None:
+        """Print the many Lines of Screen Writer Help for F9"""
 
         help_ = textwrap.dedent(SCREEN_WRITER_HELP).strip()
 
@@ -1067,6 +1161,37 @@ class ScreenEditor:
         # FIXME: show loss of \e7 memory because of emulations
 
         # FIXME: accept lots of quits and movements as per Vim ⌃O & Emacs
+
+    #
+    # Play Conway's Game-of-Life
+    #
+
+    #
+    # Bind Keycaps to Funcs
+    #
+
+    def form_conway_func_by_keycaps(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
+        "Bind Keycaps to Funcs"
+
+        func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = {
+            "⌃D": self.do_raise_system_exit,
+            # "Tab": self.do_conway_eight_half_steps,
+            # "Spacebar": self.do_conway_half_step,
+            # "⌃Spacebar": self.do_conway_full_step,
+            # "+": self.do_conway_plus,
+            # "-": self.do_conway_minus,
+            # "MousePress": self.do_conway_mouse_press,
+            # "MouseRelease": self.do_conway_mouse_release,
+        }
+
+        return func_by_str
+
+        # why does MyPy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
+
+    def form_conway_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
+        """Bind Keyboard Encodings to Funcs"""
+
+        return dict()
 
 
 # FIXME: F1 F2 F3 F4 for the different pages and pages of Help
@@ -1870,10 +1995,10 @@ class TerminalBytePacket:
 
         # Take or don't take 1 Printable Char into CSI or Esc CSI Sequence
 
-        esc_csi_extras = self._esc_csi_take_one_if_(decode)
+        esc_csi_extras = self.take_one_esc_csi_if_(decode)
         return esc_csi_extras  # maybe empty
 
-    def _esc_csi_take_one_if_(self, decode: str) -> bytes:
+    def take_one_esc_csi_if_(self, decode: str) -> bytes:
         """Take 1 Char into CSI or Esc CSI Sequence, else return 1..4 Bytes that don't fit"""
 
         assert len(decode) == 1, decode
