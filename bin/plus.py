@@ -187,7 +187,7 @@ def try_tbp_self_test() -> None:
 
 
 #
-# Loop Keyboard back to Screen, but as whole Packets, & with some emulations
+# Loop Keyboard back to Screen, but as whole Packets or Emulations thereof  # todo4: name the helped
 #
 
 
@@ -215,6 +215,7 @@ CUP_Y_X = "\x1b[" "{};{}" "H"  # CSI 04/08 Cursor Position
 
 CHT_X = "\x1b" "[" "{}I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
 
+ED_P = "\x1b" "[" "{}" "J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
 EL_P = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
 IL_Y = "\x1b[" "{}" "L"  # CSI 04/12 Insert Line [Row]
@@ -250,14 +251,15 @@ class ScreenEditor:
     screen_bytes_log: typing.BinaryIO  # .slog  # logs Screen Delays & Bytes
     bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
+    settings: list[bytes]  # tracks Insert/ Replace/ etc
+
+    func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
+    func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
 
     str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
     yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
     steps: int  # counts steps, after -1
-
-    func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
-    func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
 
     #
     # Init, Enter, Exit, Print
@@ -283,14 +285,15 @@ class ScreenEditor:
         self.screen_bytes_log = slog
         self.bytes_terminal = bt
         self.arrows = arrows
+        self.settings = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
+
+        self.func_by_str = func_by_str
+        self.func_by_kdata = func_by_kdata  # MyPy needs Dict
 
         self.yx_board = (-1, -1)
         self.yx_puck = (-1, -1)
         self.str_by_y_x = dict()
         self.steps = -1
-
-        self.func_by_str = func_by_str
-        self.func_by_kdata = func_by_kdata  # MyPy needs Dict
 
     def __enter__(self) -> ScreenEditor:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -363,6 +366,49 @@ class ScreenEditor:
         os.write(fileno, sdata)
 
         slog.write(sdata)
+
+        self.write_shadow(sdata)
+
+    #
+    # Remember much if what we wrote
+    #
+
+    def write_shadow(self, sdata: bytes) -> None:
+        """Shadow the Screen Panel"""
+
+        settings = self.settings
+
+        assert SM_IRM == "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
+        assert RM_IRM == "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+
+        toggle_pairs = [
+            (b"\x1b[" b"4h", b"\x1b[" b"4l"),
+        ]
+
+        for toggle_pair in toggle_pairs:
+            if sdata in toggle_pair:
+                index = toggle_pair.index(sdata)
+                other = toggle_pair[1 - index]
+
+                if other in settings:
+                    settings.remove(other)
+                settings.append(sdata)
+
+    def read_shadow_settings(self, sdata0: bytes, sdata1: bytes) -> bytes:
+        """Read the present Shadow Setting of a pair:  the one, the other, else empty Bytes"""
+
+        settings = self.settings
+
+        zero = sdata0 in settings
+        one = sdata1 in settings
+
+        assert not (zero and one), (zero, one, sdata0, sdata1)
+        if zero:
+            return sdata0
+        if one:
+            return sdata1
+
+        return b""
 
     #
     # Bind Keyboard Chords to Funcs
@@ -1097,10 +1143,16 @@ class ScreenEditor:
         func_by_kdata = self.func_by_kdata
         func_by_str = self.form_conway_func_by_keycaps()
 
-        # Default to Inserting, not Replacing
+        # Default to Replacing, not Inserting
+
+        assert SM_IRM == "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
+        assert RM_IRM == "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+
+        irm_bytes = self.read_shadow_settings(b"\x1b[4h", sdata1=b"\x1b[4l")
+        restore_inserting_replacing = irm_bytes.decode()  # doesn't raise UnicodeDecodeError
 
         tbp = TerminalBytePacket()
-        self.do_replacing_start(tbp)  # todo5: restore Replacing/ Inserting after ConwayLife
+        self.do_replacing_start(tbp)
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
@@ -1119,11 +1171,7 @@ class ScreenEditor:
         finally:
             self.func_by_kdata = func_by_kdata  # replaces
             self.func_by_str = func_by_str  # replaces
-
-        # Default to Replacing, not Inserting
-
-        tbp = TerminalBytePacket()
-        self.do_inserting_start(tbp)  # todo5: restore Replacing/ Inserting after ConwayLife
+            self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
     def do_kdata_fn_f9(self, tbp: TerminalBytePacket, /) -> None:
         """Print the many Lines of Screen Writer Help for F9"""
