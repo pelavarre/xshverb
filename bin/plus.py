@@ -247,7 +247,6 @@ class ScreenEditor:
     yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
     str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     steps: int  # counts steps, after -1
-    speed: int  # runs the Puck faster or slower, else -1
 
     func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
     func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
@@ -281,7 +280,6 @@ class ScreenEditor:
         self.yx_puck = (-1, -1)
         self.str_by_y_x = dict()
         self.steps = -1
-        self.speed = -1
 
         self.func_by_str = func_by_str
         self.func_by_kdata = func_by_kdata  # MyPy needs Dict
@@ -1097,8 +1095,15 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        self.func_by_kdata = self.form_conway_func_by_kdata()
-        self.func_by_str = self.form_conway_func_by_keycaps()
+        func_by_kdata = self.form_conway_func_by_kdata()
+
+        assert func_by_kdata[b"\x1bO" b"Q"] == self.do_kdata_fn_f2
+        func_by_kdata[b"\x1bO" b"Q"] = self.restart_conway_life
+
+        self.func_by_kdata = func_by_kdata
+
+        func_by_str = self.form_conway_func_by_keycaps()
+        self.func_by_str = func_by_str
 
         try:
             self.play_conway_life()
@@ -1163,6 +1168,8 @@ class ScreenEditor:
 
         # XShVerb F1
 
+        # FIXME: Adopt "Keyboard Shortcuts" over "Bindings"
+
         # FIXME: toggle emulations on/off
         # FIXME: toggle tracing input on/off
         # FIXME: show loss of \e7 memory because of emulations
@@ -1172,6 +1179,10 @@ class ScreenEditor:
     #
     # Play Conway's Game-of-Life
     #
+
+    # FIXME: FIXME: Hide the Conway Cursor?
+    # FIXME: FIXME: Discover the same drawing but translated to new Y X or
+    # FIXME: FIXME: Stop the Infinite Recursive Inception of Conway inside Conway inside ...
 
     def play_conway_life(self) -> None:
         """Play Conway's Game-of-Life"""
@@ -1187,11 +1198,31 @@ class ScreenEditor:
         self.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
         self.print()
 
-        # FIXME: FIXME: Hide the Conway Cursor?
+        self.restart_conway_life()
 
-        # Default to the most famous Life Glider
+        # Default to Replacing, not Inserting
+
+        tbp = TerminalBytePacket()
+        self.do_replacing_start(tbp)
+
+        # Walk one step after another
+
+        while True:
+            try:
+                self.read_eval_print_once()
+            except SystemExit:
+                break
+
+        # Say Goodbye
+
+        self.print()
+        self.print("Goodbye from Conway's Game-of-Life")
+
+    def restart_conway_life(self, tbp: TerminalBytePacket | None = None) -> None:
+        """Start again, with the most famous Conway Life Glider"""
 
         (y0, x0) = self.yx_board_place(dy=-3, dx=-6)
+        # (y0, x0) = (9, 1)  # last wins
 
         self.yx_board = (y0, x0)
         self.yx_puck = (y0, x0)
@@ -1205,27 +1236,6 @@ class ScreenEditor:
         self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
 
         self._leap_conway_between_half_steps_()
-
-        # Default to Replacing, not Inserting
-
-        tbp = TerminalBytePacket()
-        self.do_replacing_start(tbp)
-
-        # Walk one step after another
-
-        self.func_by_kdata = self.form_conway_func_by_kdata()
-        self.func_by_str = self.form_conway_func_by_keycaps()
-
-        while True:
-            try:
-                self.read_eval_print_once()
-            except SystemExit:
-                break
-
-        # Say Goodbye
-
-        self.print()
-        self.print("Goodbye from Conway's Game-of-Life")
 
     def yx_board_place(self, dy: int, dx: int) -> tuple[int, int]:
         """Leap to our main Center of our Screen Panel"""
@@ -1262,15 +1272,8 @@ class ScreenEditor:
     def do_conway_8x_redo(self, tbp: TerminalBytePacket) -> None:
         """Step the Game of Life forward at 8X Speed"""
 
-        speed = self.speed
-
         for _ in range(8):
-            if speed in (-1, 1):
-                self._do_conway_half_step_()
-            else:
-                assert speed == 2, (speed,)
-                self._do_conway_half_step_()  # once
-                self._do_conway_half_step_()  # twice
+            self._do_conway_half_step_()
 
         self._leap_conway_between_half_steps_()
 
@@ -1280,8 +1283,6 @@ class ScreenEditor:
         """Step the Game of Life forward by 1 Full Step"""
 
         steps = self.steps
-
-        self.speed = 2
 
         if (steps % 2) == 0:  # if halfway
             self._do_conway_half_step_()  # out-of-phase
@@ -1295,8 +1296,6 @@ class ScreenEditor:
 
     def do_conway_half_step(self, tbp: TerminalBytePacket) -> None:
         """Step the Game of Life forward by 1/2 Step"""
-
-        self.speed = 1
 
         self._do_conway_half_step_()
         self._leap_conway_between_half_steps_()
@@ -1328,7 +1327,7 @@ class ScreenEditor:
                     n = self.y_x_count_around(y, x)
 
                     if (n < 2) and (syx == "🔴"):
-                        self.conway_print_y_x_syx(y, x=x, syx="🟧")
+                        self.conway_print_y_x_syx(y, x=x, syx="🟥")
                     elif (n == 3) and (syx == "⚪"):
                         self.conway_print_y_x_syx(y, x=x, syx="⚫")
                     elif (n > 3) and (syx == "🔴"):
@@ -1338,7 +1337,7 @@ class ScreenEditor:
 
                     if syx == "⚫":
                         self.conway_print_y_x_syx(y, x=x, syx="🔴")
-                    elif syx in ("🟧", "🟥"):
+                    elif syx in ("🟥"):
                         self.conway_print_y_x_syx(y, x=x, syx="⚪")
 
     def y_x_count_around(self, y: int, x: int) -> int:
@@ -1361,7 +1360,7 @@ class ScreenEditor:
                     continue
 
                 sy1x1 = str_by_y_x[y1][x1]
-                if sy1x1 in ("🟧", "🔴", "🟥"):
+                if sy1x1 in ("🔴", "🟥"):
                     count += 1
 
         return count
@@ -1414,6 +1413,40 @@ class ScreenEditor:
         d = self.form_func_by_kdata()
 
         return d
+
+
+_ = """  # The 8 Half-Steps of a 5-Pixel Glider
+
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
+    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
+    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
+    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+"""
 
 
 # FIXME: F1 F2 F3 F4 for the different pages and pages of Help
@@ -1654,10 +1687,8 @@ class BytesTerminal:
                 kdata = tbp.to_bytes()
                 if not extras:
                     if kdata == b"\x1bO":  # ⎋⇧O for Vim
-                        if not self.kbhit(
-                            timeout=0.333
-                        ):  # rejects slow SS3 b"\x1bO" "P" of Fn F1..F4
-                            break
+                        if not self.kbhit(timeout=0.333):
+                            break  # rejects slow SS3 b"\x1bO" "P" of Fn F1..F4
 
     def read_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
@@ -2306,10 +2337,10 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
     "\x1b" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of Fn F1..F12  # not ⌥⇧Fn  # coded with ⌃P
     "\x1b" "\x1b": "⎋⎋",  # Meta Esc  # not ⌥⎋
-    "\x1b" "\x1b" "OA": "⌃⌥↑",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧A  # gCloud Shell
-    "\x1b" "\x1b" "OB": "⌃⌥↓",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧B  # gCloud Shell
-    "\x1b" "\x1b" "OC": "⌃⌥→",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧C  # gCloud Shell
-    "\x1b" "\x1b" "OD": "⌃⌥←",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧D  # gCloud Shell
+    "\x1b" "\x1bO" "A": "⌃⌥↑",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧A  # gCloud Shell
+    "\x1b" "\x1bO" "B": "⌃⌥↓",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧B  # gCloud Shell
+    "\x1b" "\x1bO" "C": "⌃⌥→",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧C  # gCloud Shell
+    "\x1b" "\x1bO" "D": "⌃⌥←",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧D  # gCloud Shell
     "\x1b" "\x1b" "[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
     "\x1b" "\x1b" "[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
     "\x1b" "\x1b" "[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
@@ -2317,10 +2348,10 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "\x1b" "[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
     "\x1b" "\x1b" "[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
     "\x1b" "\x28": "⎋FnDelete",  # not ⌥FnDelete
-    "\x1b" "OP": "F1",  # ESC 04/15 Single-Shift Three (SS3)  # SS3 ⇧P
-    "\x1b" "OQ": "F2",  # SS3 ⇧Q
-    "\x1b" "OR": "F3",  # SS3 ⇧R
-    "\x1b" "OS": "F4",  # SS3 ⇧S
+    "\x1bO" "P": "F1",  # ESC 04/15 Single-Shift Three (SS3)  # SS3 ⇧P
+    "\x1bO" "Q": "F2",  # SS3 ⇧Q
+    "\x1bO" "R": "F3",  # SS3 ⇧R
+    "\x1bO" "S": "F4",  # SS3 ⇧S
     "\x1b" "[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
     "\x1b" "[" "17~": "F6",  # ⌥F1  # ⎋F1
     "\x1b" "[" "18~": "F7",  # ⌥F2  # ⎋F2
