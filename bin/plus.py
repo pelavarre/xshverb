@@ -232,7 +232,7 @@ DEL = "\x7f"  # 00/7F Delete [Control Character]  # aka ⌃?
 PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
 
-# FIXME: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
+# todo2: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
 
 
 class ScreenEditor:
@@ -365,9 +365,9 @@ class ScreenEditor:
 
         return dict()
 
-        # FIXME: bind Keyboard Chord Sequences, no longer just Keyboard Chords
-        # FIXME: FIXME: FIXME: bind Keycaps in place of Keyboard Encodings where possible
-        # FIXME: FIXME: FIXME: bind Keycaps separately to Funcs of 1 Arg or 0 Args
+        # todo2: bind Keyboard Chord Sequences, no longer just Keyboard Chords
+        # todo5: bind Keycaps in place of Keyboard Encodings where possible
+        # todo5: bind Keycaps separately to Funcs of 1 Arg or 0 Args
 
     def form_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
         """Bind Keyboard Encodings to Funcs"""
@@ -391,20 +391,20 @@ class ScreenEditor:
             b"\x10": self.do_row_up,  # ⌃P
             b"\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
             b"\x16": self.do_quote_one_kdata,  # ⌃V for Vim
-            # FIXME: ⌃X⌃C ⌃X⌃S for Emacs
+            # todo2: ⌃X⌃C ⌃X⌃S for Emacs
             b"\x1b" b"$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
             #
             b"\x1b" b"0": self.do_column_leap_leftmost,  # ⎋0 for Vim
             b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
             b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
-            # FIXME: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
+            # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
             b"\x1b" b"A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
             b"\x1b" b"C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
             # b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
             b"\x1b" b"D": self.do_row_tail_erase,  # Vim ⇧D
             b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
-            # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # FIXME: Delete Row if at 1st Column
+            # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
             b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
             b"\x1b" b"L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
             # b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑ (RI)
@@ -414,7 +414,7 @@ class ScreenEditor:
             b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
             b"\x1b" b"S": self.do_row_delete_start_inserting,  # ⎋S for Vim
             b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
-            # FIXME: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
+            # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
             b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (ICF_RIS)
@@ -440,20 +440,18 @@ class ScreenEditor:
             b"\x1bO" b"Q": self.do_kdata_fn_f2,  # Fn F2
             b"\x1b" b"[" b"20~": self.do_kdata_fn_f9,  # Fn F9
             #
-            b"\x7f": self.do_char_delete_left,  # ⌃? Delete  # FIXME: Delete Row if at 1st Column
+            b"\x7f": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
         }
 
         return func_by_kdata
 
-        # FIXME: ⌃U for Emacs
-        # FIXME: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
-        # FIXME: bind ⎋0 etc to Vi Meanings - but don't get stuck inside ⎋-Lock
+        # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
 
-        # FIXME: bind ⌃C ⇧O for Emacs overwrite-mode, or something
+        # todo2: bind ⌃C ⇧O for Emacs overwrite-mode, or something
 
-        # FIXME: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
+        # todo2: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
 
-        # FIXME: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
+        # todo2: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
 
     #
     # Loop Keyboard back to Screen, but as whole Packets, & with some emulations
@@ -482,8 +480,8 @@ class ScreenEditor:
 
         # Reply to each Keyboard Chord Input, till quit
 
-        # FIXME: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
-        # FIXME: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
+        # todo2: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
+        # todo2: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
 
         t0 = time.time()
         (tbp, n) = self.read_some_byte_packets()
@@ -502,9 +500,9 @@ class ScreenEditor:
         if kdata == b"\x04":  # ⌃D
             raise SystemExit()
 
-        # FIXME: FIXME: Shadow Terminal with default Replacing
-        # FIXME: Read Str not Bytes from Keyboard, and then List[Str]
-        # FIXME: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
+        # todo5: Shadow Terminal with default Replacing
+        # todo2: Read Str not Bytes from Keyboard, and then List[Str]
+        # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
     def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
@@ -563,7 +561,7 @@ class ScreenEditor:
 
             return
 
-            # FIXME: stop wrongly passing through multibyte Control Characters
+            # todo2: stop wrongly passing through multibyte Control Characters
 
         # Pass-Through, or emulate, the famous Control Byte Sequences
 
@@ -684,7 +682,7 @@ class ScreenEditor:
         # gCloud Shell needs ⎋[1D for ⎋[D
 
     def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧} cols-insert"""  # FIXME: FIXME: #
+        """Emulate ⎋['⇧} cols-insert"""  # todo5: #
 
         if (tbp.back + tbp.tail) != b"'}":
             return False
@@ -695,7 +693,7 @@ class ScreenEditor:
         return True
 
     def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧~ cols-delete"""  # FIXME: FIXME: #
+        """Emulate ⎋['⇧~ cols-delete"""  # todo5: #
 
         if (tbp.back + tbp.tail) != b"'~":
             return False
@@ -828,7 +826,7 @@ class ScreenEditor:
 
         # Vim R
 
-        # FIXME: FIXME: Shadow Terminal with default Replacing
+        # todo5: Shadow Terminal with default Replacing
 
     #
     # Reply to Keyboard Chords
@@ -860,8 +858,8 @@ class ScreenEditor:
 
         # Vim A = Vim L I
 
-        # FIXME: FIXME: FIXME: Vim I ⌃O
-        # FIXME: FIXME: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
+        # todo5: Vim I ⌃O
+        # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
 
     def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character beneath the Cursor"""
@@ -907,7 +905,7 @@ class ScreenEditor:
 
         # Emacs Delete  # Vim ⇧X
 
-        # FIXME: Show .do_char_delete_left bouncing off the Left Edge
+        # todo2: Show .do_char_delete_left bouncing off the Left Edge
 
     def do_column_leap_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column"""
@@ -924,7 +922,7 @@ class ScreenEditor:
         assert PN_MAX_32100 == 32100
         self.write("\x1b[" "32100" "C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
 
-        # FIXME: FIXME: Leap to Rightmost Shadow, if Row Shadowed
+        # todo3: Leap to Rightmost Shadow, if Row Shadowed
 
         # Emacs ⌃E  # Vim ⇧$
 
@@ -944,7 +942,7 @@ class ScreenEditor:
 
         # Vim I
 
-        # FIXME: Show Inserting while Inserting
+        # todo2: Show Inserting while Inserting
 
     def do_replacing_start(self, tbp: TerminalBytePacket) -> None:
         """Start Replacing Characters at the Cursor"""
@@ -954,7 +952,7 @@ class ScreenEditor:
 
         # Vim ⇧R
 
-        # FIXME: Show Replacing while Replacing
+        # todo2: Show Replacing while Replacing
 
     def do_row_delete_start_inserting(self, tbp: TerminalBytePacket) -> None:
         """Empty the Row beneath the Cursor, and Start Inserting"""
@@ -1007,7 +1005,7 @@ class ScreenEditor:
 
         # Vim ⇧H
 
-        # FIXME: FIXME: Leap to First Shadow Row, if Column Shadowed
+        # todo3: Leap to First Shadow Row, if Column Shadowed
 
     def do_row_leap_last_column_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column of the Last Row"""
@@ -1016,7 +1014,7 @@ class ScreenEditor:
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
         self.write("\x1b[" "32100" "H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
 
-        # FIXME: FIXME: Leap to Last Shadow Row, if Column Shadowed
+        # todo3: Leap to Last Shadow Row, if Column Shadowed
 
         # Vim ⇧L
 
@@ -1092,7 +1090,7 @@ class ScreenEditor:
         # Default to Inserting, not Replacing
 
         tbp = TerminalBytePacket()
-        self.do_replacing_start(tbp)  # FIXME: restore Replacing/ Inserting after ConwayLife
+        self.do_replacing_start(tbp)  # todo5: restore Replacing/ Inserting after ConwayLife
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
@@ -1115,7 +1113,7 @@ class ScreenEditor:
         # Default to Replacing, not Inserting
 
         tbp = TerminalBytePacket()
-        self.do_inserting_start(tbp)  # FIXME: restore Replacing/ Inserting after ConwayLife
+        self.do_inserting_start(tbp)  # todo5: restore Replacing/ Inserting after ConwayLife
 
     def do_kdata_fn_f9(self, tbp: TerminalBytePacket, /) -> None:
         """Print the many Lines of Screen Writer Help for F9"""
@@ -1137,7 +1135,7 @@ class ScreenEditor:
             self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
             self.print()
 
-            # FIXME: FIXME: emulate ⎋[⇧T Rows-Down and ⎋[⇧S Rows-Up at gCloud Shell
+            # todo5: emulate ⎋[⇧T Rows-Down and ⎋[⇧S Rows-Up at gCloud Shell
 
             # self.print("gCloud Shell ignores ⎋[⇧T Rows-Down (but accepts ⎋[⇧L)")
             # self.print("gCloud Shell ignores ⎋[⇧S Rows-Up (but accepts ⌃J)")
@@ -1148,7 +1146,7 @@ class ScreenEditor:
             # gCloud Shell has ⌃⌥ ← ↑ → ↓
             # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as Esc Xms Esc
 
-            # gCloud AltIsMeta has FIXME
+            # gCloud AltIsMeta has todo2:
 
         if sys_platform_darwin:
             self.print()
@@ -1169,23 +1167,23 @@ class ScreenEditor:
 
         # XShVerb F1
 
-        # FIXME: Adopt "Keyboard Shortcuts" over "Bindings"
+        # todo2: Adopt "Keyboard Shortcuts" over "Bindings"
 
-        # FIXME: toggle emulations on/off
-        # FIXME: toggle tracing input on/off
-        # FIXME: show loss of \e7 memory because of emulations
+        # todo2: toggle emulations on/off
+        # todo2: toggle tracing input on/off
+        # todo2: show loss of \e7 memory because of emulations
 
-        # FIXME: accept lots of quits and movements as per Vim ⌃O & Emacs
+        # todo2: accept lots of quits and movements as per Vim ⌃O & Emacs
 
     #
     # Play Conway's Game-of-Life
     #
 
-    # FIXME: FIXME: Layer below to do the Screen Shadowing. Each Y X gets a List Str
-    # FIXME: FIXME: Last Item of List Str is the Text written after the Controls
+    # todo5: Layer below to do the Screen Shadowing. Each Y X gets a List Str
+    # todo5: Last Item of List Str is the Text written after the Controls
 
-    # FIXME: FIXME: Hide the Conway Cursor?
-    # FIXME: FIXME: Discover the same drawing but translated to new Y X or new Rotation
+    # todo3: Hide the Conway Cursor?
+    # todo3: Discover the same drawing but translated to new Y X or new Rotation
 
     def play_conway_life(self) -> None:
         """Play Conway's Game-of-Life"""
@@ -1427,10 +1425,10 @@ class ScreenEditor:
             "Spacebar": self.do_conway_half_step,
             "⌃Spacebar": self.do_conway_full_step,
             # "⌥Spacebar": self.do_conway_undo,
-            # "+": self.do_conway_older,  # FIXME: FIXME: FIXME:
-            # "-": self.do_conway_younger,  # FIXME: FIXME: FIXME:
-            # "MousePress": self.do_conway_pass,  # FIXME: FIXME: FIXME:
-            # "MouseRelease": self.do_conway_leap_here,  # FIXME: FIXME: FIXME:
+            # "+": self.do_conway_older,  # todo4:
+            # "-": self.do_conway_younger,  # todo4:
+            # "MousePress": self.do_conway_pass,  # todo4:
+            # "MouseRelease": self.do_conway_leap_here,  # todo4:
         }
 
         return func_by_str
@@ -1479,12 +1477,11 @@ _ = """  # The 8 Half-Steps of a 5-Pixel Glider
 """
 
 
-# FIXME: F1 F2 F3 F4 for the different pages and pages of Help
-# FIXME: Put a Menu of Games at F1, but first move Screen_Writer_Help to F2
+# todo2: F1 F2 F3 F4 for the different pages and pages of Help
 
-# FIXME: elapsed time logs into k.keyboard and s.screen for record/replay
+# todo2: elapsed time logs into k.keyboard and s.screen for record/replay
 
-# FIXME: Vim C0 C⇧$ D0 D⇧$ . . . Yea, sample Y X before/ after and do it
+# todo2: Vim C0 C⇧$ D0 D⇧$ . . . Yea, sample Y X before/ after and do it
 
 
 # Help with famous ⎋ 7 8 C L ⇧D ⇧E ⇧M (when not taken by Vim)
@@ -1532,13 +1529,14 @@ SCREEN_WRITER_HELP = r"""
 
 """
 
-# FIXME: FIXME: FIXME: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
+# todo5: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
 
-# FIXME: FIXME: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
-# FIXME: FIXME: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
+# todo5: ⎋ ⎋[ ⎋[O are slow to close only inside ⌃V ⌃Q
+# todo3: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
+# todo3: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
 
-# FIXME: doc the Alt Screen Toggle
-# FIXME: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
+# todo5: doc the Alt Screen Toggle
+# todo2: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
 
 # ⎋[` near alias of ⎋[⇧G column-leap  # macOS
 # ⎋[F near alias of ⎋[⇧H row-column-leap
@@ -1547,9 +1545,6 @@ SCREEN_WRITER_HELP = r"""
 # ⎋[C call for reply ⎋[?1;2C  # ⎋[=C also works at macOS
 # ⎋[>C call for reply ⎋[>1;95;0C macOS or ⎋[>84;0;0C gCloud Shell
 # ⎋[X call for reply ⎋[2;1;1;112;112;1;0X  # macOS
-
-
-# FIXME: help for Emacs, help for Vim
 
 
 #
