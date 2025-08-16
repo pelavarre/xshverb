@@ -1067,8 +1067,17 @@ class ScreenEditor:
 
         self.print()
         self.print("Hello from Conway's Game-of-Life")
+        self.print()
+        self.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
+        self.print("+ - to make a Cell older or younger")
+        self.print("Spacebar to step, ⌃Spacebar to step twice, ⌥← to undo")
+        self.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
+        self.print()
 
         # Default to the most famous Life Glider  # FIXME: FIXME: FIXME:
+
+        # height = bt.read_height()
+        # middle = (height // 2) + (height % 2)
 
         # go to the middle
         # lay down + - +, - + +, - + -
@@ -1175,13 +1184,15 @@ class ScreenEditor:
 
         func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = {
             "⌃D": self.do_raise_system_exit,
-            # "Tab": self.do_conway_eight_half_steps,
+            # Tab": self.do_conway_8x_redo,
+            # ⇧Tab": self.do_conway_8x_undo,
             # "Spacebar": self.do_conway_half_step,
             # "⌃Spacebar": self.do_conway_full_step,
-            # "+": self.do_conway_plus,
-            # "-": self.do_conway_minus,
-            # "MousePress": self.do_conway_mouse_press,
-            # "MouseRelease": self.do_conway_mouse_release,
+            # "⌥Spacebar": self.do_conway_undo,
+            # "+": self.do_conway_older,
+            # "-": self.do_conway_younger,
+            # "MousePress": self.do_conway_pass,
+            # "MouseRelease": self.do_conway_leap_here,
         }
 
         return func_by_str
@@ -2090,8 +2101,10 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "\x1b" "OC": "⌃⌥→",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧C  # gCloud Shell
     "\x1b" "\x1b" "OD": "⌃⌥←",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧D  # gCloud Shell
     "\x1b" "\x1b" "[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
-    "\x1b" "\x1b" "[" "A": "⎋↑",  # CSI 04/01 Cursor Up (CUU)  # not ⌥↑
-    "\x1b" "\x1b" "[" "B": "⎋↓",  # CSI 04/02 Cursor Down (CUD)  # not ⌥↓
+    "\x1b" "\x1b" "[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
+    "\x1b" "\x1b" "[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
+    "\x1b" "\x1b" "[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # gCloud Shell
+    "\x1b" "\x1b" "[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
     "\x1b" "\x1b" "[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
     "\x1b" "\x28": "⎋FnDelete",  # not ⌥FnDelete
     "\x1b" "OP": "F1",  # ESC 04/15 Single-Shift Three (SS3)  # SS3 ⇧P
@@ -2102,8 +2115,8 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "[" "17~": "F6",  # ⌥F1  # ⎋F1
     "\x1b" "[" "18~": "F7",  # ⌥F2  # ⎋F2
     "\x1b" "[" "19~": "F8",  # ⌥F3  # ⎋F3
-    "\x1b" "[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2
-    "\x1b" "[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2
+    "\x1b" "[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # macOS
+    "\x1b" "[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # macOS
     "\x1b" "[" "20~": "F9",  # ⌥F4  # ⎋F4
     "\x1b" "[" "21~": "F10",  # ⌥F5  # ⎋F5
     "\x1b" "[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
@@ -2121,15 +2134,15 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "[" "3~": "FnDelete",
     "\x1b" "[" "5~": "⇧Fn↑",  # macOS
     "\x1b" "[" "6~": "⇧Fn↓",  # macOS
-    "\x1b" "[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)
-    "\x1b" "[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)
-    "\x1b" "[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)
-    "\x1b" "[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)
+    "\x1b" "[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ macOS
+    "\x1b" "[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ macOS
+    "\x1b" "[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ macOS
+    "\x1b" "[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← macOS
     "\x1b" "[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
     "\x1b" "[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
     "\x1b" "[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
-    "\x1b" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word
-    "\x1b" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word
+    "\x1b" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # macOS
+    "\x1b" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # macOS
     "\x20": "Spacebar",  # ' ' ␠ ␣ ␢
     "\x7f": "Delete",  # ␡ ⌫ ⌦
     "\xa0": "⌥Spacebar",  # '\N{No-Break Space}'
