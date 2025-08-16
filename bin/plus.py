@@ -1304,17 +1304,17 @@ class ScreenEditor:
                     n = self.y_x_count_around(y, x)
 
                     if (n < 2) and (syx == "🔴"):
-                        self.conway_print_y_x_syx(y, x=x, syx="🟥")
+                        self.conway_print_y_x_syx(y, x=x, syx="🟠")
                     elif (n == 3) and (syx == "⚪"):
-                        self.conway_print_y_x_syx(y, x=x, syx="⬛")
+                        self.conway_print_y_x_syx(y, x=x, syx="⚫")
                     elif (n > 3) and (syx == "🔴"):
                         self.conway_print_y_x_syx(y, x=x, syx="🟥")
 
                 else:
 
-                    if syx == "⬛":
+                    if syx == "⚫":
                         self.conway_print_y_x_syx(y, x=x, syx="🔴")
-                    elif syx == "🟥":
+                    elif syx in ("🟠", "🟥"):
                         self.conway_print_y_x_syx(y, x=x, syx="⚪")
 
     def y_x_count_around(self, y: int, x: int) -> int:
@@ -1337,7 +1337,7 @@ class ScreenEditor:
                     continue
 
                 sy1x1 = str_by_y_x[y1][x1]
-                if sy1x1 in ("🔴", "🟥"):
+                if sy1x1 in ("🟠", "🔴", "🟥"):
                     count += 1
 
         return count
