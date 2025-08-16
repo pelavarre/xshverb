@@ -153,21 +153,7 @@ def try_screen_editor() -> None:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
     with ScreenEditor() as se:
-
-        se.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
-
-        # Default to Inserting, not Replacing
-
-        tbp = TerminalBytePacket()
-        se.do_inserting_start(tbp)
-
-        # Walk one step after another
-
-        while True:
-            try:
-                se.read_eval_print_once()
-            except SystemExit:
-                break
+        se.play_screen_editor()
 
 
 def try_read_byte_packet() -> None:
@@ -257,6 +243,11 @@ class ScreenEditor:
     bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
 
+    yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
+    yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
+    str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
+    steps: int  # counts steps taken
+
     func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
     func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
 
@@ -283,9 +274,15 @@ class ScreenEditor:
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
         self.bytes_terminal = bt
+        self.arrows = arrows
+
+        self.yx_board = (-1, -1)
+        self.yx_puck = (-1, -1)
+        self.str_by_y_x = dict()
+        self.steps = -1
+
         self.func_by_str = func_by_str
         self.func_by_kdata = func_by_kdata  # MyPy needs Dict
-        self.arrows = arrows
 
     def __enter__(self) -> ScreenEditor:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -458,8 +455,26 @@ class ScreenEditor:
         # FIXME: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
 
     #
+    # Loop Keyboard back to Screen, but as whole Packets, & with some emulations
     #
-    #
+
+    def play_screen_editor(self) -> None:
+        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+        self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
+
+        # Default to Inserting, not Replacing
+
+        tbp = TerminalBytePacket()
+        self.do_inserting_start(tbp)
+
+        # Walk one step after another
+
+        while True:
+            try:
+                self.read_eval_print_once()
+            except SystemExit:
+                break
 
     def read_eval_print_once(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
@@ -494,6 +509,7 @@ class ScreenEditor:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
 
         func_by_kdata = self.func_by_kdata
+        func_by_str = self.func_by_str
         klog = self.keyboard_bytes_log
 
         # Append to our __pycache__/k.keyboard Keylogger Keylogging File
@@ -503,12 +519,23 @@ class ScreenEditor:
 
         klog.write(kdata)
 
-        # Call 1 Func Def
+        # Call 1 Func Def by Keycaps
+
+        kcaps = kdata_to_kcaps(kdata)
+
+        if kcaps in func_by_str.keys():
+            func = func_by_str[kcaps]
+            tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
+
+            func(tbp)  # may raise SystemExit
+
+            return
+
+        # Call 1 Func Def by Keyboard Encoding
 
         if kdata in func_by_kdata.keys():
             func = func_by_kdata[kdata]
-            # tprint(f"{func.__qualname__=}  # reply_to_kdata")
-            tprint(f"{func.__name__=}  # reply_to_kdata")
+            tprint(f"{func.__name__=}  # func_by_kdata reply_to_kdata")  # not .__qualname__
 
             func(tbp)  # may raise SystemExit
 
@@ -522,7 +549,6 @@ class ScreenEditor:
 
             if tbp.tail != b"H":  # falls-through to pass-through ⎋[⇧H CUP_Y_X
 
-                kcaps = kdata_to_kcaps(kdata)
                 self.print(kcaps, end=" ")
 
                 return
@@ -548,7 +574,6 @@ class ScreenEditor:
 
         tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
 
-        kcaps = kdata_to_kcaps(kdata)
         self.print(kcaps, end=" ")
 
     def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
@@ -1000,10 +1025,10 @@ class ScreenEditor:
         bt = self.bytes_terminal
 
         height = bt.read_height()
-        middle = (height // 2) + (height % 2)
+        mid_height = (height // 2) + (height % 2)
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write(f"\x1b[{middle}" "H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
+        self.write(f"\x1b[{mid_height}" "H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
 
         # Vim ⇧M
 
@@ -1032,7 +1057,7 @@ class ScreenEditor:
         # Emacs ⌃P
 
     #
-    #
+    # Reply to F1 F2 F9 ...
     #
 
     def do_kdata_fn_f1(self, tbp: TerminalBytePacket, /) -> None:
@@ -1063,55 +1088,26 @@ class ScreenEditor:
         func_by_kdata = self.func_by_kdata
         func_by_str = self.form_conway_func_by_keycaps()
 
-        # Say Hello
-
-        self.print()
-        self.print("Hello from Conway's Game-of-Life")
-        self.print()
-        self.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
-        self.print("+ - to make a Cell older or younger")
-        self.print("Spacebar to step, ⌃Spacebar to step twice, ⌥← to undo")
-        self.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
-        self.print()
-
-        # Default to the most famous Life Glider  # FIXME: FIXME: FIXME:
-
-        # height = bt.read_height()
-        # middle = (height // 2) + (height % 2)
-
-        # go to the middle
-        # lay down + - +, - + +, - + -
-
-        # Default to Replacing, not Inserting
+        # Default to Inserting, not Replacing
 
         tbp = TerminalBytePacket()
-        self.do_replacing_start(tbp)
+        self.do_replacing_start(tbp)  # FIXME: restore Replacing/ Inserting after ConwayLife
 
-        # Walk one step after another
+        # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
         self.func_by_kdata = self.form_conway_func_by_kdata()
         self.func_by_str = self.form_conway_func_by_keycaps()
 
         try:
-
-            while True:
-                try:
-                    self.read_eval_print_once()
-                except SystemExit:
-                    break
-
+            self.play_conway_life()
         finally:
             self.func_by_kdata = func_by_kdata  # replaces
             self.func_by_str = func_by_str  # replaces
 
-        # Default to Inserting, not Replacing
+        # Default to Replacing, not Inserting
 
         tbp = TerminalBytePacket()
         self.do_inserting_start(tbp)  # FIXME: restore Replacing/ Inserting after ConwayLife
-
-        # Say Goodbye
-
-        self.print("Goodbye from Conway's Game-of-Life")
 
     def do_kdata_fn_f9(self, tbp: TerminalBytePacket, /) -> None:
         """Print the many Lines of Screen Writer Help for F9"""
@@ -1175,9 +1171,198 @@ class ScreenEditor:
     # Play Conway's Game-of-Life
     #
 
-    #
-    # Bind Keycaps to Funcs
-    #
+    def play_conway_life(self) -> None:
+        """Play Conway's Game-of-Life"""
+
+        # Say Hello
+
+        self.print()
+        self.print("Hello from Conway's Game-of-Life")
+        self.print()
+        self.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
+        self.print("+ - to make a Cell older or younger")
+        self.print("Spacebar to step, ⌃Spacebar to step twice, ⌥← to undo")
+        self.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
+        self.print()
+
+        # FIXME: FIXME: FIXME: Hide the Cursor
+
+        # Default to the most famous Life Glider
+
+        (y0, x0) = self.yx_board_place(dy=-3, dx=-6)
+
+        self.yx_board = (y0, x0)
+        self.yx_puck = (y0, x0)
+
+        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
+        self.conway_print_some("⚪🔴⚪🔴⚪⚪⚪")
+        self.conway_print_some("⚪⚪🔴🔴⚪⚪⚪")
+        self.conway_print_some("⚪⚪🔴⚪⚪⚪⚪")
+        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
+        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
+        self.conway_print_some("⚪⚪⚪⚪⚪⚪⚪")
+
+        self._leap_conway_between_half_steps_()
+
+        # Default to Replacing, not Inserting
+
+        tbp = TerminalBytePacket()
+        self.do_replacing_start(tbp)
+
+        # Walk one step after another
+
+        self.func_by_kdata = self.form_conway_func_by_kdata()
+        self.func_by_str = self.form_conway_func_by_keycaps()
+
+        while True:
+            try:
+                self.read_eval_print_once()
+            except SystemExit:
+                break
+
+        # Say Goodbye
+
+        self.print()
+        self.print("Goodbye from Conway's Game-of-Life")
+
+    def yx_board_place(self, dy: int, dx: int) -> tuple[int, int]:
+        """Leap to our main Center of our Screen Panel"""
+
+        bt = self.bytes_terminal
+
+        height = bt.read_height()
+        width = bt.read_width()
+
+        mid_height = (height // 2) + (height % 2)
+        mid_width = (width // 2) + (width % 2)
+
+        yx_board = (mid_height + dy, mid_width + dx)
+
+        return yx_board
+
+    def conway_print_some(self, s: str) -> None:
+        """Print each Character"""
+
+        (y0, x0) = self.yx_puck
+
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        self.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
+
+        (y, x) = (y0, x0)
+        for syx in s:
+            self.conway_print_y_x_syx(y, x=x, syx=syx)
+            x += 2
+
+        y1 = y0 + 1
+        x1 = x0
+        self.yx_puck = (y1, x1)
+
+    def do_conway_full_step(self, tbp: TerminalBytePacket) -> None:
+        """Step the Game of Life forward by 1 Full Step"""
+
+        steps = self.steps
+        if (steps % 2) == 0:  # if halfway
+            self._do_conway_half_step_(tbp)  # out-of-phase
+
+        self._do_conway_half_step_(tbp)  # once
+        self._do_conway_half_step_(tbp)  # twice
+
+        self._leap_conway_between_half_steps_()
+
+        # ⌃Spacebar
+
+    def do_conway_half_step(self, tbp: TerminalBytePacket) -> None:
+        """Step the Game of Life forward by 1/2 Step"""
+
+        self._do_conway_half_step_(tbp)
+        self._leap_conway_between_half_steps_()
+
+        # Spacebar
+
+    def _leap_conway_between_half_steps_(self) -> None:
+        """Place the Puck between Half-Step's"""
+
+        (y0, x0) = self.yx_board_place(dy=0, dx=0)
+
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        self.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
+
+    def _do_conway_half_step_(self, tbp: TerminalBytePacket) -> None:
+        """Step the Game of Life forward by 1/2 Step"""
+
+        str_by_y_x = self.str_by_y_x
+        steps = self.steps
+
+        steps += 1
+        self.steps = steps
+
+        for y in str_by_y_x.keys():
+            for x in str_by_y_x[y].keys():
+                syx = str_by_y_x[y][x]
+
+                if steps % 2 == 0:
+                    n = self.y_x_count_around(y, x)
+
+                    if (n < 2) and (syx == "🔴"):
+                        self.conway_print_y_x_syx(y, x=x, syx="🟥")
+                    elif (n == 3) and (syx == "⚪"):
+                        self.conway_print_y_x_syx(y, x=x, syx="⬛")
+                    elif (n > 3) and (syx == "🔴"):
+                        self.conway_print_y_x_syx(y, x=x, syx="🟥")
+
+                else:
+
+                    if syx == "⬛":
+                        self.conway_print_y_x_syx(y, x=x, syx="🔴")
+                    elif syx == "🟥":
+                        self.conway_print_y_x_syx(y, x=x, syx="⚪")
+
+    def y_x_count_around(self, y: int, x: int) -> int:
+        """Count the Neighbors of a Cell"""
+
+        str_by_y_x = self.str_by_y_x
+
+        count = 0
+
+        for dy in range(-1, 2):
+            for dx in range(-2, 4, 2):
+                if dy == 0 and dx == 0:
+                    continue
+
+                y1 = y + dy
+                x1 = x + dx
+                if y1 not in str_by_y_x.keys():
+                    continue
+                if x1 not in str_by_y_x[y1].keys():
+                    continue
+
+                sy1x1 = str_by_y_x[y1][x1]
+                if sy1x1 in ("🔴", "🟥"):
+                    count += 1
+
+        return count
+
+    def conway_print_y_x_syx(self, y: int, x: int, syx: str) -> None:
+        """Print each Character"""
+
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        self.write(f"\x1b[{y};{x}H")  # for .conway_print_some
+
+        self.write(syx)
+        self.shadow_y_x_syx(y, x=x, syx=syx)
+        x += 2
+
+        self.yx_puck = (y, x)
+
+    def shadow_y_x_syx(self, y: int, x: int, syx: str) -> None:
+        """Shadow the Screen Panel"""
+
+        str_by_y_x = self.str_by_y_x
+
+        if y not in str_by_y_x.keys():
+            str_by_y_x[y] = dict()
+
+        str_by_y_x[y][x] = syx
 
     def form_conway_func_by_keycaps(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
         "Bind Keycaps to Funcs"
@@ -1186,8 +1371,8 @@ class ScreenEditor:
             "⌃D": self.do_raise_system_exit,
             # Tab": self.do_conway_8x_redo,
             # ⇧Tab": self.do_conway_8x_undo,
-            # "Spacebar": self.do_conway_half_step,
-            # "⌃Spacebar": self.do_conway_full_step,
+            "Spacebar": self.do_conway_half_step,
+            "⌃Spacebar": self.do_conway_full_step,
             # "⌥Spacebar": self.do_conway_undo,
             # "+": self.do_conway_older,
             # "-": self.do_conway_younger,
@@ -1202,7 +1387,9 @@ class ScreenEditor:
     def form_conway_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
         """Bind Keyboard Encodings to Funcs"""
 
-        return dict()
+        d = self.form_func_by_kdata()
+
+        return d
 
 
 # FIXME: F1 F2 F3 F4 for the different pages and pages of Help
