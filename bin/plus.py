@@ -243,9 +243,9 @@ class ScreenEditor:
     bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
 
+    str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
     yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
-    str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     steps: int  # counts steps, after -1
 
     func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
@@ -787,7 +787,7 @@ class ScreenEditor:
 
         return (tbp, n)
 
-        # todo: log & echo the Bytes as they arrive
+        # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
 
     def do_write_cr_lf(self, tbp: TerminalBytePacket) -> None:
         """Write CR LF"""
@@ -1181,9 +1181,11 @@ class ScreenEditor:
     # Play Conway's Game-of-Life
     #
 
+    # FIXME: FIXME: Layer below to do the Screen Shadowing. Each Y X gets a List Str
+    # FIXME: FIXME: Last Item of List Str is the Text written after the Controls
+
     # FIXME: FIXME: Hide the Conway Cursor?
-    # FIXME: FIXME: Discover the same drawing but translated to new Y X or
-    # FIXME: FIXME: Stop the Infinite Recursive Inception of Conway inside Conway inside ...
+    # FIXME: FIXME: Discover the same drawing but translated to new Y X or new Rotation
 
     def play_conway_life(self) -> None:
         """Play Conway's Game-of-Life"""
@@ -1661,7 +1663,7 @@ class BytesTerminal:
 
         fileno = self.fileno
         stdio = self.stdio
-        assert self.tcgetattr, self.tcgetattr  # todo: kbhit can say readline won't block
+        assert self.tcgetattr, self.tcgetattr
 
         stdio.flush()  # for .kbhit of BytesTerminal
 
@@ -1761,7 +1763,7 @@ class BytesTerminal:
         assert CPR_Y_X_REGEX == r"\x1b\[([0-9]+);([0-9]+)R"
 
         kbhit = self.kbhit(timeout=0.000)  # flushes output, then polls input
-        assert not kbhit  # todo: cope when Mouse or Paste work disrupts os.read
+        assert not kbhit  # todo: cope when Mouse or Paste or Keyboard work disrupts replies to Csi
 
         stdio.write("\x1b[6n")  # bypass Screen Logs & Screen Shadows above
         tbp = self.read_byte_packet(timeout=None)
@@ -2549,7 +2551,10 @@ def _kch_to_kcap_(ch: str) -> str:  # noqa C901
     # Show the Key Caps of US-Ascii, plus the ⌃ ⇧ Control/ Shift Key Caps
 
     elif (o < 0x20) or (o == 0x7F):  # C0 Control Bytes, or \x7F Delete (DEL)
-        s = "⌃" + chr(o ^ 0x40)  # '^ 0x40' speaks of ⌃ with one of @ A..Z [\]^_ ?
+        if o == 0x1F:  # macOS ⌃- doesn't come through as  (0x2D ^ 0x40)
+            s = "^-"  # macOS ⌃-  and ⌃⇧_ do come through as (0x5F ^ 0x40)
+        else:
+            s = "⌃" + chr(o ^ 0x40)  # '^ 0x40' mixes ⌃ into one of @ A..Z [\]^_ ?
 
         # '^ 0x40' speaks of ⌃@ but not ⌃⇧@ and not ⌃⇧2 and not ⌃Spacebar at b"\x00"
         # '^ 0x40' speaks of ⌃M but not Return at b"\x0D"
@@ -2558,8 +2563,7 @@ def _kch_to_kcap_(ch: str) -> str:  # noqa C901
 
         # ^` ^2 ^6 ^⇧~ don't work
 
-        # todo: can we more quickly decide that ⌃[ is only ⎋ by itself not continued?
-        # todo: should we push ⌃- above ⌃⇧_
+        # todo: can we quickly take ⌃[ as ⎋ by itself, not the start of a timeless ⎋[ etc?
 
     elif "A" <= ch <= "Z":  # printable Upper Case English
         s = "⇧" + chr(o)  # shifted Key Cap '⇧A' from b'A'
