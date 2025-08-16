@@ -39,6 +39,8 @@ if not __debug__:
 env_cloud_shell = os.environ.get("CLOUD_SHELL") == "true"  # Google
 sys_platform_darwin = sys.platform == "darwin"  # Apple
 
+_: object
+
 
 #
 # Exit nonzero into the Pdb-Pm Post-Mortem Debugger, when not KeyboardInterrupt nor SystemExit
@@ -198,8 +200,8 @@ IND = "\x1b" "D"  # ESC 04/04 Index (IND) = C1 Control U+0084 IND (formerly know
 NEL = "\x1b" "E"  # ESC 04/05 Next Line (NEL) = C1 Control U+0085 NEXT LINE (NEL)
 RI = "\x1b" "M"  # ESC 04/06 Reverse Index (RI) = C1 Control U+0086 REVERSE LINE FEED (RI)
 
-ICF_RIS = "\x1b" "c"  # ESC 06/03 Reset To Initial State (RIS) [an Independent Control Function]
-ICF_CUP = "\x1b" "l"  # ESC 06/12 Cursor Position (CUP) [an Independent Control Function]
+_ICF_RIS_ = "\x1b" "c"  # ESC 06/03 Reset To Initial State (RIS) [an Independent Control Function]
+_ICF_CUP_ = "\x1b" "l"  # ESC 06/12 Cursor Position (CUP) [an Independent Control Function]
 
 
 CUU_Y = "\x1b[" "{}" "A"  # CSI 04/01 Cursor Up
@@ -207,7 +209,10 @@ CUD_Y = "\x1b[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last
 CUF_X = "\x1b[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
 CUB_X = "\x1b[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
 
+CUP_Y1_X1 = "\x1b[" "H"  # CSI 04/08 Cursor Position
+CUP_Y_X1 = "\x1b[" "{}" "H"  # CSI 04/08 Cursor Position
 CUP_Y_X = "\x1b[" "{};{}" "H"  # CSI 04/08 Cursor Position
+
 CHT_X = "\x1b" "[" "{}I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
 
 EL_P = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
@@ -217,19 +222,22 @@ DCH_X = "\x1b[" "{}" "P"  # CSI 05/00 Delete Character
 
 VPA_Y = "\x1b" "[" "{}" "d"  # CSI 06/04 Line Position Absolute
 
-SM_IRM = "\x1b" "[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
-RM_IRM = "\x1b" "[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+SM_IRM = "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
+RM_IRM = "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
 
-SGR = "\x1b" "[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
+SGR = "\x1b[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
-DSR_6 = "\x1b" "[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
+DSR_6 = "\x1b[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
 CPR_Y_X_REGEX = r"\x1b\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
+
+_SM_XTERM_ALT_ = "\x1b[" "?1049h"  # show Alt Screen
+_RM_XTERM_MAIN_ = "\x1b[" "?1049l"  # show Main Screen
 
 
 DEL = "\x7f"  # 00/7F Delete [Control Character]  # aka ⌃?
 
 
-PN_MAX_32100 = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
+_PN_MAX_32100_ = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
 
 
 # todo2: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
@@ -316,10 +324,10 @@ class ScreenEditor:
         fileno = bt.fileno
 
         assert CUU_Y == "\x1b[" "{}" "A"
-        assert CUP_Y_X == "\x1b[" "{}" ";{}H"
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
         assert SGR == "\x1b[" "{}" "m"
-        assert RM_IRM == "\x1b[" "4" "l"
-        assert PN_MAX_32100 == 32100
+        assert RM_IRM == "\x1b[" "4l"
+        assert _PN_MAX_32100_ == 32100
 
         # Exit via 1st Column of 1 Row above the Last Row
 
@@ -417,8 +425,8 @@ class ScreenEditor:
             # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
-            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (ICF_RIS)
-            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (ICF_CUP)
+            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (_ICF_RIS_)
+            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
             b"\x1b" b"h": self.do_column_left,  # ⎋H for Vim
             b"\x1b" b"i": self.do_inserting_start,  # ⎋I for Vim
             b"\x1b" b"j": self.do_row_down,  # ⎋J for Vim
@@ -635,12 +643,14 @@ class ScreenEditor:
     def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
 
+        assert CUP_Y1_X1 == "\x1b[" "H"
+
         if kdata != b"\x1b" b"l":
             return False
 
         tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
 
-        self.write("\x1b[" "H")  # for ⎋L
+        self.write("\x1b[H")  # for ⎋L
 
         return True
 
@@ -650,7 +660,7 @@ class ScreenEditor:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
         assert TAB == "\t"
-        assert CHT_X == "\x1b" "[" "{}I"
+        assert CHT_X == "\x1b[" "{}" "I"
 
         if tbp.tail != b"I":
             return False
@@ -668,7 +678,7 @@ class ScreenEditor:
     def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
 
-        assert VPA_Y == "\x1b" "[" "{}" "d"
+        assert VPA_Y == "\x1b[" "{}" "d"
 
         if kdata != b"\x1b[" b"d":
             return False
@@ -919,7 +929,7 @@ class ScreenEditor:
         """Leap to the Rightmost Column"""
 
         assert CUF_X == "\x1b[" "{}" "C"
-        assert PN_MAX_32100 == 32100
+        assert _PN_MAX_32100_ == 32100
         self.write("\x1b[" "32100" "C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
 
         # todo3: Leap to Rightmost Shadow, if Row Shadowed
@@ -1000,8 +1010,8 @@ class ScreenEditor:
     def do_row_leap_first_column_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column of the First Row"""
 
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write("\x1b[" "H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        assert CUP_Y1_X1 == "\x1b[" "H"
+        self.write("\x1b[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
 
         # Vim ⇧H
 
@@ -1010,9 +1020,9 @@ class ScreenEditor:
     def do_row_leap_last_column_leftmost(self, tbp: TerminalBytePacket) -> None:
         """Leap to the Leftmost Column of the Last Row"""
 
-        assert PN_MAX_32100 == 32100
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write("\x1b[" "32100" "H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
+        assert _PN_MAX_32100_ == 32100
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+        self.write("\x1b[32100H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
 
         # todo3: Leap to Last Shadow Row, if Column Shadowed
 
@@ -1026,8 +1036,8 @@ class ScreenEditor:
         height = bt.read_height()
         mid_height = (height // 2) + (height % 2)
 
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write(f"\x1b[{mid_height}" "H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+        self.write(f"\x1b[{mid_height}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
 
         # Vim ⇧M
 
@@ -1515,6 +1525,7 @@ SCREEN_WRITER_HELP = r"""
         ⎋[⇧T rows-down  ⎋[⇧S rows-up  ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
         ⎋[4H insert  ⎋[4L replace  ⎋[6 Q bar  ⎋[4 Q skid  ⎋[ Q unstyled
+        ⎋[?1049H screen-alt  ⎋[?1049L screen-main
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
@@ -1535,7 +1546,6 @@ SCREEN_WRITER_HELP = r"""
 # todo3: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
 # todo3: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
 
-# todo5: doc the Alt Screen Toggle
 # todo2: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
 
 # ⎋[` near alias of ⎋[⇧G column-leap  # macOS
@@ -1720,7 +1730,7 @@ class BytesTerminal:
 
         fileno = self.fileno
         size = os.get_terminal_size(fileno)
-        assert 5 <= size.lines <= PN_MAX_32100, (size,)
+        assert 5 <= size.lines <= _PN_MAX_32100_, (size,)
 
         height = size.lines
 
@@ -1734,7 +1744,7 @@ class BytesTerminal:
         fileno = self.fileno
         size = os.get_terminal_size(fileno)
 
-        assert 20 <= size.columns <= PN_MAX_32100, (size,)
+        assert 20 <= size.columns <= _PN_MAX_32100_, (size,)
 
         width = size.columns
 
@@ -1754,7 +1764,7 @@ class BytesTerminal:
 
         stdio = self.stdio
 
-        assert DSR_6 == "\x1b" "[" "6n"
+        assert DSR_6 == "\x1b[" "6n"
         assert CPR_Y_X_REGEX == r"\x1b\[([0-9]+);([0-9]+)R"
 
         kbhit = self.kbhit(timeout=0.000)  # flushes output, then polls input
@@ -1773,8 +1783,8 @@ class BytesTerminal:
         y = int(y_bytes)
         x = int(x_bytes)
 
-        assert 1 <= y <= PN_MAX_32100, (y, x, kdata, tbp)
-        assert 1 <= x <= PN_MAX_32100, (y, x, kdata, tbp)
+        assert 1 <= y <= _PN_MAX_32100_, (y, x, kdata, tbp)
+        assert 1 <= x <= _PN_MAX_32100_, (y, x, kdata, tbp)
 
         assert y >= 1, (y, y_bytes, kdata, tbp)
         assert x >= 1, (x, x_bytes, kdata, tbp)
@@ -2635,12 +2645,21 @@ def tprint(*args: object) -> None:
 
 
 #
+# Mention the unmentioned skidded names defined by this File, to please PyLance
+#
+
+
+_ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
+
+
+#
 # Run from the Shell Command Line, if not imported
 #
 
 
 if __name__ == "__main__":
     main()
+
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
 
