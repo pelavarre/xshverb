@@ -430,7 +430,11 @@ class ScreenEditor:
     def form_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
         """Bind Keyboard Encodings to Funcs"""
 
+        # List the simplest Keyboard Encodings
+
         func_by_kdata = {
+            #
+            # 1-Byte 7-Bit C0 Controls
             #
             b"\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
             b"\x02": self.do_column_left,  # ⌃B for Emacs
@@ -445,37 +449,41 @@ class ScreenEditor:
             # b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
             b"\x0d": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
             b"\x0e": self.do_row_down,  # ⌃N
-            b"\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost
+            b"\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
             b"\x10": self.do_row_up,  # ⌃P
             b"\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
             b"\x16": self.do_quote_one_kdata,  # ⌃V for Vim
             # todo2: ⌃X⌃C ⌃X⌃S for Emacs
-            b"\x1b" b"$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
             #
+            # Esc and Esc Byte Pairs
+            #
+            b"\x1b": self.do_write_kdata,  # ⎋
+            #
+            b"\x1b" b"$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
             b"\x1b" b"0": self.do_column_leap_leftmost,  # ⎋0 for Vim
-            b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
-            b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
+            # b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
+            # b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
             # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
             b"\x1b" b"A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
             b"\x1b" b"C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
             # b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
             b"\x1b" b"D": self.do_row_tail_erase,  # Vim ⇧D
-            b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
+            # b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
             # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
             b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
             b"\x1b" b"L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
             # b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑ (RI)
             b"\x1b" b"M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
             b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
-            b"\x1bQ": self.do_assert_false,  # ⎋⇧Q for Vim
+            b"\x1b" b"Q": self.do_assert_false,  # ⎋⇧Q for Vim
             b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
             b"\x1b" b"S": self.do_row_delete_start_inserting,  # ⎋S for Vim
             b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
             # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
-            b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (_ICF_RIS_)
+            # b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (_ICF_RIS_)
             # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
             b"\x1b" b"h": self.do_column_left,  # ⎋H for Vim
             b"\x1b" b"i": self.do_inserting_start,  # ⎋I for Vim
@@ -487,6 +495,8 @@ class ScreenEditor:
             b"\x1b" b"s": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
             b"\x1b" b"x": self.do_char_delete_here,  # ⎋X for Vim
             #
+            # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
+            #
             b"\x1b[" b"A": self.do_write_kdata,  # ⎋[⇧A ↑
             b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
             b"\x1b[" b"C": self.do_write_kdata,  # ⎋[⇧C →
@@ -494,12 +504,31 @@ class ScreenEditor:
             # b"\x1b[" b"I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not at gCloud
             b"\x1b[" b"Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
             #
+            b"\x1b[" b"20~": self.do_kdata_fn_f9,  # Fn F9
+            #
+            # Ss3 Esc Byte Sequences
+            #
             b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
             b"\x1bO" b"Q": self.do_kdata_fn_f2,  # Fn F2
-            b"\x1b" b"[" b"20~": self.do_kdata_fn_f9,  # Fn F9
+            #
+            # The Last 1-Byte 7-Bit Control, which looks lots like a C0 Control
             #
             b"\x7f": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
         }
+
+        # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
+        #
+        # items = list(func_by_kdata.items())
+        #
+        # for (kdata, func) in items:
+        #     if len(kdata) == 2:
+        #         if kdata.startswith(b"\x1b"):
+        #             alt_kdata = b"\x15" + kdata[1:]  # ⌃O
+        #
+        #             assert alt_kdata not in func_by_kdata.keys()
+        #             func_by_kdata[alt_kdata] = func  # todo4: need Chord Sequences to do Vim I ⌃O
+
+        # Succeed
 
         return func_by_kdata
 
@@ -947,7 +976,6 @@ class ScreenEditor:
 
         # Vim A = Vim L I
 
-        # todo5: Vim I ⌃O
         # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
 
     def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
