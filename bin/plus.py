@@ -246,7 +246,8 @@ class ScreenEditor:
     yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
     yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
     str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
-    steps: int  # counts steps taken
+    steps: int  # counts steps, after -1
+    speed: int  # runs the Puck faster or slower, else -1
 
     func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
     func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
@@ -280,6 +281,7 @@ class ScreenEditor:
         self.yx_puck = (-1, -1)
         self.str_by_y_x = dict()
         self.steps = -1
+        self.speed = -1
 
         self.func_by_str = func_by_str
         self.func_by_kdata = func_by_kdata  # MyPy needs Dict
@@ -1185,7 +1187,7 @@ class ScreenEditor:
         self.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
         self.print()
 
-        # FIXME: FIXME: FIXME: Hide the Cursor
+        # FIXME: FIXME: Hide the Conway Cursor?
 
         # Default to the most famous Life Glider
 
@@ -1257,15 +1259,35 @@ class ScreenEditor:
         x1 = x0
         self.yx_puck = (y1, x1)
 
+    def do_conway_8x_redo(self, tbp: TerminalBytePacket) -> None:
+        """Step the Game of Life forward at 8X Speed"""
+
+        speed = self.speed
+
+        for _ in range(8):
+            if speed in (-1, 1):
+                self._do_conway_half_step_()
+            else:
+                assert speed == 2, (speed,)
+                self._do_conway_half_step_()  # once
+                self._do_conway_half_step_()  # twice
+
+        self._leap_conway_between_half_steps_()
+
+        # Tab
+
     def do_conway_full_step(self, tbp: TerminalBytePacket) -> None:
         """Step the Game of Life forward by 1 Full Step"""
 
         steps = self.steps
-        if (steps % 2) == 0:  # if halfway
-            self._do_conway_half_step_(tbp)  # out-of-phase
 
-        self._do_conway_half_step_(tbp)  # once
-        self._do_conway_half_step_(tbp)  # twice
+        self.speed = 2
+
+        if (steps % 2) == 0:  # if halfway
+            self._do_conway_half_step_()  # out-of-phase
+
+        self._do_conway_half_step_()  # once
+        self._do_conway_half_step_()  # twice
 
         self._leap_conway_between_half_steps_()
 
@@ -1274,7 +1296,9 @@ class ScreenEditor:
     def do_conway_half_step(self, tbp: TerminalBytePacket) -> None:
         """Step the Game of Life forward by 1/2 Step"""
 
-        self._do_conway_half_step_(tbp)
+        self.speed = 1
+
+        self._do_conway_half_step_()
         self._leap_conway_between_half_steps_()
 
         # Spacebar
@@ -1287,7 +1311,7 @@ class ScreenEditor:
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
         self.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
 
-    def _do_conway_half_step_(self, tbp: TerminalBytePacket) -> None:
+    def _do_conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
 
         str_by_y_x = self.str_by_y_x
@@ -1369,15 +1393,15 @@ class ScreenEditor:
 
         func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = {
             "⌃D": self.do_raise_system_exit,
-            # Tab": self.do_conway_8x_redo,
-            # ⇧Tab": self.do_conway_8x_undo,
+            "Tab": self.do_conway_8x_redo,
+            # "⇧Tab": self.do_conway_8x_undo,
             "Spacebar": self.do_conway_half_step,
             "⌃Spacebar": self.do_conway_full_step,
             # "⌥Spacebar": self.do_conway_undo,
-            # "+": self.do_conway_older,
-            # "-": self.do_conway_younger,
-            # "MousePress": self.do_conway_pass,
-            # "MouseRelease": self.do_conway_leap_here,
+            # "+": self.do_conway_older,  # FIXME: FIXME: FIXME:
+            # "-": self.do_conway_younger,  # FIXME: FIXME: FIXME:
+            # "MousePress": self.do_conway_pass,  # FIXME: FIXME: FIXME:
+            # "MouseRelease": self.do_conway_leap_here,  # FIXME: FIXME: FIXME:
         }
 
         return func_by_str
@@ -1445,7 +1469,6 @@ SCREEN_WRITER_HELP = r"""
 
 """
 
-# FIXME: FIXME: FIXME: Put Conway Life on Screen, toggle with Mouse Clicks, time by Spacebar
 # FIXME: FIXME: FIXME: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
 
 # FIXME: FIXME: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
