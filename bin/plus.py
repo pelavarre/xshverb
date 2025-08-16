@@ -271,6 +271,8 @@ class ScreenEditor:
 
     def __init__(self) -> None:
 
+        #
+
         klog_path = pathlib.Path("__pycache__/k.keyboard")
         slog_path = pathlib.Path("__pycache__/s.screen")
 
@@ -279,20 +281,22 @@ class ScreenEditor:
 
         klog = klog_path.open("ab")
         slog = slog_path.open("ab")
-        bt = BytesTerminal()
-        arrows = 0
+
+        self.keyboard_bytes_log = klog
+        self.screen_bytes_log = slog
+        self.bytes_terminal = BytesTerminal()
+        self.arrows = 0
+        self.settings = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
+
+        #
 
         func_by_str = self.form_func_by_str()
         func_by_kdata = self.form_func_by_kdata()
 
-        self.keyboard_bytes_log = klog
-        self.screen_bytes_log = slog
-        self.bytes_terminal = bt
-        self.arrows = arrows
-        self.settings = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
-
         self.func_by_str = func_by_str
         self.func_by_kdata = func_by_kdata  # MyPy needs Dict
+
+        #
 
         self.yx_board = (-1, -1)
         self.yx_puck = (-1, -1)
@@ -457,7 +461,7 @@ class ScreenEditor:
             #
             # Esc and Esc Byte Pairs
             #
-            b"\x1b": self.do_write_kdata,  # ⎋
+            # b"\x1b": self.print_kcaps_plus,  # ⎋
             #
             b"\x1b" b"$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
             b"\x1b" b"0": self.do_column_leap_leftmost,  # ⎋0 for Vim
@@ -497,6 +501,8 @@ class ScreenEditor:
             #
             # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
             #
+            # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
+            #
             b"\x1b[" b"A": self.do_write_kdata,  # ⎋[⇧A ↑
             b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
             b"\x1b[" b"C": self.do_write_kdata,  # ⎋[⇧C →
@@ -507,6 +513,8 @@ class ScreenEditor:
             b"\x1b[" b"20~": self.do_kdata_fn_f9,  # Fn F9
             #
             # Ss3 Esc Byte Sequences
+            #
+            # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
             #
             b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
             b"\x1bO" b"Q": self.do_kdata_fn_f2,  # Fn F2
@@ -587,7 +595,6 @@ class ScreenEditor:
         if kdata == b"\x04":  # ⌃D
             raise SystemExit()
 
-        # todo5: Shadow Terminal with default Replacing
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
         # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
 
@@ -633,9 +640,9 @@ class ScreenEditor:
         if kchars in KCAP_BY_KCHARS.keys():  # already handled above
             tprint(f"Keycap {kchars=} {str(tbp)=}   # reply_to_kdata")
 
-            if tbp.tail != b"H":  # falls-through to pass-through ⎋[⇧H CUP_Y_X
+            if (n == 1) or (tbp.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
 
-                self.print(kcaps, end=" ")
+                self.print_kcaps_plus(tbp)
 
                 return
 
@@ -659,7 +666,15 @@ class ScreenEditor:
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
         tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
+        self.print_kcaps_plus(tbp)
 
+    def print_kcaps_plus(self, tbp: TerminalBytePacket) -> None:
+        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
+
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)
+
+        kcaps = kdata_to_kcaps(kdata)
         self.print(kcaps, end=" ")
 
     def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
@@ -893,9 +908,12 @@ class ScreenEditor:
             self.arrows += 1
 
         while (not tbp.text) and (not tbp.closed) and (not bt.extras):
+
             kdata = tbp.to_bytes()
+            # if kdata in (b"\x1b", b"\x1bO", b"\x1b[", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b["):
             if kdata == b"\x1bO":  # ⎋⇧O for Vim
                 break
+
             n += 1
             bt.close_byte_packet_if(tbp, timeout=None)
 
@@ -943,8 +961,6 @@ class ScreenEditor:
         self.do_inserting_start(tbp)  # Vim I
 
         # Vim R
-
-        # todo5: Shadow Terminal with default Replacing
 
     #
     # Reply to Keyboard Chords
@@ -1096,7 +1112,7 @@ class ScreenEditor:
         self.do_row_down(tbp)  # Vim J
         self.do_row_insert_inserting_start(tbp)  # Vim ⇧O
 
-        # Vim O = J ⇧O
+        # Vim O = J ⇧O  # despite ⎋O collides with SS3
 
     def do_row_insert_inserting_start(self, tbp: TerminalBytePacket) -> None:
 
@@ -1614,7 +1630,7 @@ SCREEN_WRITER_HELP = r"""
         Tab means ⌃I \t, and Return means ⌃M \r
 
         Minimal Emacs is ⌃A ⌃B ⌃D ⌃E ⌃F ⌃G ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V
-        Minimal Vim is ⎋ I ⌃O ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧A ⇧C ⇧D ⇧H ⇧L ⇧M ⇧O ⇧Q ⇧R ⇧S ⇧X
+        Minimal Vim is ⎋ I ⌃O ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧ A C D H L M O Q R S X
 
     Esc ⎋ Byte Pairs
 
@@ -1649,9 +1665,10 @@ SCREEN_WRITER_HELP = r"""
 
 """
 
+# todo3: Vim Q Q ⇧@ Record/ Replay, and ⌃X ⇧( till ⌃C ⇧) and ⌃X E for Emacs
+
 # todo5: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
 
-# todo5: ⎋ ⎋[ ⎋[O are slow to close only inside ⌃V ⌃Q
 # todo3: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
 # todo3: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
 
@@ -1809,7 +1826,13 @@ class BytesTerminal:
 
         # Wait for first Byte, add in already available Bytes. and declare victory
 
-        t = 0.000_001  # 0.000 works at macOS
+        t = 0.000_001  # defines "immediately"  # 0.000 works as "instantaneously" at macOS
+
+        # if not extras:
+        #     kdata = tbp.to_bytes()
+        #     if kdata in (b"\x1b", b"\x1bO", b"\x1b[", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b["):
+        #         tbp.close()
+        #         return None
 
         if extras or self.kbhit(timeout=timeout):
             while extras or self.kbhit(timeout=t):
@@ -2676,8 +2699,6 @@ def _kch_to_kcap_(ch: str) -> str:  # noqa C901
         # '^ 0x40' speaks of ⌃? but not Delete at b"\x7F"
 
         # ^` ^2 ^6 ^⇧~ don't work
-
-        # todo: can we quickly take ⌃[ as ⎋ by itself, not the start of a timeless ⎋[ etc?
 
     elif "A" <= ch <= "Z":  # printable Upper Case English
         s = "⇧" + chr(o)  # shifted Key Cap '⇧A' from b'A'
