@@ -260,7 +260,8 @@ class ScreenEditor:
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
     settings: list[bytes]  # tracks Insert/ Replace/ etc
 
-    func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
+    none_func_by_str: dict[str, abc.Callable[[], None]] = dict()
+    loopable_kdata_tuple: tuple[bytes, ...] = tuple()
 
     str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
@@ -273,7 +274,7 @@ class ScreenEditor:
 
     def __init__(self) -> None:
 
-        #
+        # Init our Keyboard & Screen Drivers
 
         klog_path = pathlib.Path("__pycache__/k.keyboard")
         slog_path = pathlib.Path("__pycache__/s.screen")
@@ -290,12 +291,15 @@ class ScreenEditor:
         self.arrows = 0
         self.settings = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
 
-        #
+        # Init our Keyboard Chord Bindings
 
-        func_by_str = self.form_func_by_str()
-        self.func_by_str = func_by_str
+        none_func_by_str = self.form_none_func_by_str()
+        self.none_func_by_str = none_func_by_str
 
-        #
+        loopable_kdata_tuple = self.form_loopable_kdata_tuple()
+        self.loopable_kdata_tuple = loopable_kdata_tuple
+
+        # Init our Gameplay
 
         self.yx_board = (-1, -1)
         self.yx_puck = (-1, -1)
@@ -421,53 +425,61 @@ class ScreenEditor:
     # Bind Keyboard Chords to Funcs
     #
 
-    # todo5: rethink Emacs ⌃M emulation, vs Insert/ Replace
-
-    def form_func_by_str(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
+    def form_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         """Bind Keycaps to Funcs"""
 
-        func_by_str = {
+        none_func_by_str: dict[str, abc.Callable[[], None]] = {
             #
             # 1-Byte 7-Bit C0 Controls
             #
             "\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
             "\x02": self.do_column_left,  # ⌃B for Emacs
+            # "\x03",  # ⌃C
             "\x04": self.do_char_delete_here,  # ⌃D for Emacs
             "\x05": self.do_column_leap_rightmost,  # ⌃E for Emacs
             "\x06": self.do_column_right,  # ⌃F for Emacs
-            "\x07": self.do_write_kdata,  # ⌃G \a bell-ring
-            "\x08": self.do_write_kdata,  # ⌃H \b ←  # todo: where does Windows Backspace land?
-            "\x09": self.do_write_kdata,  # ⌃I \t Tab
-            "\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
+            # b"\x07",  # ⌃G \a bell-ring
+            # b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
+            # b"\x09",  # ⌃I \t Tab
+            # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
             "\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
-            # "\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
+            # # b"\x0c",  # ⌃L
+            # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
             "\x0d": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
             "\x0e": self.do_row_down,  # ⌃N
             "\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
             "\x10": self.do_row_up,  # ⌃P
             "\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
+            # # b"\x12",  # ⌃R
+            # # b"\x13",  # ⌃S
+            # # b"\x14",  # ⌃T
+            # # b"\x15",  # ⌃U
             "\x16": self.do_quote_one_kdata,  # ⌃V for Vim
+            # # b"\x17",  # ⌃W
+            # # b"\x18",  # ⌃X
+            # # b"\x19",  # ⌃Y
+            # # b"\x1a",  # ⌃Z
             # todo2: ⌃X⌃C ⌃X⌃S for Emacs
             #
             # Esc and Esc Byte Pairs
             #
-            # "\x1b": self.print_kcaps_plus,  # ⎋
+            # # b"\x1b": self.print_kcaps_plus,  # ⎋
             #
             "\x1b" "$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
             "\x1b" "0": self.do_column_leap_leftmost,  # ⎋0 for Vim
-            # "\x1b" "7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
-            # "\x1b" "8": self.do_write_kdata,  # ⎋8 cursor-revert
+            # # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
+            # # b"\x1b" b"8",  # ⎋8 cursor-revert
             # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
             "\x1b" "A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
             "\x1b" "C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
-            # "\x1b" "D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
+            # # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
             "\x1b" "D": self.do_row_tail_erase,  # Vim ⇧D
-            # "\x1b" "E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
+            # # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
             # "\x1b" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
             "\x1b" "H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
             "\x1b" "L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
-            # "\x1b" "M": self.do_write_kdata,  # ⎋⇧M ↑ (RI)
+            # # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
             "\x1b" "M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
             "\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
             "\x1b" "Q": self.do_assert_false,  # ⎋⇧Q for Vim
@@ -477,12 +489,12 @@ class ScreenEditor:
             # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             "\x1b" "a": self.do_column_right_inserting_start,  # ⎋A for Vim
-            # "\x1b" "c": self.do_write_kdata,  # ⎋C cursor-revert (_ICF_RIS_)
-            # "\x1b" "l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            # # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
             "\x1b" "h": self.do_column_left,  # ⎋H for Vim
             "\x1b" "i": self.do_inserting_start,  # ⎋I for Vim
             "\x1b" "j": self.do_row_down,  # ⎋J for Vim
             "\x1b" "k": self.do_row_up,  # ⎋K for Vim
+            # # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
             "\x1b" "l": self.do_column_right,  # ⎋L for Vim
             "\x1b" "o": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
             "\x1b" "r": self.do_replacing_one_kdata,  # ⎋R for Vim
@@ -491,20 +503,20 @@ class ScreenEditor:
             #
             # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
             #
-            # "\x1b[": self.print_kcaps_plus,  # ⎋ [
+            # # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
             #
-            "\x1b[" "A": self.do_write_kdata,  # ⎋[⇧A ↑
-            "\x1b[" "B": self.do_write_kdata,  # ⎋[⇧B ↓
-            "\x1b[" "C": self.do_write_kdata,  # ⎋[⇧C →
-            "\x1b[" "D": self.do_write_kdata,  # ⎋[⇧D ←
-            # "\x1b[" "I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not at gCloud
-            "\x1b[" "Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
+            # b"\x1b[" b"A",  # ⎋[⇧A ↑
+            # b"\x1b[" b"B",  # ⎋[⇧B ↓
+            # b"\x1b[" b"C",  # ⎋[⇧C →
+            # b"\x1b[" b"D",  # ⎋[⇧D ←
+            # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
             "\x1b[" "20~": self.do_kdata_fn_f9,  # Fn F9
             #
             # Ss3 Esc Byte Sequences
             #
-            # "\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            # # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
             #
             "\x1bO" "P": self.do_kdata_fn_f1,  # Fn F1
             "\x1bO" "Q": self.do_kdata_fn_f2,  # Fn F2
@@ -513,6 +525,8 @@ class ScreenEditor:
             #
             "\x7f": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
         }
+
+        return none_func_by_str
 
         # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
         #
@@ -526,9 +540,40 @@ class ScreenEditor:
         #             assert alt_kstr not in func_by_str.keys()
         #             func_by_str[alt_kstr] = func  # todo4: need Chord Sequences to do Vim I ⌃O
 
-        return func_by_str
+    def form_loopable_kdata_tuple(self) -> tuple[bytes, ...]:
+        """List Keyboard Encodings that run well when looped back to Screen"""
 
-        # todo5: bind Keycaps separately to Funcs of 1 Arg or 0 Args
+        d = (
+            b"\x07",  # ⌃G \a bell-ring
+            b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
+            b"\x09",  # ⌃I \t Tab
+            b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
+            # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
+            #
+            # b"\x1b": self.print_kcaps_plus,  # ⎋
+            #
+            # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
+            # b"\x1b" b"8",  # ⎋8 cursor-revert
+            # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
+            # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
+            # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
+            # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
+            # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            #
+            # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            #
+            # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
+            b"\x1b[" b"A",  # ⎋[⇧A ↑
+            b"\x1b[" b"B",  # ⎋[⇧B ↓
+            b"\x1b[" b"C",  # ⎋[⇧C →
+            b"\x1b[" b"D",  # ⎋[⇧D ←
+            # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
+        )
+
+        loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please PyLance
+
+        return loopable_kdata_tuple
 
         # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
 
@@ -548,8 +593,7 @@ class ScreenEditor:
 
         # Default to Inserting, not Replacing
 
-        tbp = TerminalBytePacket()
-        self.do_inserting_start(tbp)
+        self.do_inserting_start()
 
         # Walk one step after another
 
@@ -590,7 +634,8 @@ class ScreenEditor:
     def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
 
-        func_by_str = self.func_by_str
+        none_func_by_str = self.none_func_by_str
+        loopable_kdata_tuple = self.loopable_kdata_tuple
         klog = self.keyboard_bytes_log
 
         # Append to our __pycache__/k.keyboard Keylogger Keylogging File
@@ -604,11 +649,18 @@ class ScreenEditor:
 
         kcaps = kdata_to_kcaps(kdata)
 
-        if kcaps in func_by_str.keys():
-            func = func_by_str[kcaps]
-            tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
+        if kcaps in none_func_by_str.keys():
+            none_func = none_func_by_str[kcaps]
+            tprint(f"{none_func.__name__=}  # none_func_by_str reply_to_kdata")  # not .__qualname__
 
-            func(tbp)  # may raise SystemExit
+            none_func()  # may raise SystemExit
+
+            return
+
+        if kdata in loopable_kdata_tuple:
+            tprint(f"{kdata=} # do_write_kdata reply_to_kdata")  # not .__qualname__
+
+            self.do_write_kdata(kdata)
 
             return
 
@@ -629,7 +681,7 @@ class ScreenEditor:
         if tbp.text:
             tprint(f"tbp.text {kdata=}  # reply_to_kdata")
 
-            self.do_write_kdata(tbp)
+            self.write(tbp.text)
 
             return
 
@@ -705,7 +757,7 @@ class ScreenEditor:
         # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
 
         tprint(f"Pass-through {kdata=} {str(tbp)=}   # take_tbp_n_kdata_if")
-        self.do_write_kdata(tbp)
+        self.do_write_kdata(kdata)
 
         return True
 
@@ -919,13 +971,15 @@ class ScreenEditor:
 
         # gCloud Shell lacks ⎋[ {}I
 
-    def do_write_cr_lf(self, tbp: TerminalBytePacket) -> None:
+    def do_write_cr_lf(self) -> None:
         """Write CR LF"""
 
         assert CR == "\r"
         assert LF == "\n"
 
         self.write("\r\n")
+
+        # todo3: Emacs ⌃M and ⌃K need the Rows shadowed, as does Vim I ⌃M
 
     #
     #
@@ -982,10 +1036,8 @@ class ScreenEditor:
 
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
 
-    def do_write_kdata(self, tbp: TerminalBytePacket) -> None:
+    def do_write_kdata(self, kdata: bytes) -> None:
         """Loop the Keyboard back to the Screen, literally, directly"""
-
-        kdata = tbp.to_bytes()
 
         bt = self.bytes_terminal
         fileno = bt.fileno
@@ -996,31 +1048,33 @@ class ScreenEditor:
 
         slog.write(sdata)
 
-    def do_replacing_one_kdata(self, tbp: TerminalBytePacket) -> None:
+    def do_replacing_one_kdata(self) -> None:
         """Start replacing, quote 1 Keyboard Chord, then start inserting"""
 
-        self.do_replacing_start(tbp)  # Vim ⇧R
-        self.do_quote_one_kdata(tbp)  # Emacs ⌃Q  # Vim ⌃V
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_replacing_start()  # Vim ⇧R
+        self.do_quote_one_kdata()  # Emacs ⌃Q  # Vim ⌃V
+        self.do_inserting_start()  # Vim I
 
         # Vim R
 
-    def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
+    def do_quote_one_kdata(self) -> None:
         """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
         (tbp, n) = self.read_some_byte_packets()
-        self.do_write_kdata(tbp)
+
+        kdata = tbp.to_bytes()
+        self.do_write_kdata(kdata)
 
         # Emacs ⌃Q  # Vim ⌃V
 
-    def do_assert_false(self, tbp: TerminalBytePacket) -> None:
+    def do_assert_false(self) -> None:
         """Assert False"""
 
         assert False
 
         # Vim ⇧Q  # (traditionally swaps Ex Key Bindings in place of Vim Key Bindings)
 
-    def do_raise_system_exit(self, tbp: TerminalBytePacket) -> None:
+    def do_raise_system_exit(self) -> None:
         """Raise SystemExit"""
 
         raise SystemExit()
@@ -1033,17 +1087,15 @@ class ScreenEditor:
     # Reply to Emacs & Vim Keyboard Chords
     #
 
-    def do_column_left(self, tbp: TerminalBytePacket) -> None:
+    def do_column_left(self) -> None:
         """Go left by 1 Column"""
 
         assert BS == "\b"
-
-        tbp = TerminalBytePacket(b"\b")
-        self.do_write_kdata(tbp)
+        self.write("\b")
 
         # Emacs Delete
 
-    def do_column_right(self, tbp: TerminalBytePacket) -> None:
+    def do_column_right(self) -> None:
         """Go right by 1 Column"""
 
         assert CUF_X == "\x1b[" "{}" "C"
@@ -1051,17 +1103,17 @@ class ScreenEditor:
 
         # Emacs ⌃F
 
-    def do_column_right_inserting_start(self, tbp: TerminalBytePacket) -> None:
+    def do_column_right_inserting_start(self) -> None:
         """Insert 1 Space at the Cursor, then go right by 1 Column"""
 
-        self.do_column_right(tbp)  # Vim L
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_column_right()  # Vim L
+        self.do_inserting_start()  # Vim I
 
         # Vim A = Vim L I
 
         # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
 
-    def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
+    def do_char_delete_here(self) -> None:
         """Delete the Character beneath the Cursor"""
 
         assert DCH_X == "\x1b[" "{}" "P"
@@ -1069,15 +1121,15 @@ class ScreenEditor:
 
         # Emacs ⌃D  # Vim X
 
-    def do_char_delete_here_start_inserting(self, tbp: TerminalBytePacket) -> None:
+    def do_char_delete_here_start_inserting(self) -> None:
         """Delete the Character beneath the Cursor, and Start Inserting"""
 
-        self.do_char_delete_here(tbp)  # Emacs ⌃D  # Vim X
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_char_delete_here()  # Emacs ⌃D  # Vim X
+        self.do_inserting_start()  # Vim I
 
         # Vim S = Vim X I
 
-    def do_char_delete_left(self, tbp: TerminalBytePacket) -> None:
+    def do_char_delete_left(self) -> None:
         """Delete the Character at left of the Cursor"""
 
         assert BS == "\b"
@@ -1092,7 +1144,7 @@ class ScreenEditor:
 
         # todo2: Show .do_char_delete_left bouncing off the Left Edge
 
-    def do_column_leap_leftmost(self, tbp: TerminalBytePacket) -> None:
+    def do_column_leap_leftmost(self) -> None:
         """Leap to the Leftmost Column"""
 
         assert CR == "\r"
@@ -1100,7 +1152,7 @@ class ScreenEditor:
 
         # Emacs ⌃A  # Vim 0
 
-    def do_column_leap_rightmost(self, tbp: TerminalBytePacket) -> None:
+    def do_column_leap_rightmost(self) -> None:
         """Leap to the Rightmost Column"""
 
         assert CUF_X == "\x1b[" "{}" "C"
@@ -1111,15 +1163,15 @@ class ScreenEditor:
 
         # Emacs ⌃E  # Vim ⇧$
 
-    def do_column_leap_rightmost_inserting_start(self, tbp: TerminalBytePacket) -> None:
+    def do_column_leap_rightmost_inserting_start(self) -> None:
         """Leap to the Rightmost Column, and Start Inserting"""
 
-        self.do_column_leap_rightmost(tbp)  # Emacs ⌃E  # Vim ⇧$
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_column_leap_rightmost()  # Emacs ⌃E  # Vim ⇧$
+        self.do_inserting_start()  # Vim I
 
         # Vim ⇧A = Vim ⇧$ I
 
-    def do_inserting_start(self, tbp: TerminalBytePacket) -> None:
+    def do_inserting_start(self) -> None:
         """Start Inserting Characters at the Cursor"""
 
         assert SM_IRM == "\x1b[" "4h"
@@ -1129,7 +1181,7 @@ class ScreenEditor:
 
         # todo2: Show Inserting while Inserting
 
-    def do_replacing_start(self, tbp: TerminalBytePacket) -> None:
+    def do_replacing_start(self) -> None:
         """Start Replacing Characters at the Cursor"""
 
         assert RM_IRM == "\x1b[" "4l"
@@ -1139,18 +1191,18 @@ class ScreenEditor:
 
         # todo2: Show Replacing while Replacing
 
-    def do_row_delete_start_inserting(self, tbp: TerminalBytePacket) -> None:
+    def do_row_delete_start_inserting(self) -> None:
         """Empty the Row beneath the Cursor, and Start Inserting"""
 
-        self.do_column_leap_leftmost(tbp)  # Emacs ⌃A  # Vim 0
-        self.do_row_tail_erase(tbp)  # Vim ⇧D
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_column_leap_leftmost()  # Emacs ⌃A  # Vim 0
+        self.do_row_tail_erase()  # Vim ⇧D
+        self.do_inserting_start()  # Vim I
 
         # could be coded as ⎋[2K like a .do_row_tail_erase but without moving the Cursor
 
         # Vim ⇧S = Vim 0 D I
 
-    def do_row_down(self, tbp: TerminalBytePacket) -> None:
+    def do_row_down(self) -> None:
         """Go down by 1 Row, but stop in last Row"""
 
         assert CUD_Y == "\x1b[" "{}" "B"
@@ -1158,23 +1210,23 @@ class ScreenEditor:
 
         # Emacs ⌃N
 
-    def do_row_down_insert_inserting_start(self, tbp: TerminalBytePacket) -> None:
+    def do_row_down_insert_inserting_start(self) -> None:
         """Insert 1 Row below the Cursor"""
 
-        self.do_row_down(tbp)  # Vim J
-        self.do_row_insert_inserting_start(tbp)  # Vim ⇧O
+        self.do_row_down()  # Vim J
+        self.do_row_insert_inserting_start()  # Vim ⇧O
 
         # Vim O = J ⇧O  # despite ⎋O collides with SS3
 
-    def do_row_insert_inserting_start(self, tbp: TerminalBytePacket) -> None:
+    def do_row_insert_inserting_start(self) -> None:
 
-        self.do_row_insert(tbp)  # Emacs ⌃O when leftmost
-        self.do_column_leap_leftmost(tbp)  # Emacs ⌃A  # Vim 0
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_row_insert()  # Emacs ⌃O when leftmost
+        self.do_column_leap_leftmost()  # Emacs ⌃A  # Vim 0
+        self.do_inserting_start()  # Vim I
 
         # Vim ⇧O = Emacs ⌃A ⌃O + Vim I
 
-    def do_row_insert(self, tbp: TerminalBytePacket) -> None:
+    def do_row_insert(self) -> None:
         """Insert 1 Row above the Cursor"""
 
         assert IL_Y == "\x1b[" "{}" "L"
@@ -1182,7 +1234,7 @@ class ScreenEditor:
 
         # Emacs ⌃O when leftmost
 
-    def do_row_leap_first_column_leftmost(self, tbp: TerminalBytePacket) -> None:
+    def do_row_leap_first_column_leftmost(self) -> None:
         """Leap to the Leftmost Column of the First Row"""
 
         assert CUP_Y1_X1 == "\x1b[" "H"
@@ -1192,7 +1244,7 @@ class ScreenEditor:
 
         # todo3: Leap to First Shadow Row, if Column Shadowed
 
-    def do_row_leap_last_column_leftmost(self, tbp: TerminalBytePacket) -> None:
+    def do_row_leap_last_column_leftmost(self) -> None:
         """Leap to the Leftmost Column of the Last Row"""
 
         assert _PN_MAX_32100_ == 32100
@@ -1203,7 +1255,7 @@ class ScreenEditor:
 
         # Vim ⇧L
 
-    def do_row_leap_middle_column_leftmost(self, tbp: TerminalBytePacket) -> None:
+    def do_row_leap_middle_column_leftmost(self) -> None:
         """Leap to the Leftmost Column of the Middle Row"""
 
         bt = self.bytes_terminal
@@ -1216,7 +1268,7 @@ class ScreenEditor:
 
         # Vim ⇧M
 
-    def do_row_tail_erase(self, tbp: TerminalBytePacket) -> None:
+    def do_row_tail_erase(self) -> None:
         """Erase from the Cursor to the Tail of the Row"""
 
         assert EL_P == "\x1b[" "{}" "K"
@@ -1224,15 +1276,15 @@ class ScreenEditor:
 
         # Vim ⇧D  # Emacs ⌃K when not rightmost
 
-    def do_row_tail_erase_inserting_start(self, tbp: TerminalBytePacket) -> None:
+    def do_row_tail_erase_inserting_start(self) -> None:
         """Erase from the Cursor to the Tail of the Row, and Start Inserting"""
 
-        self.do_row_tail_erase(tbp)  # Vim ⇧D  # Emacs ⌃K when not rightmost
-        self.do_inserting_start(tbp)  # Vim I
+        self.do_row_tail_erase()  # Vim ⇧D  # Emacs ⌃K when not rightmost
+        self.do_inserting_start()  # Vim I
 
         # Vim ⇧C = # Vim ⇧D I
 
-    def do_row_up(self, tbp: TerminalBytePacket) -> None:
+    def do_row_up(self) -> None:
         """Go up by 1 Row, but stop in Top Row"""
 
         assert CUU_Y == "\x1b[" "{}" "A"
@@ -1244,7 +1296,7 @@ class ScreenEditor:
     # Reply to F1 F2 F9 ...
     #
 
-    def do_kdata_fn_f1(self, tbp: TerminalBytePacket, /) -> None:
+    def do_kdata_fn_f1(self) -> None:
         """Print Lines of main top Help for F1"""
 
         f1_text = """
@@ -1266,10 +1318,10 @@ class ScreenEditor:
         self.print()
         self.print()
 
-    def do_kdata_fn_f2(self, tbp: TerminalBytePacket, /) -> None:
+    def do_kdata_fn_f2(self) -> None:
         """Play Conway's Game-of-Life for F2"""
 
-        func_by_str = self.form_conway_func_by_str()
+        with_none_func_by_str = self.none_func_by_str
 
         # Default to Replacing, not Inserting
 
@@ -1279,25 +1331,24 @@ class ScreenEditor:
         irm_bytes = self.read_shadow_settings(b"\x1b[4h", sdata1=b"\x1b[4l")
         restore_inserting_replacing = irm_bytes.decode()  # doesn't raise UnicodeDecodeError
 
-        tbp = TerminalBytePacket()
-        self.do_replacing_start(tbp)
+        self.do_replacing_start()  # for F2
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        func_by_str = self.form_conway_func_by_str()
+        none_func_by_str = self.form_conway_none_func_by_str()
 
-        assert func_by_str["\x1bO" "Q"] == self.do_kdata_fn_f2
-        func_by_str["\x1bO" "Q"] = self.restart_conway_life
+        assert none_func_by_str["\x1bO" "Q"] == self.do_kdata_fn_f2
+        none_func_by_str["\x1bO" "Q"] = self.restart_conway_life
 
-        self.func_by_str = func_by_str
+        self.none_func_by_str = none_func_by_str
 
         try:
             self.play_conway_life()
         finally:
-            self.func_by_str = func_by_str  # replaces
+            self.none_func_by_str = with_none_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
-    def do_kdata_fn_f9(self, tbp: TerminalBytePacket, /) -> None:
+    def do_kdata_fn_f9(self) -> None:
         """Print the many Lines of Screen Writer Help for F9"""
 
         help_ = textwrap.dedent(SCREEN_WRITER_HELP).strip()
@@ -1371,11 +1422,6 @@ class ScreenEditor:
 
         self.restart_conway_life()
 
-        # Default to Replacing, not Inserting
-
-        tbp = TerminalBytePacket()
-        self.do_replacing_start(tbp)
-
         # Walk one step after another
 
         while True:
@@ -1438,7 +1484,7 @@ class ScreenEditor:
         x1 = x0
         self.yx_puck = (y1, x1)
 
-    def do_conway_8x_redo(self, tbp: TerminalBytePacket) -> None:
+    def do_conway_8x_redo(self) -> None:
         """Step the Game of Life forward at 8X Speed"""
 
         for _ in range(8):
@@ -1448,7 +1494,7 @@ class ScreenEditor:
 
         # Tab
 
-    def do_conway_full_step(self, tbp: TerminalBytePacket) -> None:
+    def do_conway_full_step(self) -> None:
         """Step the Game of Life forward by 1 Full Step"""
 
         steps = self.steps
@@ -1463,7 +1509,7 @@ class ScreenEditor:
 
         # ⌃Spacebar
 
-    def do_conway_half_step(self, tbp: TerminalBytePacket) -> None:
+    def do_conway_half_step(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
 
         self._do_conway_half_step_()
@@ -1585,10 +1631,10 @@ class ScreenEditor:
 
         str_by_y_x[y][x] = syx
 
-    def form_conway_func_by_str(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
+    def form_conway_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
 
-        func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = {
+        func_by_str: dict[str, abc.Callable[[], None]] = {
             "⌃D": self.do_raise_system_exit,
             "Tab": self.do_conway_8x_redo,
             # "⇧Tab": self.do_conway_8x_undo,
