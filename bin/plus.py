@@ -445,7 +445,7 @@ class ScreenEditor:
             "\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
             # # b"\x0c",  # ⌃L
             # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
-            "\x0d": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
+            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
             "\x0e": self.do_row_down,  # ⌃N
             "\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
             "\x10": self.do_row_up,  # ⌃P
@@ -980,6 +980,7 @@ class ScreenEditor:
         self.write("\r\n")
 
         # todo3: Emacs ⌃M and ⌃K need the Rows shadowed, as does Vim I ⌃M
+        # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
 
     #
     #
