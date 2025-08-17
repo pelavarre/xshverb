@@ -1525,7 +1525,6 @@ class ConwayLife:
 
     screen_editor: ScreenEditor
 
-    str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
     yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
     steps: int  # counts steps, after -1
@@ -1536,7 +1535,6 @@ class ConwayLife:
 
         self.yx_board = (-1, -1)
         self.yx_puck = (-1, -1)
-        self.str_by_y_x = dict()
         self.steps = -1
 
     def play_conway_life(self) -> None:
@@ -1573,7 +1571,8 @@ class ConwayLife:
     def restart_conway_life(self) -> None:
         """Start again, with the most famous Conway Life Glider"""
 
-        str_by_y_x = self.str_by_y_x
+        se = self.screen_editor
+        list_str_by_y_x = se.list_str_by_y_x
 
         choice = 1
 
@@ -1599,15 +1598,17 @@ class ConwayLife:
 
             # https://imgur.com/a/interesting-face-pattern-conways-game-of-life-epMFxEb
 
+            # todo6: compare/contrast web life at Wolf Face
+
         yx_list = list()
-        for y in str_by_y_x.keys():
-            for x in str_by_y_x[y].keys():
+        for y in list_str_by_y_x.keys():
+            for x in list_str_by_y_x[y].keys():
                 yx = (y, x)
                 yx_list.append(yx)
 
         for y, x in yx_list:
-            syx = str_by_y_x[y][x]
-            if syx == "🔴":
+            writes = list_str_by_y_x[y][x]
+            if writes and writes[-1] == "🔴":
                 self.y_x_count_around(y, x)  # adds its Next Spots
 
         self._leap_conway_between_half_steps_()
@@ -1694,20 +1695,26 @@ class ConwayLife:
     def _do_conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
 
-        str_by_y_x = self.str_by_y_x
+        se = self.screen_editor
+        list_str_by_y_x = se.list_str_by_y_x
+
         steps = self.steps
 
         steps += 1
         self.steps = steps
 
         yx_list = list()
-        for y in str_by_y_x.keys():
-            for x in str_by_y_x[y].keys():
+        for y in list_str_by_y_x.keys():
+            for x in list_str_by_y_x[y].keys():
                 yx = (y, x)
                 yx_list.append(yx)
 
         for y, x in yx_list:
-            syx = str_by_y_x[y][x]
+            writes = list_str_by_y_x[y][x]
+            syx = writes[-1] if writes else ""
+
+            if syx not in ("⚪", "⚫", "🔴", "🟥"):
+                continue
 
             if steps % 2 == 0:
                 assert syx in ("⚪", "🔴"), (syx,)
@@ -1726,15 +1733,17 @@ class ConwayLife:
 
                 if syx == "⚫":
                     self.conway_print_y_x_syx(y, x=x, syx="🔴")
-                elif syx in ("🟥"):
+                elif syx == "🟥":
                     self.conway_print_y_x_syx(y, x=x, syx="⚪")
 
     def y_x_count_around(self, y: int, x: int) -> int:
         """Count the Neighbors of a Cell"""
 
-        str_by_y_x = self.str_by_y_x
+        se = self.screen_editor
+        list_str_by_y_x = se.list_str_by_y_x
 
-        syx = str_by_y_x[y][x]
+        yx_writes = list_str_by_y_x[y][x]
+        syx = yx_writes[-1] if yx_writes else ""
 
         dydx_list = list()
         for dy in range(-1, 1 + 1):
@@ -1751,20 +1760,22 @@ class ConwayLife:
             x1 = x + dx
 
             if syx == "⚪":
-                if y1 not in str_by_y_x.keys():
+                if y1 not in list_str_by_y_x.keys():
                     continue
-                if x1 not in str_by_y_x[y1].keys():
+                if x1 not in list_str_by_y_x[y1].keys():
                     continue
 
-            if y1 not in str_by_y_x.keys():
-                str_by_y_x[y1] = dict()
-            if x1 not in str_by_y_x[y1].keys():
-                sy1x1 = "⚪"
-                self.conway_print_y_x_syx(y1, x=x1, syx=sy1x1)
-                assert str_by_y_x[y1][x1] == sy1x1, (str_by_y_x[y1][x1], y1, x1, sy1x1)
+            y1x1_write = ""
+            if not ((y1 in list_str_by_y_x.keys()) and (x1 in list_str_by_y_x[y1].keys())):
+                y1x1_write = "⚪"
+                self.conway_print_y_x_syx(y1, x=x1, syx=y1x1_write)
 
-            sy1x1 = str_by_y_x[y1][x1]
-            if sy1x1 in ("🔴", "🟥"):
+            y1x1_writes = list_str_by_y_x[y1][x1]
+            shadow_sy1x1 = y1x1_writes[-1] if y1x1_writes else ""
+            if y1x1_write:
+                assert y1x1_write == shadow_sy1x1, (y1x1_write, shadow_sy1x1, y1, x1)
+
+            if shadow_sy1x1 in ("🔴", "🟥"):
                 count += 1
 
         return count
@@ -1773,31 +1784,23 @@ class ConwayLife:
         """Print each Character"""
 
         se = self.screen_editor
+        list_str_by_y_x = se.list_str_by_y_x
 
         assert CUF_X == "\x1b[" "{}" "C"
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
 
         se.write(f"\x1b[{y};{x}H")  # for .conway_print_y_x_syx
 
-        if syx == "🔵":
-            se.write("\x1b[2C")
-        else:
+        if syx != "🔵":
             se.write(syx)
-            self.shadow_y_x_syx(y, x=x, syx=syx)
+
+            yx_writes = list_str_by_y_x[y][x]
+            yx_shadow_text = yx_writes[-1] if yx_writes else ""
+            assert syx == yx_shadow_text, (syx, yx_shadow_text, y, x)
 
         x += 2
 
         self.yx_puck = (y, x)
-
-    def shadow_y_x_syx(self, y: int, x: int, syx: str) -> None:
-        """Shadow the Screen Panel"""
-
-        str_by_y_x = self.str_by_y_x
-
-        if y not in str_by_y_x.keys():
-            str_by_y_x[y] = dict()
-
-        str_by_y_x[y][x] = syx
 
     def form_conway_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
