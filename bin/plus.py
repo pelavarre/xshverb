@@ -1310,7 +1310,6 @@ class ScreenEditor:
     def do_kdata_fn_f2(self) -> None:
         """Play Conway's Game-of-Life for F2"""
 
-        se = self
         with_none_func_by_str = self.none_func_by_str
 
         # Default to Replacing, not Inserting
@@ -1330,9 +1329,6 @@ class ScreenEditor:
         none_func_by_str = dict(with_none_func_by_str)
         conway_none_func_by_str = cl.form_conway_none_func_by_str()
         none_func_by_str.update(conway_none_func_by_str)
-
-        assert none_func_by_str["F2"] == se.do_kdata_fn_f2, (none_func_by_str["F2"],)
-        none_func_by_str["F2"] = cl.restart_conway_life
 
         self.none_func_by_str = none_func_by_str
 
@@ -1434,7 +1430,7 @@ class ConwayLife:
         se.print()
         se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
         se.print("+ - to make a Cell older or younger")
-        se.print("Spacebar to step, ⌃Spacebar to step twice, ⌥← to undo")
+        se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
         se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
         se.print()
 
@@ -1465,8 +1461,8 @@ class ConwayLife:
         self.conway_print_some("⚪⚪⚪⚪⚪")
         self.conway_print_some("⚪🔴⚪🔴⚪")
         self.conway_print_some("⚪⚪🔴🔴⚪")
-        self.conway_print_some("..⚪🔴⚪⚪")
-        self.conway_print_some("..⚪⚪⚪..")
+        self.conway_print_some("🔵⚪🔴⚪⚪")
+        self.conway_print_some("🔵⚪⚪⚪🔵")
 
         self._leap_conway_between_half_steps_()
 
@@ -1509,7 +1505,8 @@ class ConwayLife:
         """Step the Game of Life forward at 8X Speed"""
 
         for _ in range(8):
-            self._do_conway_half_step_()
+            self._do_conway_half_step_()  # once
+            self._do_conway_half_step_()  # twice
 
         self._leap_conway_between_half_steps_()
 
@@ -1636,8 +1633,8 @@ class ConwayLife:
 
         se.write(f"\x1b[{y};{x}H")  # for .conway_print_some
 
-        if syx == ".":
-            se.write("\x1b[C")
+        if syx == "🔵":
+            se.write("\x1b[2C")
         else:
             se.write(syx)
             self.shadow_y_x_syx(y, x=x, syx=syx)
@@ -1665,13 +1662,14 @@ class ConwayLife:
             "⌃D": se.do_raise_system_exit,
             "Tab": self.do_conway_8x_redo,
             # "⇧Tab": self.do_conway_8x_undo,
-            "Spacebar": self.do_conway_half_step,
-            "⌃Spacebar": self.do_conway_full_step,
+            "Spacebar": self.do_conway_full_step,
+            "⌃Spacebar": self.do_conway_half_step,
             # "⌥Spacebar": self.do_conway_undo,
             # "+": self.do_conway_older,  # todo4:
             # "-": self.do_conway_younger,  # todo4:
             # "MousePress": self.do_conway_pass,  # todo4:
             # "MouseRelease": self.do_conway_leap_here,  # todo4:
+            "F2": self.restart_conway_life,
         }
 
         return func_by_str
