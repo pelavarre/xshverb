@@ -257,8 +257,12 @@ class ScreenEditor:
     keyboard_bytes_log: typing.BinaryIO  # .klog  # logs Keyboard Delays & Bytes
     screen_bytes_log: typing.BinaryIO  # .slog  # logs Screen Delays & Bytes
     bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
+
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
-    settings: list[bytes]  # tracks Insert/ Replace/ etc
+    settings: list[str]  # Replacing/ Inserting/ etc
+    row_y: int  # Y places encoded as Southbound across 1 .. Height
+    column_x: int  # X places encoded as Eastbound across 1 .. Width
+    list_str_by_y_x: dict[int, dict[int, list[str]]] = dict()  # shadows the last Write at each Place
 
     none_func_by_str: dict[str, abc.Callable[[], None]] = dict()
     loopable_kdata_tuple: tuple[bytes, ...] = tuple()
@@ -283,8 +287,12 @@ class ScreenEditor:
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
         self.bytes_terminal = BytesTerminal()
+
         self.arrows = 0
         self.settings = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
+        self.row_y = -1
+        self.column_x = -1
+        self.list_str_by_y_x = dict()
 
         # Init our Keyboard Chord Bindings
 
@@ -366,14 +374,110 @@ class ScreenEditor:
 
         slog.write(sdata)
 
-        self.write_shadow(sdata)
+        self.write_shadows(sdata)
 
     #
-    # Remember much if what we wrote
+    # Remember much of what we wrote
     #
 
-    def write_shadow(self, sdata: bytes) -> None:
+    def write_shadows(self, sdata: bytes) -> None:
         """Shadow the Screen Panel"""
+
+        stext = sdata.decode()  # todo: may raise UnicodeDecodeError
+        for some in re.findall(r"[^\r\n]+|[\r\n]", string=stext):
+
+            if self.write_text_shadows(stext=some):
+                continue
+
+            if self.write_leap_shadows(stext=some):
+                continue
+
+            if self.write_toggle_shadows(stext=some):
+                continue
+
+            tprint(f"Bytes written but not shadowed {some=}")
+
+    def write_text_shadows(self, stext: str) -> bool:
+        """Shadow the Text"""
+
+        list_str_by_y_x = self.list_str_by_y_x
+
+        if not stext.isprintable():
+            return False
+
+        for ch in stext:
+            y = self.row_y
+            x = self.column_x
+
+            if y not in list_str_by_y_x.keys():
+                list_str_by_y_x[y] = dict()
+
+            if x not in list_str_by_y_x[y].keys():
+                list_str_by_y_x[y][x] = list()
+
+            writes = list_str_by_y_x[y][x]
+            writes.clear()
+            writes.append(ch)
+
+            x_width = self._str_guess_x_width(ch)
+            self.column_x += x_width
+
+        return False
+
+    def _str_guess_x_width(self, text: str) -> int:
+        """Guess the Width on Screen of printing a Text"""
+
+        x_width = 0
+        for ch in text:
+            eaw = unicodedata.east_asian_width(ch)
+            x_width += 1
+            if eaw in ("F", "W"):
+                x_width += 1
+
+        return x_width
+
+    def write_leap_shadows(self, stext: str) -> bool:
+        """Shadow the Control Byte Sequences that move the Terminal Cursor"""
+
+        sdata = stext.encode()  # todo: may raise UnicodeEncodeError
+
+        bt = self.bytes_terminal
+        row_y = self.row_y
+        y_height = bt.read_y_height()
+
+        if sdata == b"\n":
+            self.row_y = min(y_height, row_y + 1)
+            return True
+
+            # todo5: scroll the Shadowed Text at "\n" etc
+
+        if sdata == b"\r":
+            self.column_x = 1
+            return True
+
+        tbp = TerminalBytePacket(sdata)
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        if csi and tbp.tail == b"H":
+            assert not tbp.back, (tbp.back, tbp)
+
+            neck_splits = tbp.neck.split(b";")
+            assert len(neck_splits) <= 2, (neck_splits, tbp.neck, tbp)
+
+            neck_plus_splits = neck_splits + [b"1", b"1"]
+
+            row_y = int(neck_plus_splits[0])
+            column_x = int(neck_plus_splits[1])
+
+            self.row_y = row_y  # for .write_leap_shadows
+            self.column_x = column_x  # for .write_leap_shadows
+
+            return True
+
+        return False
+
+    def write_toggle_shadows(self, stext: str) -> bool:
+        """Shadow the Replacing/ Inserting choice for before writing each Character"""
 
         settings = self.settings
 
@@ -381,33 +485,37 @@ class ScreenEditor:
         assert RM_IRM == "\x1b[" "4l"
 
         toggle_pairs = [
-            (b"\x1b[" b"4h", b"\x1b[" b"4l"),
+            ("\x1b[" "4h", "\x1b[" "4l"),
         ]
 
         for toggle_pair in toggle_pairs:
-            if sdata in toggle_pair:
-                index = toggle_pair.index(sdata)
+            if stext in toggle_pair:
+                index = toggle_pair.index(stext)
                 other = toggle_pair[1 - index]
 
                 if other in settings:
                     settings.remove(other)
-                settings.append(sdata)
+                settings.append(stext)
 
-    def read_shadow_settings(self, sdata0: bytes, sdata1: bytes) -> bytes:
+                return True
+
+        return False
+
+    def read_shadow_settings(self, stext0: str, stext1: str) -> str:
         """Read the present Shadow Setting of a pair:  the one, the other, else empty Bytes"""
 
         settings = self.settings
 
-        zero = sdata0 in settings
-        one = sdata1 in settings
+        zero = stext0 in settings
+        one = stext1 in settings
 
-        assert not (zero and one), (zero, one, sdata0, sdata1)
+        assert not (zero and one), (zero, one, stext0, stext1)
         if zero:
-            return sdata0
+            return stext0
         if one:
-            return sdata1
+            return stext1
 
-        return b""
+        return ""
 
     #
     # Bind Keyboard Chords to Funcs
@@ -778,10 +886,13 @@ class ScreenEditor:
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
 
         n = int(tbp.neck) if tbp.neck else 1
-        height = bt.read_height()
-        (row_y, column_x) = bt.read_row_y_column_x()
+        y_height = bt.read_y_height()
 
-        for y in range(1, height + 1):
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for ._take_csi_cols_delete_if_
+        self.column_x = column_x  # for ._take_csi_cols_delete_if_
+
+        for y in range(1, y_height + 1):
             self.write(f"\x1b[{y}d")  # for .columns_delete_n
             self.write(f"\x1b[{n}P")  # for .columns_delete_n
         self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
@@ -807,10 +918,13 @@ class ScreenEditor:
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
 
         n = int(tbp.neck) if tbp.neck else 1
-        height = bt.read_height()
-        (row_y, column_x) = bt.read_row_y_column_x()
+        y_height = bt.read_y_height()
 
-        for y in range(1, height + 1):
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for ._take_csi_cols_insert_if_
+        self.column_x = column_x  # for ._take_csi_cols_insert_if_
+
+        for y in range(1, y_height + 1):
             self.write(f"\x1b[{y}d")  # for .columns_delete_n
             self.write(f"\x1b[{n}@")  # for .columns_delete_n
         self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
@@ -1125,6 +1239,8 @@ class ScreenEditor:
         assert DCH_X == "\x1b[" "{}" "P"
 
         x = self.bytes_terminal.read_column_x()
+        self.column_x = x
+
         if x > 1:
             self.write("\b")
             self.write("\x1b[P")
@@ -1249,8 +1365,8 @@ class ScreenEditor:
 
         bt = self.bytes_terminal
 
-        height = bt.read_height()
-        mid_height = (height // 2) + (height % 2)
+        y_height = bt.read_y_height()
+        mid_height = (y_height // 2) + (y_height % 2)
 
         assert CUP_Y_X1 == "\x1b[" "{}" "H"
         self.write(f"\x1b[{mid_height}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
@@ -1317,8 +1433,8 @@ class ScreenEditor:
         assert SM_IRM == "\x1b[" "4h"
         assert RM_IRM == "\x1b[" "4l"
 
-        irm_bytes = self.read_shadow_settings(b"\x1b[4h", sdata1=b"\x1b[4l")
-        restore_inserting_replacing = irm_bytes.decode()  # doesn't raise UnicodeDecodeError
+        irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
+        restore_inserting_replacing = irm_stext  # maybe empty
 
         self.do_replacing_start()  # for F2
 
@@ -1392,8 +1508,13 @@ class ScreenEditor:
 #
 
 
-# todo5: Layer below to do the Screen Shadowing. Each Y X gets a List Str
-# todo5: Last Item of List Str is the Text written after the Controls
+# todo7: Type out your own Button, and then Mouse Click (or F10) it. Enclose in <> to not self-erase
+
+# todo6: Each Y X gets a List Str. Last Item of List Str is the Text written after the Controls
+# todo6: plain bold italic
+# todo6: <mark> flip spin
+# todo6: glider, sw glider, ne nw se gliders
+# todo6: circle triangle square rectangle polygon
 
 # todo3: Hide the Conway Cursor?
 # todo3: Discover the same drawing but translated to new Y X or new Rotation
@@ -1452,17 +1573,42 @@ class ConwayLife:
     def restart_conway_life(self) -> None:
         """Start again, with the most famous Conway Life Glider"""
 
-        (y0, x0) = self.yx_board_place(dy=-3, dx=-6)
-        # (y0, x0) = (9, 1)  # last wins
+        str_by_y_x = self.str_by_y_x
 
-        self.yx_board = (y0, x0)
-        self.yx_puck = (y0, x0)
+        choice = 1
 
-        self.conway_print_some("⚪⚪⚪⚪⚪")
-        self.conway_print_some("⚪🔴⚪🔴⚪")
-        self.conway_print_some("⚪⚪🔴🔴⚪")
-        self.conway_print_some("🔵⚪🔴⚪⚪")
-        self.conway_print_some("🔵⚪⚪⚪🔵")
+        if choice == 1:
+            (y0, x0) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
+            self.yx_board = (y0, x0)
+            self.yx_puck = (y0, x0)
+            self.conway_print_some("⚪🔴⚪🔴⚪")  # todo5: Conway Gameboard at Cursor
+            self.conway_print_some("⚪⚪🔴🔴⚪")
+            self.conway_print_some("🔵⚪🔴⚪⚪")
+
+            # Southeast Glider
+
+        if choice == 2:
+            (y0, x0) = self.yx_board_place(dy=-2, dx=-4)  # todo5: derive dy dx
+            self.yx_board = (y0, x0)
+            self.yx_puck = (y0, x0)
+            self.conway_print_some("🔴⚪⚪⚪🔴")
+            self.conway_print_some("🔴🔴⚪🔴🔴")
+            self.conway_print_some("🔴⚪🔴⚪🔴")
+            self.conway_print_some("⚪🔴⚪🔴⚪")
+            self.conway_print_some("⚪⚪🔴⚪⚪")
+
+            # https://imgur.com/a/interesting-face-pattern-conways-game-of-life-epMFxEb
+
+        yx_list = list()
+        for y in str_by_y_x.keys():
+            for x in str_by_y_x[y].keys():
+                yx = (y, x)
+                yx_list.append(yx)
+
+        for y, x in yx_list:
+            syx = str_by_y_x[y][x]
+            if syx == "🔴":
+                self.y_x_count_around(y, x)  # adds its Next Spots
 
         self._leap_conway_between_half_steps_()
 
@@ -1472,11 +1618,11 @@ class ConwayLife:
         se = self.screen_editor
         bt = se.bytes_terminal
 
-        height = bt.read_height()
-        width = bt.read_width()
+        y_height = bt.read_y_height()
+        x_width = bt.read_x_width()
 
-        mid_height = (height // 2) + (height % 2)
-        mid_width = (width // 2) + (width % 2)
+        mid_height = (y_height // 2) + (y_height % 2)
+        mid_width = (x_width // 2) + (x_width % 2)
 
         yx_board = (mid_height + dy, mid_width + dx)
 
@@ -1543,7 +1689,7 @@ class ConwayLife:
         (y0, x0) = self.yx_board_place(dy=0, dx=0)
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        se.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
+        se.write(f"\x1b[{y0};{x0}H")  # for ._leap_conway_between_half_steps_
 
     def _do_conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
@@ -1631,7 +1777,7 @@ class ConwayLife:
         assert CUF_X == "\x1b[" "{}" "C"
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
 
-        se.write(f"\x1b[{y};{x}H")  # for .conway_print_some
+        se.write(f"\x1b[{y};{x}H")  # for .conway_print_y_x_syx
 
         if syx == "🔵":
             se.write("\x1b[2C")
@@ -1814,8 +1960,8 @@ class BytesTerminal:
 
     extras: bytearray  # Bytes from 'os.read' not yet returned inside some TerminalBytePacket
 
-    height: int  # Terminal Screen Pane Rows, else -1
-    width: int  # Terminal Screen Pane Columns, else -1
+    y_height: int  # Terminal Screen Pane Rows, else -1
+    x_width: int  # Terminal Screen Pane Columns, else -1
 
     #
     # Init, enter, exit, flush, and stop
@@ -1835,8 +1981,8 @@ class BytesTerminal:
 
         self.extras = bytearray()
 
-        self.height = -1
-        self.width = -1
+        self.y_height = -1
+        self.x_width = -1
 
     def __enter__(self) -> BytesTerminal:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -1956,20 +2102,20 @@ class BytesTerminal:
                         if not self.kbhit(timeout=0.333):
                             break  # rejects slow SS3 b"\x1bO" "P" of Fn F1..F4
 
-    def read_height(self) -> int:
+    def read_y_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
         fileno = self.fileno
         size = os.get_terminal_size(fileno)
         assert 5 <= size.lines <= _PN_MAX_32100_, (size,)
 
-        height = size.lines
+        y_height = size.lines
 
-        return height
+        return y_height
 
         # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
 
-    def read_width(self) -> int:
+    def read_x_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
         fileno = self.fileno
@@ -1977,9 +2123,9 @@ class BytesTerminal:
 
         assert 20 <= size.columns <= _PN_MAX_32100_, (size,)
 
-        width = size.columns
+        x_width = size.columns
 
-        return width
+        return x_width
 
         # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
 
