@@ -222,6 +222,9 @@ ICH_X = "\x1b[" "{}" "@"  # CSI 04/00 Insert Character
 IL_Y = "\x1b[" "{}" "L"  # CSI 04/12 Insert Line [Row]
 DCH_X = "\x1b[" "{}" "P"  # CSI 05/00 Delete Character
 
+SU_Y = "\x1b[" "{}" "S"  # CSI 05/03 Scroll Up [Insert South Lines]
+SD_Y = "\x1b[" "{}" "T"  # CSI 05/04 Scroll Down [Insert North Lines]
+
 VPA_Y = "\x1b" "[" "{}" "d"  # CSI 06/04 Line Position Absolute
 
 DECIC_X = "\x1b[" "{}" "'}}"  # CSI 02/07 07/13 VT420 DECIC_X  # "}}" to mean "}"
@@ -668,15 +671,6 @@ class ScreenEditor:
         tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
         self.print_kcaps_plus(tbp)
 
-    def print_kcaps_plus(self, tbp: TerminalBytePacket) -> None:
-        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
-
-        kdata = tbp.to_bytes()
-        assert kdata, (kdata,)
-
-        kcaps = kdata_to_kcaps(kdata)
-        self.print(kcaps, end=" ")
-
     def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
         """Emulate the KData Control Sequence and return it, else return False"""
 
@@ -715,6 +709,12 @@ class ScreenEditor:
         if self._take_csi_tab_right_leap_if_(tbp):  # ⎋[{}⇧I
             return True
 
+        if self._take_csi_rows_up_if_(tbp):  # ⎋[{}⇧S
+            return True
+
+        if self._take_csi_rows_down_if_(tbp):  # ⎋[{}⇧T
+            return True
+
         if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
             return True
 
@@ -734,56 +734,18 @@ class ScreenEditor:
 
         return True
 
-    def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
-        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
+    #
+    # Define some emulations
+    #
 
-        assert CUP_Y1_X1 == "\x1b[" "H"
+    def print_kcaps_plus(self, tbp: TerminalBytePacket) -> None:
+        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
 
-        if kdata != b"\x1b" b"l":
-            return False
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)
 
-        tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
-
-        self.write("\x1b[H")  # for ⎋L
-
-        return True
-
-        # gCloud Shell needs ⎋[⇧H for ⎋L
-
-    def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
-
-        assert TAB == "\t"
-        assert CHT_X == "\x1b[" "{}" "I"
-
-        if tbp.tail != b"I":
-            return False
-
-        tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
-
-        pn = int(tbp.neck) if tbp.neck else 1
-        assert pn >= 1, (pn,)
-        self.write(pn * "\t")
-
-        return True
-
-        # gCloud Shell needs \t for ⎋[ {}I
-
-    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
-        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
-
-        assert VPA_Y == "\x1b[" "{}" "d"
-
-        if kdata != b"\x1b[" b"d":
-            return False
-
-        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
-
-        self.write("\x1b[" "1" "d")
-
-        return True
-
-        # gCloud Shell needs ⎋[1D for ⎋[D
+        kcaps = kdata_to_kcaps(kdata)
+        self.print(kcaps, end=" ")
 
     def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧~ cols-delete"""
@@ -794,7 +756,8 @@ class ScreenEditor:
         assert VPA_Y == "\x1b[" "{}" "d"
         assert DECDC_X == "\x1b[" "{}" "'~"
 
-        if (tbp.back + tbp.tail) != b"'~":
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((tbp.back + tbp.tail) == b"'~")):
             return False
 
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
@@ -810,6 +773,8 @@ class ScreenEditor:
 
         return True
 
+        # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
+
     def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧} cols-insert"""
 
@@ -820,7 +785,8 @@ class ScreenEditor:
         assert DECDC_X == "\x1b[" "{}" "'~"
         assert DECIC_X == "\x1b[" "{}" "'}}"
 
-        if (tbp.back + tbp.tail) != b"'}":
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((tbp.back + tbp.tail) == b"'}")):
             return False
 
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
@@ -835,6 +801,24 @@ class ScreenEditor:
         self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
 
         return True
+
+        # macOS Terminal & gCloud Shell lack ⎋['⇧} cols-insert
+
+    def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
+        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
+
+        assert CUP_Y1_X1 == "\x1b[" "H"
+
+        if kdata != b"\x1b" b"l":
+            return False
+
+        tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
+
+        self.write("\x1b[H")  # for ⎋L
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋L
 
     def _take_csi_mouse_press_if_(self, tbp: TerminalBytePacket, n: int) -> bool:
         """Shrug off a Mouse Press if quick"""
@@ -871,6 +855,106 @@ class ScreenEditor:
         return True
 
         # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
+
+    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
+        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
+
+        assert VPA_Y == "\x1b[" "{}" "d"
+
+        if kdata != b"\x1b[d":
+            return False
+
+        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
+
+        self.write("\x1b[1d")  # carefully not empty Parameters via "\x1b[d"
+
+        return True
+
+        # gCloud Shell needs ⎋[1D for ⎋[D
+
+    def _take_csi_rows_down_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Scroll Down [Insert North Lines]"""
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+
+        assert CUU_Y == "\x1b[" "{}" "A"
+        assert IL_Y == "\x1b[" "{}" "L"
+        assert SD_Y == "\x1b[" "{}" "T"
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (tbp.tail == b"T")):
+            return False
+
+        n = int(tbp.neck) if tbp.neck else 1
+
+        self.write("\x1b7")
+        self.write("\x1b[32100A")
+        self.write(f"\x1b[{n}L")
+        self.write("\x1b8")
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋[{}⇧T
+
+    def _take_csi_rows_up_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Scroll Up [Insert South Lines]"""
+
+        assert LF == "\n"
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+
+        assert CUD_Y == "\x1b[" "{}" "B"
+        assert SU_Y == "\x1b[" "{}" "S"
+        assert _PN_MAX_32100_ == 32100
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (tbp.tail == b"S")):
+            return False
+
+        n = int(tbp.neck) if tbp.neck else 1
+
+        self.write("\x1b7")
+        self.write("\x1b[32100B")
+        self.write(n * "\n")
+        self.write("\x1b8")
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋[{}⇧S
+
+    def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
+
+        assert TAB == "\t"
+        assert CHT_X == "\x1b[" "{}" "I"
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (tbp.tail == b"I")):
+            return False
+
+        tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
+
+        pn = int(tbp.neck) if tbp.neck else 1
+        assert pn >= 1, (pn,)
+        self.write(pn * "\t")
+
+        return True
+
+        # gCloud Shell lacks ⎋[ {}I
+
+    def do_write_cr_lf(self, tbp: TerminalBytePacket) -> None:
+        """Write CR LF"""
+
+        assert CR == "\r"
+        assert LF == "\n"
+
+        self.write("\r\n")
+
+    #
+    #
+    #
 
     def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
@@ -923,14 +1007,6 @@ class ScreenEditor:
 
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
 
-    def do_write_cr_lf(self, tbp: TerminalBytePacket) -> None:
-        """Write CR LF"""
-
-        assert CR == "\r"
-        assert LF == "\n"
-
-        self.write("\r\n")
-
     def do_write_kdata(self, tbp: TerminalBytePacket) -> None:
         """Loop the Keyboard back to the Screen, literally, directly"""
 
@@ -945,14 +1021,6 @@ class ScreenEditor:
 
         slog.write(sdata)
 
-    def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
-        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
-
-        (tbp, n) = self.read_some_byte_packets()
-        self.do_write_kdata(tbp)
-
-        # Emacs ⌃Q  # Vim ⌃V
-
     def do_replacing_one_kdata(self, tbp: TerminalBytePacket) -> None:
         """Start replacing, quote 1 Keyboard Chord, then start inserting"""
 
@@ -962,45 +1030,13 @@ class ScreenEditor:
 
         # Vim R
 
-    #
-    # Reply to Keyboard Chords
-    #
+    def do_quote_one_kdata(self, tbp: TerminalBytePacket) -> None:
+        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
-    def do_column_left(self, tbp: TerminalBytePacket) -> None:
-        """Go left by 1 Column"""
-
-        assert BS == "\b"
-
-        tbp = TerminalBytePacket(b"\b")
+        (tbp, n) = self.read_some_byte_packets()
         self.do_write_kdata(tbp)
 
-        # Emacs Delete
-
-    def do_column_right(self, tbp: TerminalBytePacket) -> None:
-        """Go right by 1 Column"""
-
-        assert CUF_X == "\x1b[" "{}" "C"
-        self.write("\x1b[" "C")
-
-        # Emacs ⌃F
-
-    def do_column_right_inserting_start(self, tbp: TerminalBytePacket) -> None:
-        """Insert 1 Space at the Cursor, then go right by 1 Column"""
-
-        self.do_column_right(tbp)  # Vim L
-        self.do_inserting_start(tbp)  # Vim I
-
-        # Vim A = Vim L I
-
-        # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
-
-    def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
-        """Delete the Character beneath the Cursor"""
-
-        assert DCH_X == "\x1b[" "{}" "P"
-        self.write("\x1b[" "P")
-
-        # Emacs ⌃D  # Vim X
+        # Emacs ⌃Q  # Vim ⌃V
 
     def do_assert_false(self, tbp: TerminalBytePacket) -> None:
         """Assert False"""
@@ -1018,6 +1054,46 @@ class ScreenEditor:
         # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
         # Vim ⇧Z⇧Q
 
+    #
+    # Reply to Emacs & Vim Keyboard Chords
+    #
+
+    def do_column_left(self, tbp: TerminalBytePacket) -> None:
+        """Go left by 1 Column"""
+
+        assert BS == "\b"
+
+        tbp = TerminalBytePacket(b"\b")
+        self.do_write_kdata(tbp)
+
+        # Emacs Delete
+
+    def do_column_right(self, tbp: TerminalBytePacket) -> None:
+        """Go right by 1 Column"""
+
+        assert CUF_X == "\x1b[" "{}" "C"
+        self.write("\x1b[C")
+
+        # Emacs ⌃F
+
+    def do_column_right_inserting_start(self, tbp: TerminalBytePacket) -> None:
+        """Insert 1 Space at the Cursor, then go right by 1 Column"""
+
+        self.do_column_right(tbp)  # Vim L
+        self.do_inserting_start(tbp)  # Vim I
+
+        # Vim A = Vim L I
+
+        # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
+
+    def do_char_delete_here(self, tbp: TerminalBytePacket) -> None:
+        """Delete the Character beneath the Cursor"""
+
+        assert DCH_X == "\x1b[" "{}" "P"
+        self.write("\x1b[P")
+
+        # Emacs ⌃D  # Vim X
+
     def do_char_delete_here_start_inserting(self, tbp: TerminalBytePacket) -> None:
         """Delete the Character beneath the Cursor, and Start Inserting"""
 
@@ -1034,7 +1110,8 @@ class ScreenEditor:
 
         x = self.bytes_terminal.read_column_x()
         if x > 1:
-            self.write("\b" "\x1b[" "P")
+            self.write("\b")
+            self.write("\x1b[P")
 
         # Emacs Delete  # Vim ⇧X
 
@@ -1053,7 +1130,7 @@ class ScreenEditor:
 
         assert CUF_X == "\x1b[" "{}" "C"
         assert _PN_MAX_32100_ == 32100
-        self.write("\x1b[" "32100" "C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
+        self.write("\x1b[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
 
         # todo3: Leap to Rightmost Shadow, if Row Shadowed
 
@@ -1071,7 +1148,7 @@ class ScreenEditor:
         """Start Inserting Characters at the Cursor"""
 
         assert SM_IRM == "\x1b[" "4h"
-        self.write("\x1b[" "4h")
+        self.write("\x1b[4h")
 
         # Vim I
 
@@ -1081,7 +1158,7 @@ class ScreenEditor:
         """Start Replacing Characters at the Cursor"""
 
         assert RM_IRM == "\x1b[" "4l"
-        self.write("\x1b[" "4l")
+        self.write("\x1b[4l")
 
         # Vim ⇧R
 
@@ -1102,7 +1179,7 @@ class ScreenEditor:
         """Go down by 1 Row, but stop in last Row"""
 
         assert CUD_Y == "\x1b[" "{}" "B"
-        self.write("\x1b[" "B")
+        self.write("\x1b[B")
 
         # Emacs ⌃N
 
@@ -1126,7 +1203,7 @@ class ScreenEditor:
         """Insert 1 Row above the Cursor"""
 
         assert IL_Y == "\x1b[" "{}" "L"
-        self.write("\x1b[" "L")
+        self.write("\x1b[L")
 
         # Emacs ⌃O when leftmost
 
@@ -1168,7 +1245,7 @@ class ScreenEditor:
         """Erase from the Cursor to the Tail of the Row"""
 
         assert EL_P == "\x1b[" "{}" "K"
-        self.write("\x1b[" "K")
+        self.write("\x1b[K")
 
         # Vim ⇧D  # Emacs ⌃K when not rightmost
 
@@ -1184,7 +1261,7 @@ class ScreenEditor:
         """Go up by 1 Row, but stop in Top Row"""
 
         assert CUU_Y == "\x1b[" "{}" "A"
-        self.write("\x1b[" "A")
+        self.write("\x1b[A")
 
         # Emacs ⌃P
 
@@ -1264,24 +1341,14 @@ class ScreenEditor:
         if env_cloud_shell:
             self.print()
             self.print("gCloud Shell ignores ⌃M (you must press Return)")
-            self.print("gCloud Shell ignores a quick ⎋[D (you must press ⎋[1D)")
-            self.print("gCloud Shell often ignores ⎋[I (you must press Tab)")
             self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
             self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
             self.print()
 
-            # todo5: emulate ⎋[⇧T Rows-Down and ⎋[⇧S Rows-Up at gCloud Shell
+            # gCloud Shell has distinct ← ↑ → ↓ and ⌥ ← ↑ → ↓ and ⌃⌥ ← ↑ → ↓
+            # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as slow Esc Esc
 
-            # self.print("gCloud Shell ignores ⎋[⇧T Rows-Down (but accepts ⎋[⇧L)")
-            # self.print("gCloud Shell ignores ⎋[⇧S Rows-Up (but accepts ⌃J)")
-            # self.print("gCloud Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
-
-            # gCloud Shell has ← ↑ → ↓
-            # gCloud Shell has ⌥ ← ↑ → ↓
-            # gCloud Shell has ⌃⌥ ← ↑ → ↓
-            # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as Esc Xms Esc
-
-            # gCloud AltIsMeta has todo2:
+            # todo2: gCloud AltIsMeta has ...
 
         if sys_platform_darwin:
             self.print()
@@ -1291,9 +1358,7 @@ class ScreenEditor:
             self.print("macOS Shell ⌘K clears Screen & Scrollback (but not Top Row)")
             self.print()
 
-            # macOS Shell has ← ↑ → ↓
-            # macOS Shell has ⌥ ← → and ⇧ ← →
-            # macOS Shell has ⇧ Fn ← ↑ → ↓
+            # macOS Shell has distinct ← ↑ → ↓ and ⌥ ← → and ⇧ ← → and ⇧ Fn ← ↑ → ↓
             # macOS Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
 
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
@@ -1531,7 +1596,7 @@ class ScreenEditor:
         self.write(f"\x1b[{y};{x}H")  # for .conway_print_some
 
         if syx == ".":
-            self.write("\x1b[" "C")
+            self.write("\x1b[C")
         else:
             self.write(syx)
             self.shadow_y_x_syx(y, x=x, syx=syx)
