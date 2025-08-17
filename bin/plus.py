@@ -263,11 +263,6 @@ class ScreenEditor:
     none_func_by_str: dict[str, abc.Callable[[], None]] = dict()
     loopable_kdata_tuple: tuple[bytes, ...] = tuple()
 
-    str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
-    yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
-    yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
-    steps: int  # counts steps, after -1
-
     #
     # Init, Enter, Exit, Print
     #
@@ -298,13 +293,6 @@ class ScreenEditor:
 
         loopable_kdata_tuple = self.form_loopable_kdata_tuple()
         self.loopable_kdata_tuple = loopable_kdata_tuple
-
-        # Init our Gameplay
-
-        self.yx_board = (-1, -1)
-        self.yx_puck = (-1, -1)
-        self.str_by_y_x = dict()
-        self.steps = -1
 
     def __enter__(self) -> ScreenEditor:  # -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -1336,15 +1324,17 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        none_func_by_str = self.form_conway_none_func_by_str()
+        cl = ConwayLife(se=self)
+
+        none_func_by_str = cl.form_conway_none_func_by_str()
 
         assert none_func_by_str["\x1bO" "Q"] == self.do_kdata_fn_f2
-        none_func_by_str["\x1bO" "Q"] = self.restart_conway_life
+        none_func_by_str["\x1bO" "Q"] = cl.restart_conway_life
 
         self.none_func_by_str = none_func_by_str
 
         try:
-            self.play_conway_life()
+            cl.play_conway_life()
         finally:
             self.none_func_by_str = with_none_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
@@ -1397,29 +1387,53 @@ class ScreenEditor:
 
         # todo2: accept lots of quits and movements as per Vim ⌃O & Emacs
 
-    #
-    # Play Conway's Game-of-Life
-    #
 
-    # todo5: Layer below to do the Screen Shadowing. Each Y X gets a List Str
-    # todo5: Last Item of List Str is the Text written after the Controls
+#
+# Play Conway's Game-of-Life
+#
 
-    # todo3: Hide the Conway Cursor?
-    # todo3: Discover the same drawing but translated to new Y X or new Rotation
+
+# todo5: Layer below to do the Screen Shadowing. Each Y X gets a List Str
+# todo5: Last Item of List Str is the Text written after the Controls
+
+# todo3: Hide the Conway Cursor?
+# todo3: Discover the same drawing but translated to new Y X or new Rotation
+
+
+class ConwayLife:
+    """Play Conway's Game-of-Life"""
+
+    screen_editor: ScreenEditor
+
+    str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
+    yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
+    yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
+    steps: int  # counts steps, after -1
+
+    def __init__(self, se: ScreenEditor) -> None:
+
+        self.screen_editor = se
+
+        self.yx_board = (-1, -1)
+        self.yx_puck = (-1, -1)
+        self.str_by_y_x = dict()
+        self.steps = -1
 
     def play_conway_life(self) -> None:
         """Play Conway's Game-of-Life"""
 
+        se = self.screen_editor
+
         # Say Hello
 
-        self.print()
-        self.print("Hello from Conway's Game-of-Life")
-        self.print()
-        self.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
-        self.print("+ - to make a Cell older or younger")
-        self.print("Spacebar to step, ⌃Spacebar to step twice, ⌥← to undo")
-        self.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
-        self.print()
+        se.print()
+        se.print("Hello from Conway's Game-of-Life")
+        se.print()
+        se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
+        se.print("+ - to make a Cell older or younger")
+        se.print("Spacebar to step, ⌃Spacebar to step twice, ⌥← to undo")
+        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
+        se.print()
 
         self.restart_conway_life()
 
@@ -1427,16 +1441,16 @@ class ScreenEditor:
 
         while True:
             try:
-                self.read_eval_print_once()
+                se.read_eval_print_once()
             except SystemExit:
                 break
 
         # Say Goodbye
 
-        self.print()
-        self.print("Goodbye from Conway's Game-of-Life")
+        se.print()
+        se.print("Goodbye from Conway's Game-of-Life")
 
-    def restart_conway_life(self, tbp: TerminalBytePacket | None = None) -> None:
+    def restart_conway_life(self) -> None:
         """Start again, with the most famous Conway Life Glider"""
 
         (y0, x0) = self.yx_board_place(dy=-3, dx=-6)
@@ -1456,7 +1470,8 @@ class ScreenEditor:
     def yx_board_place(self, dy: int, dx: int) -> tuple[int, int]:
         """Leap to our main Center of our Screen Panel"""
 
-        bt = self.bytes_terminal
+        se = self.screen_editor
+        bt = se.bytes_terminal
 
         height = bt.read_height()
         width = bt.read_width()
@@ -1471,10 +1486,12 @@ class ScreenEditor:
     def conway_print_some(self, s: str) -> None:
         """Print each Character"""
 
+        se = self.screen_editor
+
         (y0, x0) = self.yx_puck
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
+        se.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
 
         (y, x) = (y0, x0)
         for syx in s:
@@ -1521,10 +1538,12 @@ class ScreenEditor:
     def _leap_conway_between_half_steps_(self) -> None:
         """Place the Puck between Half-Step's"""
 
+        se = self.screen_editor
+
         (y0, x0) = self.yx_board_place(dy=0, dx=0)
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        self.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
+        se.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
 
     def _do_conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
@@ -1607,15 +1626,17 @@ class ScreenEditor:
     def conway_print_y_x_syx(self, y: int, x: int, syx: str) -> None:
         """Print each Character"""
 
+        se = self.screen_editor
+
         assert CUF_X == "\x1b[" "{}" "C"
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
 
-        self.write(f"\x1b[{y};{x}H")  # for .conway_print_some
+        se.write(f"\x1b[{y};{x}H")  # for .conway_print_some
 
         if syx == ".":
-            self.write("\x1b[C")
+            se.write("\x1b[C")
         else:
-            self.write(syx)
+            se.write(syx)
             self.shadow_y_x_syx(y, x=x, syx=syx)
 
         x += 2
@@ -1635,8 +1656,10 @@ class ScreenEditor:
     def form_conway_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
 
+        se = self.screen_editor
+
         func_by_str: dict[str, abc.Callable[[], None]] = {
-            "⌃D": self.do_raise_system_exit,
+            "⌃D": se.do_raise_system_exit,
             "Tab": self.do_conway_8x_redo,
             # "⇧Tab": self.do_conway_8x_undo,
             "Spacebar": self.do_conway_half_step,
