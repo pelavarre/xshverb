@@ -261,7 +261,6 @@ class ScreenEditor:
     settings: list[bytes]  # tracks Insert/ Replace/ etc
 
     func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = dict()
-    func_by_kdata: dict[bytes, abc.Callable[[TerminalBytePacket], None]] = dict()
 
     str_by_y_x: dict[int, dict[int, str]] = dict()  # shadows Characters of the Screen Panel
     yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
@@ -294,10 +293,7 @@ class ScreenEditor:
         #
 
         func_by_str = self.form_func_by_str()
-        func_by_kdata = self.form_func_by_kdata()
-
         self.func_by_str = func_by_str
-        self.func_by_kdata = func_by_kdata  # MyPy needs Dict
 
         #
 
@@ -425,130 +421,120 @@ class ScreenEditor:
     # Bind Keyboard Chords to Funcs
     #
 
+    # todo5: rethink Emacs ⌃M emulation, vs Insert/ Replace
+
     def form_func_by_str(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
         """Bind Keycaps to Funcs"""
 
-        return dict()
-
-        # todo2: bind Keyboard Chord Sequences, no longer just Keyboard Chords
-        # todo5: bind Keycaps in place of Keyboard Encodings where possible
-        # todo5: bind Keycaps separately to Funcs of 1 Arg or 0 Args
-
-    def form_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
-        """Bind Keyboard Encodings to Funcs"""
-
-        # List the simplest Keyboard Encodings
-
-        func_by_kdata = {
+        func_by_str = {
             #
             # 1-Byte 7-Bit C0 Controls
             #
-            b"\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
-            b"\x02": self.do_column_left,  # ⌃B for Emacs
-            b"\x04": self.do_char_delete_here,  # ⌃D for Emacs
-            b"\x05": self.do_column_leap_rightmost,  # ⌃E for Emacs
-            b"\x06": self.do_column_right,  # ⌃F for Emacs
-            b"\x07": self.do_write_kdata,  # ⌃G \a bell-ring
-            b"\x08": self.do_write_kdata,  # ⌃H \b ←  # todo: where does Windows Backspace land?
-            b"\x09": self.do_write_kdata,  # ⌃I \t Tab
-            b"\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
-            b"\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
-            # b"\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
-            b"\x0d": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
-            b"\x0e": self.do_row_down,  # ⌃N
-            b"\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
-            b"\x10": self.do_row_up,  # ⌃P
-            b"\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
-            b"\x16": self.do_quote_one_kdata,  # ⌃V for Vim
+            "\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
+            "\x02": self.do_column_left,  # ⌃B for Emacs
+            "\x04": self.do_char_delete_here,  # ⌃D for Emacs
+            "\x05": self.do_column_leap_rightmost,  # ⌃E for Emacs
+            "\x06": self.do_column_right,  # ⌃F for Emacs
+            "\x07": self.do_write_kdata,  # ⌃G \a bell-ring
+            "\x08": self.do_write_kdata,  # ⌃H \b ←  # todo: where does Windows Backspace land?
+            "\x09": self.do_write_kdata,  # ⌃I \t Tab
+            "\x0a": self.do_write_kdata,  # ⌃J \n ↓, else Scroll Up and then ↓
+            "\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
+            # "\x0d": self.do_write_kdata,  # ⌃M \r Return  # only \r Return at gCloud
+            "\x0d": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
+            "\x0e": self.do_row_down,  # ⌃N
+            "\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
+            "\x10": self.do_row_up,  # ⌃P
+            "\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
+            "\x16": self.do_quote_one_kdata,  # ⌃V for Vim
             # todo2: ⌃X⌃C ⌃X⌃S for Emacs
             #
             # Esc and Esc Byte Pairs
             #
-            # b"\x1b": self.print_kcaps_plus,  # ⎋
+            # "\x1b": self.print_kcaps_plus,  # ⎋
             #
-            b"\x1b" b"$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
-            b"\x1b" b"0": self.do_column_leap_leftmost,  # ⎋0 for Vim
-            # b"\x1b" b"7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
-            # b"\x1b" b"8": self.do_write_kdata,  # ⎋8 cursor-revert
+            "\x1b" "$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
+            "\x1b" "0": self.do_column_leap_leftmost,  # ⎋0 for Vim
+            # "\x1b" "7": self.do_write_kdata,  # ⎋7 cursor-checkpoint
+            # "\x1b" "8": self.do_write_kdata,  # ⎋8 cursor-revert
             # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
-            b"\x1b" b"A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
-            b"\x1b" b"C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
-            # b"\x1b" b"D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
-            b"\x1b" b"D": self.do_row_tail_erase,  # Vim ⇧D
-            # b"\x1b" b"E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
-            # b"\x1b" b"J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
-            b"\x1b" b"H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
-            b"\x1b" b"L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
-            # b"\x1b" b"M": self.do_write_kdata,  # ⎋⇧M ↑ (RI)
-            b"\x1b" b"M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
-            b"\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
-            b"\x1b" b"Q": self.do_assert_false,  # ⎋⇧Q for Vim
-            b"\x1b" b"R": self.do_replacing_start,  # ⎋⇧R for Vim
-            b"\x1b" b"S": self.do_row_delete_start_inserting,  # ⎋S for Vim
-            b"\x1b" b"X": self.do_char_delete_left,  # ⎋⇧X for Vim
+            "\x1b" "A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
+            "\x1b" "C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
+            # "\x1b" "D": self.do_write_kdata,  # ⎋⇧D ↓ (IND)
+            "\x1b" "D": self.do_row_tail_erase,  # Vim ⇧D
+            # "\x1b" "E": self.do_write_kdata,  # ⎋⇧E \r\n else \r (NEL)
+            # "\x1b" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
+            "\x1b" "H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
+            "\x1b" "L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
+            # "\x1b" "M": self.do_write_kdata,  # ⎋⇧M ↑ (RI)
+            "\x1b" "M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
+            "\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
+            "\x1b" "Q": self.do_assert_false,  # ⎋⇧Q for Vim
+            "\x1b" "R": self.do_replacing_start,  # ⎋⇧R for Vim
+            "\x1b" "S": self.do_row_delete_start_inserting,  # ⎋S for Vim
+            "\x1b" "X": self.do_char_delete_left,  # ⎋⇧X for Vim
             # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
-            b"\x1b" b"a": self.do_column_right_inserting_start,  # ⎋A for Vim
-            # b"\x1b" b"c": self.do_write_kdata,  # ⎋C cursor-revert (_ICF_RIS_)
-            # b"\x1b" b"l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
-            b"\x1b" b"h": self.do_column_left,  # ⎋H for Vim
-            b"\x1b" b"i": self.do_inserting_start,  # ⎋I for Vim
-            b"\x1b" b"j": self.do_row_down,  # ⎋J for Vim
-            b"\x1b" b"k": self.do_row_up,  # ⎋K for Vim
-            b"\x1b" b"l": self.do_column_right,  # ⎋L for Vim
-            b"\x1b" b"o": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
-            b"\x1b" b"r": self.do_replacing_one_kdata,  # ⎋R for Vim
-            b"\x1b" b"s": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
-            b"\x1b" b"x": self.do_char_delete_here,  # ⎋X for Vim
+            "\x1b" "a": self.do_column_right_inserting_start,  # ⎋A for Vim
+            # "\x1b" "c": self.do_write_kdata,  # ⎋C cursor-revert (_ICF_RIS_)
+            # "\x1b" "l": self.do_write_kdata,  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            "\x1b" "h": self.do_column_left,  # ⎋H for Vim
+            "\x1b" "i": self.do_inserting_start,  # ⎋I for Vim
+            "\x1b" "j": self.do_row_down,  # ⎋J for Vim
+            "\x1b" "k": self.do_row_up,  # ⎋K for Vim
+            "\x1b" "l": self.do_column_right,  # ⎋L for Vim
+            "\x1b" "o": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
+            "\x1b" "r": self.do_replacing_one_kdata,  # ⎋R for Vim
+            "\x1b" "s": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
+            "\x1b" "x": self.do_char_delete_here,  # ⎋X for Vim
             #
             # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
             #
-            # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
+            # "\x1b[": self.print_kcaps_plus,  # ⎋ [
             #
-            b"\x1b[" b"A": self.do_write_kdata,  # ⎋[⇧A ↑
-            b"\x1b[" b"B": self.do_write_kdata,  # ⎋[⇧B ↓
-            b"\x1b[" b"C": self.do_write_kdata,  # ⎋[⇧C →
-            b"\x1b[" b"D": self.do_write_kdata,  # ⎋[⇧D ←
-            # b"\x1b[" b"I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not at gCloud
-            b"\x1b[" b"Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
+            "\x1b[" "A": self.do_write_kdata,  # ⎋[⇧A ↑
+            "\x1b[" "B": self.do_write_kdata,  # ⎋[⇧B ↓
+            "\x1b[" "C": self.do_write_kdata,  # ⎋[⇧C →
+            "\x1b[" "D": self.do_write_kdata,  # ⎋[⇧D ←
+            # "\x1b[" "I": self.do_write_kdata,  # ⎋[⇧I ⌃I  # not at gCloud
+            "\x1b[" "Z": self.do_write_kdata,  # ⎋[⇧Z ⇧Tab
             #
-            b"\x1b[" b"20~": self.do_kdata_fn_f9,  # Fn F9
+            "\x1b[" "20~": self.do_kdata_fn_f9,  # Fn F9
             #
             # Ss3 Esc Byte Sequences
             #
-            # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            # "\x1bO": self.print_kcaps_plus,  # ⎋⇧O
             #
-            b"\x1bO" b"P": self.do_kdata_fn_f1,  # Fn F1
-            b"\x1bO" b"Q": self.do_kdata_fn_f2,  # Fn F2
+            "\x1bO" "P": self.do_kdata_fn_f1,  # Fn F1
+            "\x1bO" "Q": self.do_kdata_fn_f2,  # Fn F2
             #
             # The Last 1-Byte 7-Bit Control, which looks lots like a C0 Control
             #
-            b"\x7f": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
+            "\x7f": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
         }
 
         # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
         #
-        # items = list(func_by_kdata.items())
+        # items = list(func_by_str.items())
         #
-        # for (kdata, func) in items:
-        #     if len(kdata) == 2:
-        #         if kdata.startswith(b"\x1b"):
-        #             alt_kdata = b"\x15" + kdata[1:]  # ⌃O
+        # for (kstr, func) in items:
+        #     if len(kstr) == 2:
+        #         if kstr.startswith("\x1b"):
+        #             alt_kstr = b"\x15" + kdata[1:]  # ⌃O
         #
-        #             assert alt_kdata not in func_by_kdata.keys()
-        #             func_by_kdata[alt_kdata] = func  # todo4: need Chord Sequences to do Vim I ⌃O
+        #             assert alt_kstr not in func_by_str.keys()
+        #             func_by_str[alt_kstr] = func  # todo4: need Chord Sequences to do Vim I ⌃O
 
-        # Succeed
+        return func_by_str
 
-        return func_by_kdata
+        # todo5: bind Keycaps separately to Funcs of 1 Arg or 0 Args
 
         # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
 
+        # todo2: bind Keyboard Chord Sequences, no longer just Keyboard Chords
         # todo2: bind ⌃C ⇧O for Emacs overwrite-mode, or something
-
         # todo2: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
-
         # todo2: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
 
     #
@@ -604,7 +590,6 @@ class ScreenEditor:
     def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
 
-        func_by_kdata = self.func_by_kdata
         func_by_str = self.func_by_str
         klog = self.keyboard_bytes_log
 
@@ -622,16 +607,6 @@ class ScreenEditor:
         if kcaps in func_by_str.keys():
             func = func_by_str[kcaps]
             tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
-
-            func(tbp)  # may raise SystemExit
-
-            return
-
-        # Call 1 Func Def by Keyboard Encoding
-
-        if kdata in func_by_kdata.keys():
-            func = func_by_kdata[kdata]
-            tprint(f"{func.__name__=}  # func_by_kdata reply_to_kdata")  # not .__qualname__
 
             func(tbp)  # may raise SystemExit
 
@@ -1294,8 +1269,7 @@ class ScreenEditor:
     def do_kdata_fn_f2(self, tbp: TerminalBytePacket, /) -> None:
         """Play Conway's Game-of-Life for F2"""
 
-        func_by_kdata = self.func_by_kdata
-        func_by_str = self.form_conway_func_by_keycaps()
+        func_by_str = self.form_conway_func_by_str()
 
         # Default to Replacing, not Inserting
 
@@ -1310,20 +1284,16 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        func_by_kdata = self.form_conway_func_by_kdata()
+        func_by_str = self.form_conway_func_by_str()
 
-        assert func_by_kdata[b"\x1bO" b"Q"] == self.do_kdata_fn_f2
-        func_by_kdata[b"\x1bO" b"Q"] = self.restart_conway_life
+        assert func_by_str["\x1bO" "Q"] == self.do_kdata_fn_f2
+        func_by_str["\x1bO" "Q"] = self.restart_conway_life
 
-        self.func_by_kdata = func_by_kdata
-
-        func_by_str = self.form_conway_func_by_keycaps()
         self.func_by_str = func_by_str
 
         try:
             self.play_conway_life()
         finally:
-            self.func_by_kdata = func_by_kdata  # replaces
             self.func_by_str = func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
@@ -1615,7 +1585,7 @@ class ScreenEditor:
 
         str_by_y_x[y][x] = syx
 
-    def form_conway_func_by_keycaps(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
+    def form_conway_func_by_str(self) -> dict[str, abc.Callable[[TerminalBytePacket], None]]:
         "Bind Keycaps to Funcs"
 
         func_by_str: dict[str, abc.Callable[[TerminalBytePacket], None]] = {
@@ -1634,13 +1604,6 @@ class ScreenEditor:
         return func_by_str
 
         # why does MyPy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
-
-    def form_conway_func_by_kdata(self) -> dict[bytes, abc.Callable[[TerminalBytePacket], None]]:
-        """Bind Keyboard Encodings to Funcs"""
-
-        d = self.form_func_by_kdata()
-
-        return d
 
 
 _ = """  # The 8 Half-Steps of a 5-Pixel Glider
@@ -1695,7 +1658,7 @@ SCREEN_WRITER_HELP = r"""
         Tab means ⌃I \t, and Return means ⌃M \r
 
         Minimal Emacs is ⌃A ⌃B ⌃D ⌃E ⌃F ⌃G ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V
-        Minimal Vim is ⎋ I ⌃O ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧ A C D H L M O Q R S X
+        Minimal Vim is ⎋ I ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧ $ A C D H L M O Q R S X
 
     Esc ⎋ Byte Pairs
 
