@@ -24,6 +24,7 @@ import pdb
 import re
 import select
 import signal
+import string
 import sys
 import termios
 import textwrap
@@ -47,9 +48,9 @@ _: object
 #
 
 
-with_exc_hook = sys.excepthook  # aliases old hook, and fails fast to chain hooks
-assert with_exc_hook.__module__ == "sys", (with_exc_hook.__module__,)
-assert with_exc_hook.__name__ == "excepthook", (with_exc_hook.__name__,)
+with_excepthook = sys.excepthook  # aliases old hook, and fails fast to chain hooks
+assert with_excepthook.__module__ == "sys", (with_excepthook.__module__,)
+assert with_excepthook.__name__ == "excepthook", (with_excepthook.__name__,)
 
 assert sys.__stderr__ is not None  # refuses to run headless
 with_stderr = sys.stderr
@@ -83,7 +84,7 @@ def excepthook(
 
     # Print the Traceback, etc
 
-    with_exc_hook(exc_type, exc_value, exc_traceback)
+    with_excepthook(exc_type, exc_value, exc_traceback)
 
     # Launch the Post-Mortem Debugger
 
@@ -135,6 +136,8 @@ def main() -> None:
     tryme()
     print(">>> ", file=sys.stderr)
 
+    sys.excepthook = with_excepthook
+
 
 def tryme() -> None:
     """Run when called"""
@@ -145,8 +148,8 @@ def tryme() -> None:
 
     func = try_screen_editor  # last choice wins
 
-    print(f"tryme: {func.__qualname__}", file=sys.stderr)
-    print(file=sys.stderr)
+    # print(f"tryme: {func.__qualname__}", file=sys.stderr)
+    # print(file=sys.stderr)
 
     func()
 
@@ -251,6 +254,9 @@ _PN_MAX_32100_ = 32100  # an Int beyond the Counts of Rows & Columns at any Term
 # todo2: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
 
 
+screen_editors: list[ScreenEditor] = list()
+
+
 class ScreenEditor:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
@@ -272,6 +278,8 @@ class ScreenEditor:
     #
 
     def __init__(self) -> None:
+
+        screen_editors.append(self)
 
         # Init our Keyboard & Screen Drivers
 
@@ -357,8 +365,9 @@ class ScreenEditor:
     def print(self, *args: object, end: str = "\r\n") -> None:
         """Join the Args by Space, add the End, and write the Encoded Chars"""
 
-        schars = " ".join(str(_) for _ in args) + end
+        schars = " ".join(str(_) for _ in args)
         self.write(schars)
+        self.write(end)
 
     def write(self, text: str) -> None:
         """Write the Bytes, and log them as written"""
@@ -380,22 +389,49 @@ class ScreenEditor:
     # Remember much of what we wrote
     #
 
+    def do_screen_redraw(self) -> None:
+        """Redraw the Screen as shadowed, be that wrong or correct"""
+
+        bt = self.bytes_terminal
+        fileno = bt.fileno
+        list_str_by_y_x = self.list_str_by_y_x
+        slog = self.screen_bytes_log
+
+        stext = "\x1b[2J"
+
+        sdata = stext.encode()
+        os.write(fileno, sdata)
+        slog.write(sdata)
+
+        for y in list_str_by_y_x.keys():
+            list_str_by_x = list_str_by_y_x[y]
+            for x in list_str_by_x.keys():
+                x_list_str = list_str_by_x[x]
+
+                self.write(f"\x1b[{y};{x}H")
+                for stext in x_list_str:
+
+                    sdata = stext.encode()
+                    os.write(fileno, sdata)
+                    slog.write(sdata)
+
+        # todo4: .do_screen_redraw of Csi ⇧J ⇧H etc bypasses our shadowed writes
+
     def write_shadows(self, sdata: bytes) -> None:
         """Shadow the Screen Panel"""
 
         stext = sdata.decode()  # todo: may raise UnicodeDecodeError
-        for some in re.findall(r"[^\r\n]+|[\r\n]", string=stext):
 
-            if self.write_text_shadows(stext=some):
-                continue
+        if self.write_text_shadows(stext):
+            return
 
-            if self.write_leap_shadows(stext=some):
-                continue
+        if self.write_leap_shadows(stext):
+            return
 
-            if self.write_toggle_shadows(stext=some):
-                continue
+        if self.write_toggle_shadows(stext):
+            return
 
-            tprint(f"Bytes written but not shadowed {some=}")
+        tprint(f"Bytes written but not shadowed {stext=}")  # such as Empty
 
     def write_text_shadows(self, stext: str) -> bool:
         """Shadow the Text"""
@@ -408,6 +444,9 @@ class ScreenEditor:
         for ch in stext:
             y = self.row_y
             x = self.column_x
+
+            if (y < 1) or (x < 1):  # todo4: Run .write_text_shadows only in Southwest? How deep?
+                continue
 
             if y not in list_str_by_y_x.keys():
                 list_str_by_y_x[y] = dict()
@@ -442,18 +481,44 @@ class ScreenEditor:
         sdata = stext.encode()  # todo: may raise UnicodeEncodeError
 
         bt = self.bytes_terminal
+        column_x = self.column_x
         row_y = self.row_y
         y_height = bt.read_y_height()
+
+        #
+
+        assert TAB == "\t"
+        assert LF == "\n"
+        assert CR == "\r"
+
+        if sdata == b"\t":
+            self.column_x = ((column_x - 1) // 8 + 1) * 8 + 1
+            return True
+
+            # todo5: cap \t shadows by screen panel width
 
         if sdata == b"\n":
             self.row_y = min(y_height, row_y + 1)
             return True
 
-            # todo5: scroll the Shadowed Text at "\n" etc
+            # todo6: scroll the Shadowed Text at "\n" etc
 
         if sdata == b"\r":
             self.column_x = 1
             return True
+
+        if sdata == b"\r\n":  # takes CR LF as 1 Control Sequence despite 2 TerminalBytePacket
+            self.column_x = 1
+            self.row_y = min(y_height, row_y + 1)
+            return True
+
+            # todo6: scroll the Shadowed Text at "\n" etc
+
+            # todo: reconsider CR LF is 2 TerminalBytePacket, not 1
+
+        #
+
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
 
         tbp = TerminalBytePacket(sdata)
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -473,6 +538,8 @@ class ScreenEditor:
             self.column_x = column_x  # for .write_leap_shadows
 
             return True
+
+        #
 
         return False
 
@@ -539,7 +606,7 @@ class ScreenEditor:
             # b"\x09",  # ⌃I \t Tab
             # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
             "⌃K": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
-            # # b"\x0c",  # ⌃L
+            "⌃L": self.do_screen_redraw,  # ⌃L for Vim  # not ⌃L for Emacs a la Vim ⇧H ⇧M ⇧L
             # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
             "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
             "⌃N": self.do_row_down,  # ⌃N
@@ -617,6 +684,10 @@ class ScreenEditor:
             "F1": self.do_kdata_fn_f1,  # Fn F1  # todo4: Fn F1 vs F1
             "F2": self.do_kdata_fn_f2,  # Fn F2
             #
+            # Printable but named Characters
+            #
+            "Spacebar": self.do_write_spacebar,  # Spacebar
+            #
             # The Last 1-Byte 7-Bit Control, which looks lots like a C0 Control
             #
             "Delete": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
@@ -684,6 +755,16 @@ class ScreenEditor:
 
     def play_screen_editor(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+        bt = self.bytes_terminal
+
+        # Tell our Shadow where our next Write will land
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for .play_screen_editor
+        self.column_x = column_x  # for .play_screen_editor
+
+        #
 
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
 
@@ -754,9 +835,9 @@ class ScreenEditor:
             return
 
         if kdata in loopable_kdata_tuple:
-            tprint(f"{kdata=} # do_write_kdata reply_to_kdata")  # not .__qualname__
+            tprint(f"{kdata=} # do_write_kdata_as_sdata reply_to_kdata")  # not .__qualname__
 
-            self.do_write_kdata(kdata)
+            self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
 
             return
 
@@ -853,7 +934,7 @@ class ScreenEditor:
         # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
 
         tprint(f"Pass-through {kdata=} {str(tbp)=}   # take_tbp_n_kdata_if")
-        self.do_write_kdata(kdata)
+        self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
 
         return True
 
@@ -961,24 +1042,48 @@ class ScreenEditor:
     def _take_csi_mouse_release_if_(self, tbp: TerminalBytePacket) -> bool:
         """Reply to a Mouse Release, no matter if slow or quick"""
 
+        # Eval the Sgr Mouse Report
+
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and tbp.tail and (tbp.tail == b"m")):
             return False
 
         splits = tbp.neck.removeprefix(b"<").split(b";")
         assert len(splits) == 3, (splits, tbp.neck, tbp)
-        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f}};{x};{y}
+        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
+
+        # Take the Cursor to the Mouse
 
         self.print(f"\x1b[{y};{x}H", end="")  # for Mouse Csi ⎋[M
+        assert self.row_y == y, (self.row_y, y)
+        assert self.column_x == x, (self.column_x, x)
+
+        # Decode f = 0b⌃⌥⇧00
+
+        Shift_4 = 0b100
+        Option_8 = 0b01000
+        Control_16 = 0b0010000
+
+        assert (f & ~(Shift_4 | Option_8 | Control_16)) == 0, (hex(f),)
+
+        # Dispatch ⌥ Mouse Release
+
+        if f == Option_8:
+
+            self.at_option_mouse_release(y, x=x, f=f)
+
+            return True
+
+        # Reply to Shifting or no Shifting at Mouse Release
 
         if f == 0:
             self.print("*", end="")
 
-        if f & 0x10:
+        if f & Control_16:
             self.print("⌃", end="")
-        if f & 8:
-            self.print("⌥", end="")
-        if f & 4:
+        if f & Option_8:
+            self.print("⌥", end="")  # unreached when f == 8 because Code far above
+        if f & Shift_4:
             self.print("⇧", end="")
 
         return True
@@ -1108,8 +1213,11 @@ class ScreenEditor:
             tbp = bt.read_byte_packet(timeout=arrows_timeout)
             if not tbp:
                 self.arrows = 0
-                self.print("⌥", end="")
-                tbp = bt.read_byte_packet(timeout=None)
+
+                tbp = self.read_arrows_as_byte_packet()
+                assert tbp, (tbp,)
+
+                return (tbp, n)
 
         t1 = time.time()
 
@@ -1139,17 +1247,37 @@ class ScreenEditor:
 
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
 
-    def do_write_kdata(self, kdata: bytes) -> None:
-        """Loop the Keyboard back to the Screen, literally, directly"""
+    def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
+        """Take Slow-after-Arrow-Burst as a Mouse Option-Click Release, with never a Press"""
 
         bt = self.bytes_terminal
-        fileno = bt.fileno
-        slog = self.screen_bytes_log
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for .read_arrows_as_byte_packet
+        self.column_x = column_x  # for .read_arrows_as_byte_packet
+
+        option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
+        ktext = f"\x1b[<{option_f};{column_x};{row_y}m"
+        kdata = ktext.encode()
+
+        tbp = TerminalBytePacket(kdata)
+
+        return tbp
+
+        # todo4: Take Slow-after-Arrow-Burst as a Mouse Alt-Click Press before Release
+
+    def do_write_spacebar(self) -> None:
+        """Write 1 Space"""
+
+        self.write(" ")
+
+    def do_write_kdata_as_sdata(self, kdata: bytes) -> None:
+        """Write the Keyboard Bytes looped back to the Screen"""
 
         sdata = kdata
-        os.write(fileno, sdata)
+        stext = sdata.decode()  # may raise UnicodeDecodeError
 
-        slog.write(sdata)
+        self.write(stext)
 
     def do_replacing_one_kdata(self) -> None:
         """Start replacing, quote 1 Keyboard Chord, then start inserting"""
@@ -1166,7 +1294,7 @@ class ScreenEditor:
         (tbp, n) = self.read_some_byte_packets()
 
         kdata = tbp.to_bytes()
-        self.do_write_kdata(kdata)
+        self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
 
         # Emacs ⌃Q  # Vim ⌃V
 
@@ -1494,6 +1622,8 @@ class ScreenEditor:
 
         # XShVerb F1
 
+        # todo6: ⌃L goes wrong after _f9 scrolls up my default 101x42 MacBook Terminal
+
         # todo2: Adopt "Keyboard Shortcuts" over "Bindings"
 
         # todo2: toggle emulations on/off
@@ -1502,20 +1632,90 @@ class ScreenEditor:
 
         # todo2: accept lots of quits and movements as per Vim ⌃O & Emacs
 
+    #
+    # Take ⌥ Mouse Release as a call for Read-Eval-Print
+    #
+
+    def at_option_mouse_release(self, y: int, x: int, f: int) -> None:
+        """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
+
+        bt = self.bytes_terminal
+        list_str_by_y_x = self.list_str_by_y_x
+
+        y_text = self.read_shadowed_row_y_text(y, default=" ")
+
+        #
+
+        syx = y_text[x]
+        if syx == " ":
+            # self.write("splat")
+            self.write("\a")  # for .at_option_mouse_release
+            return
+
+        suffix_text = y_text[:x]
+        suffix_splits = suffix_text.split()
+        assert suffix_splits, (suffix_splits, syx, y, x)
+
+        suffix = suffix_splits[-1]
+        left_text = suffix_text.removesuffix(suffix)
+        vx = 1 + len(left_text)
+
+        index = len(suffix_splits) - 1
+        y_splits = y_text.split()
+
+        assert index < len(y_splits), (index, len(y_splits), y_splits, suffix_splits)
+        verb = y_splits[index]
+
+        # Read-Eval-Print the one Verb found  # todo: shrink ⎋[H when possible
+
+        self.write(f"\x1b[{y + 1};{vx}H")  # for .at_option_mouse_release
+        self.print(repr(verb) + "()")
+
+        self.print()
+
+        # todo8: pick up phrases, not just words, till like a double-Space separator
+
+    def read_shadowed_row_y_text(self, y: int, default: str) -> str:
+        """Read back just the Text Shadowed in the Row"""
+
+        assert len(default.encode()) == 1, (default, len(default.encode()))  # todo: other defaults
+
+        bt = self.bytes_terminal
+        list_str_by_y_x = self.list_str_by_y_x
+
+        x_width = bt.read_x_width()
+
+        if y not in list_str_by_y_x.keys():
+            return x_width * default
+
+        y_text = ""
+        list_str_by_x = list_str_by_y_x[y]
+        for x in range(1, x_width + 1):
+
+            syx = default
+            if x in list_str_by_x.keys():
+                list_str = list_str_by_x[x]
+                if list_str:
+                    syx = list_str[-1]
+
+            y_text += syx
+
+        return y_text
+
 
 #
 # Play Conway's Game-of-Life
 #
 
 
-# todo7: Type out your own Button, and then Mouse Click (or F10) it. Enclose in <> to not self-erase
+# todo8: Type out your own Button, and then Mouse Click (or F10) it. Enclose in <> to not self-erase
 
-# todo6: Each Y X gets a List Str. Last Item of List Str is the Text written after the Controls
-# todo6: plain bold italic
-# todo6: <mark> flip spin
-# todo6: glider, sw glider, ne nw se gliders
-# todo6: circle triangle square rectangle polygon
+# todo7: plain bold italic
+# todo7: <mark> flip spin
+# todo7: glider, sw glider, ne nw se gliders
+# todo7: circle triangle square rectangle polygon
 
+# todo3: Each Y X gets a List Str. Last Item of List Str is the Text written after the Controls
 # todo3: Hide the Conway Cursor?
 # todo3: Discover the same drawing but translated to new Y X or new Rotation
 
@@ -1567,6 +1767,8 @@ class ConwayLife:
 
         se.print()
         se.print("Goodbye from Conway's Game-of-Life")
+
+        # todo6: ⌃L goes wrong after Conway Goodbye in one row of White Dots
 
     def restart_conway_life(self) -> None:
         """Start again, with the most famous Conway Life Glider"""
@@ -1878,7 +2080,7 @@ SCREEN_WRITER_HELP = r"""
         Tab means ⌃I \t, and Return means ⌃M \r
 
         Minimal Emacs is ⌃A ⌃B ⌃D ⌃E ⌃F ⌃G ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V
-        Minimal Vim is ⎋ I ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧ $ A C D H L M O Q R S X
+        Minimal Vim is ⌃L and ⎋ I ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧ $ A C D H L M O Q R S X
 
     Esc ⎋ Byte Pairs
 
@@ -1908,7 +2110,7 @@ SCREEN_WRITER_HELP = r"""
         ⎋[6N call for reply ⎋[{y};{x}⇧R
         ⎋[18T call for reply ⎋[8;{rows};{columns}T
 
-        ⎋[?1000;1006H till ⎋[?1000;1006L for mouse ⎋[<{f}};{x};{y} ⇧M to M with f = 0b⌃⌥⇧00
+        ⎋[?1000;1006H till ⎋[?1000;1006L for mouse ⎋[<{f};{x};{y} ⇧M to M of f = 0b⌃⌥⇧00
         or ⎋[?1000 H L by itself, or 1005, or 1015
 
 """
