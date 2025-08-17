@@ -420,29 +420,29 @@ class ScreenEditor:
             #
             # 1-Byte 7-Bit C0 Controls
             #
-            "\x01": self.do_column_leap_leftmost,  # ⌃A for Emacs
-            "\x02": self.do_column_left,  # ⌃B for Emacs
+            "⌃A": self.do_column_leap_leftmost,  # ⌃A for Emacs
+            "⌃B": self.do_column_left,  # ⌃B for Emacs
             # "\x03",  # ⌃C
-            "\x04": self.do_char_delete_here,  # ⌃D for Emacs
-            "\x05": self.do_column_leap_rightmost,  # ⌃E for Emacs
-            "\x06": self.do_column_right,  # ⌃F for Emacs
+            "⌃D": self.do_char_delete_here,  # ⌃D for Emacs
+            "⌃E": self.do_column_leap_rightmost,  # ⌃E for Emacs
+            "⌃F": self.do_column_right,  # ⌃F for Emacs
             # b"\x07",  # ⌃G \a bell-ring
             # b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
             # b"\x09",  # ⌃I \t Tab
             # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
-            "\x0b": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
+            "⌃K": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
             # # b"\x0c",  # ⌃L
             # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
             "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
-            "\x0e": self.do_row_down,  # ⌃N
-            "\x0f": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
-            "\x10": self.do_row_up,  # ⌃P
-            "\x11": self.do_quote_one_kdata,  # ⌃Q for Emacs
+            "⌃N": self.do_row_down,  # ⌃N
+            "⌃O": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
+            "⌃P": self.do_row_up,  # ⌃P
+            "⌃Q": self.do_quote_one_kdata,  # ⌃Q for Emacs
             # # b"\x12",  # ⌃R
             # # b"\x13",  # ⌃S
             # # b"\x14",  # ⌃T
             # # b"\x15",  # ⌃U
-            "\x16": self.do_quote_one_kdata,  # ⌃V for Vim
+            "⌃V": self.do_quote_one_kdata,  # ⌃V for Vim
             # # b"\x17",  # ⌃W
             # # b"\x18",  # ⌃X
             # # b"\x19",  # ⌃Y
@@ -453,41 +453,41 @@ class ScreenEditor:
             #
             # # b"\x1b": self.print_kcaps_plus,  # ⎋
             #
-            "\x1b" "$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim
-            "\x1b" "0": self.do_column_leap_leftmost,  # ⎋0 for Vim
+            "⎋$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim  # todo4: ⎋⇧$ vs ⎋$
+            "⎋0": self.do_column_leap_leftmost,  # ⎋0 for Vim
             # # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
             # # b"\x1b" b"8",  # ⎋8 cursor-revert
             # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
-            "\x1b" "A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
-            "\x1b" "C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
+            "⎋⇧A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
+            "⎋⇧C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
             # # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
-            "\x1b" "D": self.do_row_tail_erase,  # Vim ⇧D
+            "⎋⇧D": self.do_row_tail_erase,  # Vim ⇧D
             # # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
             # "\x1b" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
-            "\x1b" "H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
-            "\x1b" "L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
+            "⎋⇧H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
+            "⎋⇧L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
             # # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
-            "\x1b" "M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
-            "\x1bO": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
-            "\x1b" "Q": self.do_assert_false,  # ⎋⇧Q for Vim
-            "\x1b" "R": self.do_replacing_start,  # ⎋⇧R for Vim
-            "\x1b" "S": self.do_row_delete_start_inserting,  # ⎋S for Vim
-            "\x1b" "X": self.do_char_delete_left,  # ⎋⇧X for Vim
+            "⎋⇧M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
+            "⎋⇧O": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
+            "⎋⇧Q": self.do_assert_false,  # ⎋⇧Q for Vim
+            "⎋⇧R": self.do_replacing_start,  # ⎋⇧R for Vim
+            "⎋⇧S": self.do_row_delete_start_inserting,  # ⎋S for Vim
+            "⎋⇧X": self.do_char_delete_left,  # ⎋⇧X for Vim
             # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
-            "\x1b" "a": self.do_column_right_inserting_start,  # ⎋A for Vim
+            "⎋A": self.do_column_right_inserting_start,  # ⎋A for Vim
             # # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
-            "\x1b" "h": self.do_column_left,  # ⎋H for Vim
-            "\x1b" "i": self.do_inserting_start,  # ⎋I for Vim
-            "\x1b" "j": self.do_row_down,  # ⎋J for Vim
-            "\x1b" "k": self.do_row_up,  # ⎋K for Vim
+            "⎋H": self.do_column_left,  # ⎋H for Vim
+            "⎋I": self.do_inserting_start,  # ⎋I for Vim
+            "⎋J": self.do_row_down,  # ⎋J for Vim
+            "⎋K": self.do_row_up,  # ⎋K for Vim
             # # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
-            "\x1b" "l": self.do_column_right,  # ⎋L for Vim
-            "\x1b" "o": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
-            "\x1b" "r": self.do_replacing_one_kdata,  # ⎋R for Vim
-            "\x1b" "s": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
-            "\x1b" "x": self.do_char_delete_here,  # ⎋X for Vim
+            "⎋L": self.do_column_right,  # ⎋L for Vim
+            "⎋O": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
+            "⎋R": self.do_replacing_one_kdata,  # ⎋R for Vim
+            "⎋S": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
+            "⎋X": self.do_char_delete_here,  # ⎋X for Vim
             #
             # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
             #
@@ -500,18 +500,18 @@ class ScreenEditor:
             # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
             # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
-            "\x1b[" "20~": self.do_kdata_fn_f9,  # Fn F9
+            "F9": self.do_kdata_fn_f9,  # Fn F9
             #
             # Ss3 Esc Byte Sequences
             #
             # # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
             #
-            "\x1bO" "P": self.do_kdata_fn_f1,  # Fn F1
-            "\x1bO" "Q": self.do_kdata_fn_f2,  # Fn F2
+            "F1": self.do_kdata_fn_f1,  # Fn F1  # todo4: Fn F1 vs F1
+            "F2": self.do_kdata_fn_f2,  # Fn F2
             #
             # The Last 1-Byte 7-Bit Control, which looks lots like a C0 Control
             #
-            "\x7f": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
+            "Delete": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
         }
 
         return none_func_by_str
@@ -1310,6 +1310,7 @@ class ScreenEditor:
     def do_kdata_fn_f2(self) -> None:
         """Play Conway's Game-of-Life for F2"""
 
+        se = self
         with_none_func_by_str = self.none_func_by_str
 
         # Default to Replacing, not Inserting
@@ -1326,10 +1327,12 @@ class ScreenEditor:
 
         cl = ConwayLife(se=self)
 
-        none_func_by_str = cl.form_conway_none_func_by_str()
+        none_func_by_str = dict(with_none_func_by_str)
+        conway_none_func_by_str = cl.form_conway_none_func_by_str()
+        none_func_by_str.update(conway_none_func_by_str)
 
-        assert none_func_by_str["\x1bO" "Q"] == self.do_kdata_fn_f2
-        none_func_by_str["\x1bO" "Q"] = cl.restart_conway_life
+        assert none_func_by_str["F2"] == se.do_kdata_fn_f2, (none_func_by_str["F2"],)
+        none_func_by_str["F2"] = cl.restart_conway_life
 
         self.none_func_by_str = none_func_by_str
 
