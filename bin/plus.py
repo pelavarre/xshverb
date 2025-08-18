@@ -786,9 +786,9 @@ class ScreenEditor:
 
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
 
-        # Default to Inserting, not Replacing
-
-        self.do_inserting_start()
+        # # Default to Inserting, not Replacing
+        #
+        # self.do_inserting_start()
 
         # Walk one step after another
 
