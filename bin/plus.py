@@ -24,7 +24,6 @@ import pdb
 import re
 import select
 import signal
-import string
 import sys
 import termios
 import textwrap
@@ -194,11 +193,6 @@ def try_tbp_self_test() -> None:
 #
 
 
-TAB = "\t"  # 00/09 Horizontal Tab
-CR = "\r"  # 00/13 Carriage Return  # akin to CSI CHA "\x1b[" "G"
-LF = "\n"  # 00/10 Line Feed ⌃J  # akin to CSI CUD "\x1b[" "B"
-
-
 IND = "\x1b" "D"  # ESC 04/04 Index (IND) = C1 Control U+0084 IND (formerly known as INDEX)
 NEL = "\x1b" "E"  # ESC 04/05 Next Line (NEL) = C1 Control U+0085 NEXT LINE (NEL)
 RI = "\x1b" "M"  # ESC 04/06 Reverse Index (RI) = C1 Control U+0086 REVERSE LINE FEED (RI)
@@ -270,7 +264,7 @@ class ScreenEditor:
     column_x: int  # X places encoded as Eastbound across 1 .. Width
     list_str_by_y_x: dict[int, dict[int, list[str]]] = dict()  # shadows the last Write at each Place
 
-    none_func_by_str: dict[str, abc.Callable[[], None]] = dict()
+    func_by_str: dict[str, abc.Callable[[], None]] = dict()
     loopable_kdata_tuple: tuple[bytes, ...] = tuple()
 
     #
@@ -304,8 +298,8 @@ class ScreenEditor:
 
         # Init our Keyboard Chord Bindings
 
-        none_func_by_str = self.form_none_func_by_str()
-        self.none_func_by_str = none_func_by_str
+        func_by_str = self.form_none_func_by_str()
+        self.func_by_str = func_by_str
 
         loopable_kdata_tuple = self.form_loopable_kdata_tuple()
         self.loopable_kdata_tuple = loopable_kdata_tuple
@@ -483,11 +477,13 @@ class ScreenEditor:
         bt = self.bytes_terminal
         column_x = self.column_x
         row_y = self.row_y
+
         y_height = bt.read_y_height()
+        x_width = bt.read_x_width()
 
         #
 
-        assert TAB == "\t"
+        assert HT == "\t"
         assert LF == "\n"
         assert CR == "\r"
 
@@ -518,10 +514,32 @@ class ScreenEditor:
 
         #
 
+        assert CUU_Y == "\x1b[" "{}" "A"
+        assert CUD_Y == "\x1b[" "{}" "B"
+        assert CUF_X == "\x1b[" "{}" "C"
+        assert CUB_X == "\x1b[" "{}" "D"
+
         assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
 
         tbp = TerminalBytePacket(sdata)
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        if csi and tbp.tail in b"ABCD":
+            assert not tbp.back, (tbp.back, tbp)
+            pn = int(tbp.neck) if tbp.neck else 1
+
+            if tbp.tail == b"A":
+                self.row_y = max(1, row_y - pn)
+                return True
+            if tbp.tail == b"B":
+                self.row_y = min(y_height, row_y + pn)
+                return True
+            if tbp.tail == b"C":
+                self.column_x = min(x_width, column_x + pn)
+                return True
+            if tbp.tail == b"D":
+                self.column_x = max(1, column_x - pn)
+                return True
 
         if csi and tbp.tail == b"H":
             assert not tbp.back, (tbp.back, tbp)
@@ -591,7 +609,7 @@ class ScreenEditor:
     def form_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         """Bind Keycaps to Funcs"""
 
-        none_func_by_str: dict[str, abc.Callable[[], None]] = {
+        func_by_str: dict[str, abc.Callable[[], None]] = {
             #
             # 1-Byte 7-Bit C0 Controls
             #
@@ -693,7 +711,7 @@ class ScreenEditor:
             "Delete": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
         }
 
-        return none_func_by_str
+        return func_by_str
 
         # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
         #
@@ -811,7 +829,7 @@ class ScreenEditor:
     def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
 
-        none_func_by_str = self.none_func_by_str
+        func_by_str = self.func_by_str
         loopable_kdata_tuple = self.loopable_kdata_tuple
         klog = self.keyboard_bytes_log
 
@@ -826,9 +844,9 @@ class ScreenEditor:
 
         kcaps = kdata_to_kcaps(kdata)
 
-        if kcaps in none_func_by_str.keys():
-            none_func = none_func_by_str[kcaps]
-            tprint(f"{none_func.__name__=}  # none_func_by_str reply_to_kdata")  # not .__qualname__
+        if kcaps in func_by_str.keys():
+            none_func = func_by_str[kcaps]
+            tprint(f"{none_func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
 
             none_func()  # may raise SystemExit
 
@@ -1052,39 +1070,35 @@ class ScreenEditor:
         assert len(splits) == 3, (splits, tbp.neck, tbp)
         (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
 
-        # Take the Cursor to the Mouse
-
-        self.print(f"\x1b[{y};{x}H", end="")  # for Mouse Csi ⎋[M
-        assert self.row_y == y, (self.row_y, y)
-        assert self.column_x == x, (self.column_x, x)
-
         # Decode f = 0b⌃⌥⇧00
 
-        Shift_4 = 0b100
+        Basic_0 = 0b00000
+
+        Shift_4 = 0b00100
         Option_8 = 0b01000
-        Control_16 = 0b0010000
+        Control_16 = 0b10000
 
         assert (f & ~(Shift_4 | Option_8 | Control_16)) == 0, (hex(f),)
 
         # Dispatch ⌥ Mouse Release
 
-        if f == Option_8:
+        if f in (Basic_0, Option_8):
 
-            self.at_option_mouse_release(y, x=x, f=f)
+            self.take_verb_at_yxf_mouse_release(y, x=x, f=f)
 
             return True
 
         # Reply to Shifting or no Shifting at Mouse Release
 
         if f == 0:
-            self.print("*", end="")
+            self.write("*")  # unreached when f == 0 because Code far above
 
         if f & Control_16:
-            self.print("⌃", end="")
+            self.write("⌃")
         if f & Option_8:
-            self.print("⌥", end="")  # unreached when f == 8 because Code far above
+            self.write("⌥")  # unreached when f == 8 because Code far above
         if f & Shift_4:
-            self.print("⇧", end="")
+            self.write("⇧")
 
         return True
 
@@ -1161,7 +1175,7 @@ class ScreenEditor:
     def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
-        assert TAB == "\t"
+        assert HT == "\t"
         assert CHT_X == "\x1b[" "{}" "I"
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -1554,7 +1568,7 @@ class ScreenEditor:
     def do_kdata_fn_f2(self) -> None:
         """Play Conway's Game-of-Life for F2"""
 
-        with_none_func_by_str = self.none_func_by_str
+        with_none_func_by_str = self.func_by_str
 
         # Default to Replacing, not Inserting
 
@@ -1570,16 +1584,16 @@ class ScreenEditor:
 
         cl = ConwayLife(se=self)
 
-        none_func_by_str = dict(with_none_func_by_str)
+        func_by_str = dict(with_none_func_by_str)
         conway_none_func_by_str = cl.form_conway_none_func_by_str()
-        none_func_by_str.update(conway_none_func_by_str)
+        func_by_str.update(conway_none_func_by_str)
 
-        self.none_func_by_str = none_func_by_str
+        self.func_by_str = func_by_str
 
         try:
             cl.play_conway_life()
         finally:
-            self.none_func_by_str = with_none_func_by_str  # replaces
+            self.func_by_str = with_none_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
     def do_kdata_fn_f9(self) -> None:
@@ -1636,44 +1650,114 @@ class ScreenEditor:
     # Take ⌥ Mouse Release as a call for Read-Eval-Print
     #
 
-    def at_option_mouse_release(self, y: int, x: int, f: int) -> None:
+    def take_verb_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
         """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
 
-        bt = self.bytes_terminal
-        list_str_by_y_x = self.list_str_by_y_x
+        # Read the Widget at the Mouse
+
+        wx = x
+        widget = ""
 
         y_text = self.read_shadowed_row_y_text(y, default=" ")
 
-        #
-
         syx = y_text[x]
-        if syx == " ":
-            # self.write("splat")
-            self.write("\a")  # for .at_option_mouse_release
+        if syx != " ":
+
+            suffix_text = y_text[:x]
+            suffix_splits = suffix_text.split()
+            assert suffix_splits, (suffix_splits, syx, y, x)
+
+            suffix = suffix_splits[-1]
+            left_text = suffix_text.removesuffix(suffix)
+            wx = 1 + len(left_text)
+
+            index = len(suffix_splits) - 1
+            y_splits = y_text.split()
+
+            assert index < len(y_splits), (index, len(y_splits), y_splits, suffix_splits)
+            widget = y_splits[index]
+
+            # todo8: debug why buttons after the first frequently don't work
+            # todo8: pick up phrases, not just words, till like a double-Space separator
+
+        # Run the Verb at the Mouse
+
+        self.take_widget_at_yxf(widget, y=y, x=wx, f=f)
+
+    def take_widget_at_yxf(self, widget: str, y: int, x: int, f: int) -> None:
+        """Run the Verb at the Mouse"""
+
+        assert BEL == "\a"
+        assert BS == "\b"
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        assert DCH_X == "\x1b[" "{}" "P"
+
+        # Require Widget found
+
+        if not widget:
+            self.write("\a")  # for .take_widget_at_yxf
             return
 
-        suffix_text = y_text[:x]
-        suffix_splits = suffix_text.split()
-        assert suffix_splits, (suffix_splits, syx, y, x)
+        # Decide to vanish and run once, or to persist
 
-        suffix = suffix_splits[-1]
-        left_text = suffix_text.removesuffix(suffix)
-        vx = 1 + len(left_text)
+        verb = widget
+        if (widget[0] == "<") and (widget[-1] == ">"):
+            verb = widget[1:-1]
+            if not verb:
+                self.write("\a")  # for .take_widget_at_yxf
+                return
 
-        index = len(suffix_splits) - 1
-        y_splits = y_text.split()
+        # Take the Cursor to the Verb (near to the Mouse), no matter if meaningless
 
-        assert index < len(y_splits), (index, len(y_splits), y_splits, suffix_splits)
-        verb = y_splits[index]
+        self.write(f"\x1b[{y};{x}H")  # for .take_verb_at_yxf per Mouse Csi ⎋[M
+        assert self.row_y == y, (self.row_y, y)
+        assert self.column_x == x, (self.column_x, x)
 
-        # Read-Eval-Print the one Verb found  # todo: shrink ⎋[H when possible
+        # Vanish if the Widget is no more than the Verb, unmarked
 
-        self.write(f"\x1b[{y + 1};{vx}H")  # for .at_option_mouse_release
-        self.print(repr(verb) + "()")
+        if verb == widget:
+            irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
+            if irm_stext == "\x1b[4h":
 
-        self.print()
+                self.write(f"\x1b[{len(widget)}P")  # deletes a Verb, while inserting texts
 
-        # todo8: pick up phrases, not just words, till like a double-Space separator
+            else:
+                assert (not irm_stext) or (irm_stext == "\x1b[4l"), (irm_stext,)
+
+                self.write(len(widget) * " ")  # erases a Verb, while replacing texts
+                # self.write(len(widget) * "\b")
+                self.write(f"\x1b[{y};{x}H")
+
+        #
+
+        casefold = verb.casefold()
+
+        if casefold == "bold":  # ⎋[1M bold
+            self.write("\x1b[1m")
+            if verb == widget:
+                self.write("bold")
+            return
+
+        if casefold == "underline":  # ⎋[4M underline
+            self.write("\x1b[4m")
+            if verb == widget:
+                self.write("underline")
+            return
+
+        if casefold in ("reverse", "inverse"):  # ⎋[7M reverse/inverse
+            self.write("\x1b[7m")
+            if verb == widget:
+                self.write("reverse")
+            return
+
+        if casefold == "plain":
+            self.write("\x1b[m")
+            if verb == widget:
+                self.write("plain")
+            return
+
+        # todo7: accept ⎋[M notation
+        # todo4: find an Italic that works at ⎋[3M or somewhere
 
     def read_shadowed_row_y_text(self, y: int, default: str) -> str:
         """Read back just the Text Shadowed in the Row"""
@@ -1707,8 +1791,6 @@ class ScreenEditor:
 # Play Conway's Game-of-Life
 #
 
-
-# todo8: Type out your own Button, and then Mouse Click (or F10) it. Enclose in <> to not self-erase
 
 # todo7: plain bold italic
 # todo7: <mark> flip spin
@@ -1776,7 +1858,7 @@ class ConwayLife:
         se = self.screen_editor
         list_str_by_y_x = se.list_str_by_y_x
 
-        choice = 1
+        choice = 3
 
         if choice == 1:
             (y0, x0) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
@@ -1801,6 +1883,16 @@ class ConwayLife:
             # https://imgur.com/a/interesting-face-pattern-conways-game-of-life-epMFxEb
 
             # todo6: compare/contrast web life at Wolf Face
+
+        if choice == 3:
+            (y0, x0) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
+            self.yx_board = (y0, x0)
+            self.yx_puck = (y0, x0)
+            self.conway_print_some("⚪🔴⚪🔴⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")  # todo5: Conway Gameboard at Cursor
+            self.conway_print_some("⚪🔴🔴⚪⚪🔵🔵🔵🔵⚪⚪🔴🔴⚪")
+            self.conway_print_some("⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
+
+            # Southwest Glider & Southeast Glider
 
         yx_list = list()
         for y in list_str_by_y_x.keys():
@@ -2138,6 +2230,7 @@ SCREEN_WRITER_HELP = r"""
 #
 
 
+BEL = "\a"  # 00/07 Bell (BEL)
 BS = "\b"  # 00/08 ⌃H Backspace
 HT = "\t"  # 00/09 ⌃I Character Tabulation
 LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\x1b[" "B"
