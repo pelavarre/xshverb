@@ -1732,28 +1732,48 @@ class ScreenEditor:
 
         casefold = verb.casefold()
 
+        #
+
         if casefold == "bold":  # ⎋[1M bold
             self.write("\x1b[1m")
-            if verb == widget:
-                self.write("bold")
+            # if verb == widget:
+            #     self.write("bold")
             return
 
         if casefold == "underline":  # ⎋[4M underline
             self.write("\x1b[4m")
-            if verb == widget:
-                self.write("underline")
+            # if verb == widget:
+            #     self.write("underline")
             return
 
         if casefold in ("reverse", "inverse"):  # ⎋[7M reverse/inverse
             self.write("\x1b[7m")
-            if verb == widget:
-                self.write("reverse")
+            # if verb == widget:
+            #     self.write("reverse")
             return
 
         if casefold == "plain":
             self.write("\x1b[m")
-            if verb == widget:
-                self.write("plain")
+            # if verb == widget:
+            #     self.write("plain")
+            return
+
+        #
+
+        if casefold == "blue":
+            self.write("\x1b[34m")
+            return
+
+        if casefold == "green":
+            self.write("\x1b[32m")
+            return
+
+        if casefold == "orange":
+            self.write("\x1b[38;5;130m")  # Color '#310'
+            return
+
+        if casefold == "red":
+            self.write("\x1b[31m")
             return
 
         # todo7: accept ⎋[M notation
