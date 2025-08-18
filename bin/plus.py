@@ -21,6 +21,7 @@ import datetime as dt
 import os
 import pathlib
 import pdb
+import random  # todo6: choose Seeds for Repeatability
 import re
 import select
 import signal
@@ -387,12 +388,20 @@ class ScreenEditor:
         """Redraw the Screen as shadowed, be that wrong or correct"""
 
         bt = self.bytes_terminal
+        column_x = self.column_x
         fileno = bt.fileno
         list_str_by_y_x = self.list_str_by_y_x
+        row_y = self.row_y
         slog = self.screen_bytes_log
 
-        stext = "\x1b[2J"
+        (y0, x0) = (self.row_y, self.column_x)
 
+        stext = "\x1b[2J"
+        sdata = stext.encode()
+        os.write(fileno, sdata)
+        slog.write(sdata)
+
+        stext = "\x1b[m"
         sdata = stext.encode()
         os.write(fileno, sdata)
         slog.write(sdata)
@@ -408,6 +417,8 @@ class ScreenEditor:
                     sdata = stext.encode()
                     os.write(fileno, sdata)
                     slog.write(sdata)
+
+        self.write(f"\x1b[{y0};{x0}H")
 
         # todo4: .do_screen_redraw of Csi ⇧J ⇧H etc bypasses our shadowed writes
 
@@ -784,11 +795,12 @@ class ScreenEditor:
 
         #
 
+        self.write("\x1b[J")
+        self.print("Want some Buttons?")
+        self.print()
+        self.print("<Bold> <Underline> <Plain>  <Blue> <Green> <Orange> <Red>  <Jabberwocky>")
+        self.print()
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
-
-        # # Default to Inserting, not Replacing
-        #
-        # self.do_inserting_start()
 
         # Walk one step after another
 
@@ -1226,7 +1238,7 @@ class ScreenEditor:
         else:
             tbp = bt.read_byte_packet(timeout=arrows_timeout)
             if not tbp:
-                self.arrows = 0
+                self.arrows = 0  # written only by Init & this Def
 
                 tbp = self.read_arrows_as_byte_packet()
                 assert tbp, (tbp,)
@@ -1239,9 +1251,9 @@ class ScreenEditor:
         t1t0 = t1 - t0
 
         if kdata not in (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D"):
-            self.arrows = 0
+            self.arrows = 0  # written only by Init & this Def
         elif t1t0 >= arrows_timeout:
-            self.arrows = 0
+            self.arrows = 0  # written only by Init & this Def
         else:
             self.arrows += 1
 
@@ -1262,7 +1274,7 @@ class ScreenEditor:
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
 
     def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
-        """Take Slow-after-Arrow-Burst as a Mouse Option-Click Release, with never a Press"""
+        """Take Slow-after-Arrow-Burst as a ⌥ Mouse Release, with never a Press"""
 
         bt = self.bytes_terminal
 
@@ -1278,7 +1290,7 @@ class ScreenEditor:
 
         return tbp
 
-        # todo4: Take Slow-after-Arrow-Burst as a Mouse Alt-Click Press before Release
+        # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
 
     def do_write_spacebar(self) -> None:
         """Write 1 Space"""
@@ -1677,8 +1689,8 @@ class ScreenEditor:
             assert index < len(y_splits), (index, len(y_splits), y_splits, suffix_splits)
             widget = y_splits[index]
 
-            # todo8: debug why buttons after the first frequently don't work
             # todo8: pick up phrases, not just words, till like a double-Space separator
+            # todo8: debug why Arrow Burst buttons after the first frequently don't work
 
         # Run the Verb at the Mouse
 
@@ -1709,13 +1721,14 @@ class ScreenEditor:
 
         # Take the Cursor to the Verb (near to the Mouse), no matter if meaningless
 
-        self.write(f"\x1b[{y};{x}H")  # for .take_verb_at_yxf per Mouse Csi ⎋[M
-        assert self.row_y == y, (self.row_y, y)
-        assert self.column_x == x, (self.column_x, x)
+        if verb == widget:  # todo8: doc/ comment  # todo8: some visual feedback of the pushed button
 
-        # Vanish if the Widget is no more than the Verb, unmarked
+            self.write(f"\x1b[{y};{x}H")  # for .take_verb_at_yxf per Mouse Csi ⎋[M
+            assert self.row_y == y, (self.row_y, y)
+            assert self.column_x == x, (self.column_x, x)
 
-        if verb == widget:
+            # Vanish if the Widget is no more than the Verb, unmarked
+
             irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
             if irm_stext == "\x1b[4h":
 
@@ -1775,6 +1788,18 @@ class ScreenEditor:
         if casefold == "red":
             self.write("\x1b[31m")
             return
+
+        #
+
+        if casefold == "jabberwocky":
+            splits = Jabberwocky.split()
+            split = random.choice(splits)
+            self.write(split + " ")
+            return
+
+        #
+
+        self.write("\a")  # for .take_widget_at_yxf
 
         # todo7: accept ⎋[M notation
         # todo4: find an Italic that works at ⎋[3M or somewhere
@@ -1908,7 +1933,7 @@ class ConwayLife:
             (y0, x0) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
             self.yx_board = (y0, x0)
             self.yx_puck = (y0, x0)
-            self.conway_print_some("⚪🔴⚪🔴⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")  # todo5: Conway Gameboard at Cursor
+            self.conway_print_some("⚪🔴⚪🔴⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
             self.conway_print_some("⚪🔴🔴⚪⚪🔵🔵🔵🔵⚪⚪🔴🔴⚪")
             self.conway_print_some("⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
 
@@ -3311,6 +3336,50 @@ def _spaceless_ch_to_option_kstr_(ch: str) -> str:
     s = "⌥" + asc  # '⌥⇧P'
 
     return s
+
+
+#
+# Quote some words to choose at random
+#
+
+Jabberwocky = """
+
+    ’Twas brillig, and the slithy toves
+        Did gyre and gimble in the wabe:
+    All mimsy were the borogoves,
+        And the mome raths outgrabe.
+
+    “Beware the Jabberwock, my son!
+        The jaws that bite, the claws that catch!
+    Beware the Jubjub bird, and shun
+        The frumious Bandersnatch!”
+
+    He took his vorpal sword in hand;
+        Long time the manxome foe he sought—
+    So rested he by the Tumtum tree
+        And stood awhile in thought.
+
+    And, as in uffish thought he stood,
+        The Jabberwock, with eyes of flame,
+    Came whiffling through the tulgey wood,
+        And burbled as it came!
+
+    One, two! One, two! And through and through
+        The vorpal blade went snicker-snack!
+    He left it dead, and with its head
+        He went galumphing back.
+
+    “And hast thou slain the Jabberwock?
+        Come to my arms, my beamish boy!
+    O frabjous day! Callooh! Callay!”
+        He chortled in his joy.
+
+    ’Twas brillig, and the slithy toves
+        Did gyre and gimble in the wabe:
+    All mimsy were the borogoves,
+        And the mome raths outgrabe.
+
+"""
 
 
 #
