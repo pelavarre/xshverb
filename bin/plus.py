@@ -260,7 +260,8 @@ class ScreenEditor:
     bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
 
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
-    settings: list[str]  # Replacing/ Inserting/ etc
+    toggles: list[str]  # Replacing/ Inserting/ etc
+    styles: list[str]  # Foreground on Background Colors, etc
     row_y: int  # Y places encoded as Southbound across 1 .. Height
     column_x: int  # X places encoded as Eastbound across 1 .. Width
     list_str_by_y_x: dict[int, dict[int, list[str]]] = dict()  # shadows the last Write at each Place
@@ -292,7 +293,8 @@ class ScreenEditor:
         self.bytes_terminal = BytesTerminal()
 
         self.arrows = 0
-        self.settings = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
+        self.toggles = list()
+        self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
         self.row_y = -1
         self.column_x = -1
         self.list_str_by_y_x = dict()
@@ -381,7 +383,7 @@ class ScreenEditor:
         self.write_shadows(sdata)
 
     #
-    # Remember much of what we wrote
+    # Read from the Shadows
     #
 
     def do_screen_redraw(self) -> None:
@@ -393,6 +395,7 @@ class ScreenEditor:
         list_str_by_y_x = self.list_str_by_y_x
         row_y = self.row_y
         slog = self.screen_bytes_log
+        styles = self.styles
 
         (y0, x0) = (row_y, column_x)
 
@@ -420,10 +423,14 @@ class ScreenEditor:
 
         self.write(f"\x1b[{y0};{x0}H")
 
+        self.write("\x1b[m")
+        for style in styles:
+            self.write(style)
+
         # todo4: .do_screen_redraw of Csi ⇧J ⇧H etc bypasses our shadowed writes
 
     def read_shadowed_row_y_text(self, y: int, default: str) -> str:
-        """Read back just the Text Shadowed in the Row"""
+        """Read back just the Text Shadowed in the Row, without the Styling"""
 
         assert len(default.encode()) == 1, (default, len(default.encode()))  # todo: other defaults
 
@@ -443,32 +450,70 @@ class ScreenEditor:
             if x in list_str_by_x.keys():
                 list_str = list_str_by_x[x]
                 if list_str:
-                    syx = list_str[-1]
+                    syx = list_str[-1]  # drops the Styling
 
             y_text += syx
 
         return y_text
 
+    def read_toggle_shadows(self, stext0: str, stext1: str) -> str:
+        """Read the present Shadow Setting of a pair:  the one, the other, else empty Bytes"""
+
+        styles = self.styles
+
+        zero = stext0 in styles
+        one = stext1 in styles
+
+        assert not (zero and one), (zero, one, stext0, stext1)
+        if zero:
+            return stext0
+        if one:
+            return stext1
+
+        return ""
+
+    #
+    # Write into the Shadows
+    #
+
     def write_shadows(self, sdata: bytes) -> None:
         """Shadow the Screen Panel"""
 
-        assert BEL == "\x07"
+        assert LF == "\n"
+        assert CR == "\r"
+
+        # Take CR and LF, but one at a time
+
+        if sdata == b"\r\n":
+            if self.write_leap_byte_shadows(TerminalBytePacket(b"\r")):
+                if self.write_leap_byte_shadows(TerminalBytePacket(b"\n")):
+                    return
+                assert False
+            assert False
+
+            # todo: reconsider CR LF is 2 TerminalBytePacket, not 1
+
+        # Else write 1 whole Packet into the Shadows
 
         stext = sdata.decode()  # todo: may raise UnicodeDecodeError
+        tbp = TerminalBytePacket(sdata)
 
         if not stext:
-            return
-
-        if stext == "\x07":
             return
 
         if self.write_text_shadows(stext):
             return
 
-        if self.write_leap_shadows(stext):
+        if self.write_leap_byte_shadows(tbp):
             return
 
-        if self.write_toggle_shadows(stext):
+        if self.write_leap_csi_shadows(tbp):
+            return
+
+        if self.write_toggle_shadows(tbp):
+            return
+
+        if self.write_style_shadows(tbp):
             return
 
         tprint(f"Bytes not shadowed {stext=}")  # such as Empty
@@ -477,6 +522,7 @@ class ScreenEditor:
         """Shadow the Text"""
 
         list_str_by_y_x = self.list_str_by_y_x
+        styles = self.styles
 
         if not stext.isprintable():
             return False
@@ -485,7 +531,7 @@ class ScreenEditor:
             y = self.row_y
             x = self.column_x
 
-            if (y < 1) or (x < 1):  # todo4: Run .write_text_shadows only in Southwest? How deep?
+            if (y < 1) or (x < 1):  # todo4: How deep into the SW should .write_text_shadows run?
                 continue
 
             if y not in list_str_by_y_x.keys():
@@ -494,9 +540,11 @@ class ScreenEditor:
             if x not in list_str_by_y_x[y].keys():
                 list_str_by_y_x[y][x] = list()
 
-            writes = list_str_by_y_x[y][x]
-            writes.clear()
-            writes.append(ch)
+            list_str = list_str_by_y_x[y][x]
+
+            list_str.clear()
+            list_str.extend(styles)
+            list_str.append(ch)
 
             x_width = self._str_guess_x_width(ch)
             self.column_x += x_width
@@ -515,23 +563,26 @@ class ScreenEditor:
 
         return x_width
 
-    def write_leap_shadows(self, stext: str) -> bool:
+    def write_leap_byte_shadows(self, tbp: TerminalBytePacket) -> bool:
         """Shadow the Control Byte Sequences that move the Terminal Cursor"""
 
-        sdata = stext.encode()  # todo: may raise UnicodeEncodeError
+        sdata = tbp.to_bytes()
 
         bt = self.bytes_terminal
         column_x = self.column_x
         row_y = self.row_y
 
         y_height = bt.read_y_height()
-        x_width = bt.read_x_width()
 
-        #
-
+        assert BEL == "\x07"
         assert HT == "\t"
         assert LF == "\n"
         assert CR == "\r"
+
+        # Write BEL, HT, LF, & CR into the Shadows
+
+        if sdata == b"\x07":
+            return True
 
         if sdata == b"\t":
             self.column_x = ((column_x - 1) // 8 + 1) * 8 + 1
@@ -549,16 +600,21 @@ class ScreenEditor:
             self.column_x = 1
             return True
 
-        if sdata == b"\r\n":  # takes CR LF as 1 Control Sequence despite 2 TerminalBytePacket
-            self.column_x = 1
-            self.row_y = min(y_height, row_y + 1)
-            return True
-
             # todo6: scroll the Shadowed Text at "\n" etc
 
-            # todo: reconsider CR LF is 2 TerminalBytePacket, not 1
+        # Else don't succeed here
 
-        #
+        return False
+
+    def write_leap_csi_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Write the simplest Byte Sequences into the Shadows"""
+
+        bt = self.bytes_terminal
+        column_x = self.column_x
+        row_y = self.row_y
+
+        y_height = bt.read_y_height()
+        x_width = bt.read_x_width()
 
         assert CUU_Y == "\x1b[" "{}" "A"
         assert CUD_Y == "\x1b[" "{}" "B"
@@ -567,8 +623,9 @@ class ScreenEditor:
 
         assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
 
-        tbp = TerminalBytePacket(sdata)
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        # Write the plainest Arrows into the Shadows, plus those with Repeat Counts
 
         if csi and tbp.tail in b"ABCD":
             assert not tbp.back, (tbp.back, tbp)
@@ -587,6 +644,8 @@ class ScreenEditor:
                 self.column_x = max(1, column_x - pn)
                 return True
 
+        # Write leaps to Y X into the Shadows
+
         if csi and tbp.tail == b"H":
             assert not tbp.back, (tbp.back, tbp)
 
@@ -603,14 +662,16 @@ class ScreenEditor:
 
             return True
 
-        #
+        # Else don't succeed here
 
         return False
 
-    def write_toggle_shadows(self, stext: str) -> bool:
+    def write_toggle_shadows(self, tbp: TerminalBytePacket) -> bool:
         """Shadow the Replacing/ Inserting choice for before writing each Character"""
 
-        settings = self.settings
+        sdata = tbp.to_bytes()
+
+        styles = self.styles
 
         assert SM_IRM == "\x1b[" "4h"
         assert RM_IRM == "\x1b[" "4l"
@@ -619,34 +680,140 @@ class ScreenEditor:
             ("\x1b[" "4h", "\x1b[" "4l"),
         ]
 
+        # Find the Toggle Pair
+
         for toggle_pair in toggle_pairs:
+            stext = sdata.decode()  # may raise UnicodeDecodeError
             if stext in toggle_pair:
                 index = toggle_pair.index(stext)
                 other = toggle_pair[1 - index]
 
-                if other in settings:
-                    settings.remove(other)
-                settings.append(stext)
+                # Remove the Old Stale if need be, but add the New Fresh always
+
+                if other in styles:
+                    styles.remove(other)
+
+                styles.append(stext)
+
+                # Succeed
 
                 return True
 
+        # Else don't succeed here
+
         return False
 
-    def read_shadow_settings(self, stext0: str, stext1: str) -> str:
-        """Read the present Shadow Setting of a pair:  the one, the other, else empty Bytes"""
+    def write_style_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the Foreground-on-Background Colors of the next Text"""
 
-        settings = self.settings
+        sdata0 = tbp.to_bytes()
+        stext0 = sdata0.decode()  # may raise UnicodeDecodeError
 
-        zero = stext0 in settings
-        one = stext1 in settings
+        styles = self.styles
 
-        assert not (zero and one), (zero, one, stext0, stext1)
-        if zero:
-            return stext0
-        if one:
-            return stext1
+        # Write only Sgr Styles into the Shadows
 
-        return ""
+        kind0 = self.tbp_to_sgr_kind(tbp)
+        if not kind0:
+            return False
+
+        assert kind0 in ("Foreground", "Background", "Colorless"), (kind0,)
+
+        # Take the cancellation of all Sgr Styles
+
+        if kind0 == "Colorless":
+
+            if sdata0 == b"\x1b[m":
+                styles.clear()
+                return True
+
+            # Take the Text Effects apart from Colors
+
+            if stext0 in styles:
+                return True
+
+            styles.append(stext0)
+            styles.sort()
+
+            return False
+
+        # Remove the Old Stale Color if need be
+
+        assert kind0 in ("Foreground", "Background"), (kind0,)
+
+        removables = list(styles)
+        for removable in removables:
+            tbp1 = TerminalBytePacket()
+            kind1 = self.tbp_to_sgr_kind(tbp1)
+            if kind1 == kind0:
+                styles.remove(removable)
+
+        # Add the New Fresh Color always
+
+        styles.append(stext0)
+        styles.sort()
+
+        return True
+
+    def tbp_to_sgr_kind(self, tbp: TerminalBytePacket) -> str:
+        """Say 'Foreground' or 'Background' or 'Colorless' or '' Empty Str"""
+
+        assert SGR == "\x1b[" "{}m"
+
+        if tbp.head != b"\x1b[":
+            return ""
+        if tbp.back:
+            return ""
+        if tbp.tail != b"m":
+            return ""
+
+        neck_splits = tbp.neck.split(b";")
+        assert neck_splits, (neck_splits, tbp.neck, tbp)  # because Split With Arg
+
+        if neck_splits == [b""]:
+            return "Colorless"
+
+        if len(neck_splits) == 1:
+            pn = int(tbp.neck)
+
+            if (30 <= pn <= 37) or (90 <= pn <= 97):
+                return "Foreground"
+
+            if (40 <= pn <= 47) or (100 <= pn <= 107):
+                return "Background"
+
+            return "Colorless"
+
+        if len(neck_splits) == 3:
+
+            if bytes(neck_splits[0]) in (b"38", b"48"):
+                ground = "Foreground" if (neck_splits[0] == b"38") else "Background"
+                if neck_splits[1] == b"5":
+                    pn = int(neck_splits[2])
+                    assert 0 <= pn <= 0xFF, (pn, tbp)
+                    return ground
+
+            return "Colorless"
+
+        if len(neck_splits) == 5:
+
+            if bytes(neck_splits[0]) in (b"38", b"48"):
+                ground = "Foreground" if (neck_splits[0] == b"38") else "Background"
+                if neck_splits[1] == b"2":
+
+                    r = int(neck_splits[2])
+                    g = int(neck_splits[3])
+                    b = int(neck_splits[4])
+
+                    assert 0 <= r <= 0xFF, (r, tbp)
+                    assert 0 <= g <= 0xFF, (g, tbp)
+                    assert 0 <= b <= 0xFF, (b, tbp)
+
+                    return ground
+
+            return "Colorless"
+
+        return "Colorless"
 
     #
     # Bind Keyboard Chords to Funcs
@@ -1621,7 +1788,7 @@ class ScreenEditor:
         assert SM_IRM == "\x1b[" "4h"
         assert RM_IRM == "\x1b[" "4l"
 
-        irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
+        irm_stext = self.read_toggle_shadows("\x1b[4h", stext1="\x1b[4l")
         restore_inserting_replacing = irm_stext  # maybe empty
 
         self.do_replacing_start()  # for F2
@@ -1700,28 +1867,7 @@ class ScreenEditor:
         # List the Widgets of the Row
 
         y_text = self.read_shadowed_row_y_text(y, default=" ")
-
-        widget_by_i = dict()
-
-        wi = -1
-        y_text_plus = y_text + "  "
-        for i, ich in enumerate(y_text):
-
-            if wi == -1:
-                if ich != " ":
-                    wi = i
-                    widget_by_i[wi] = ich
-
-            elif widget_by_i[wi][0] == "<":
-                widget_by_i[wi] += ich
-                if ich == ">":
-                    wi = -1
-
-            else:
-                if y_text_plus[i:].startswith("  "):
-                    wi = -1
-                else:
-                    widget_by_i[wi] += ich
+        widget_by_i = self.split_widgets(text=y_text)
 
         # Find a Widget beneath the Mouse Release
 
@@ -1761,6 +1907,36 @@ class ScreenEditor:
 
         self.take_mouse_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
 
+    def split_widgets(self, text: str) -> dict[int, str]:
+
+        widget_by_i = dict()
+
+        wi = -1
+        text_plus = text + "  "
+        for i, ich in enumerate(text):
+
+            if wi == -1:
+                if ich != " ":
+                    wi = i
+                    widget_by_i[wi] = ich
+
+            elif widget_by_i[wi][0] == "<":
+                widget_by_i[wi] += ich
+                if ich == ">":
+                    wi = -1
+
+            elif text_plus[i] == "<":
+                wi = i
+                widget_by_i[wi] = ich
+
+            else:
+                if text_plus[i:].startswith("  "):
+                    wi = -1
+                else:
+                    widget_by_i[wi] += ich
+
+        return widget_by_i
+
     def vanish_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
         """Vanish the Widget at the Mouse"""
 
@@ -1784,7 +1960,7 @@ class ScreenEditor:
 
         # Vanish if the Widget is no more than the Verb, unmarked
 
-        irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
+        irm_stext = self.read_toggle_shadows("\x1b[4h", stext1="\x1b[4l")
         if irm_stext == "\x1b[4h":
 
             self.write(f"\x1b[{len(widget)}P")  # deletes a Verb, while inserting texts
@@ -1911,19 +2087,36 @@ class ScreenEditor:
         return sdata
 
 
-#
-# Play Conway's Game-of-Life
-#
+# todo9: count up from Y1 X1 by retiring x0 y0 x1 x1 etc into xa ya xb yb etc
+# todo9: do background colors as #321 on #456
+# todo9: click at cursor to vanish & run, click away to run without vanish
 
+# todo8: glider, sw glider, ne nw se gliders
+# todo8: circle triangle square rectangle polygon
+# todo8: click on emoji to copy-paste them
+# todo8: Unicode Medium & Large Circles ⚪ ⚫ 🔴 🔵 🟠 🟡 🟢 🟣 🟤
+# todo8: Unicode Large Squares ⬛ ⬜ 🟥 🟦 🟧 🟨 🟩 🟪 🟫
+# todo8: \e notation
+
+# todo7: attach an emoji to drag behind a cursor
 
 # todo7: plain bold italic
 # todo7: <mark> flip spin
-# todo7: glider, sw glider, ne nw se gliders
-# todo7: circle triangle square rectangle polygon
+
+# todo7: more test of Disappearing Command Verbs
+# todo7: more test of Arrow Bursts at ⌥ Mouse Release
+# todo7: choose to cursor chase the ⌥ Mouse Release, or not - maybe when there is no button there?
+
+# todo6: full UnicodeData Name as Verb, and partial
 
 # todo3: Each Y X gets a List Str. Last Item of List Str is the Text written after the Controls
 # todo3: Hide the Conway Cursor?
 # todo3: Discover the same drawing but translated to new Y X or new Rotation
+
+
+#
+# Play Conway's Game-of-Life
+#
 
 
 class ConwayLife:
@@ -2025,8 +2218,8 @@ class ConwayLife:
                 yx_list.append(yx)
 
         for y, x in yx_list:
-            writes = list_str_by_y_x[y][x]
-            if writes and writes[-1] == "🔴":
+            list_str = list_str_by_y_x[y][x]
+            if list_str and list_str[-1] == "🔴":
                 self.y_x_count_around(y, x)  # adds its Next Spots
 
         self._leap_conway_between_half_steps_()
@@ -2128,8 +2321,8 @@ class ConwayLife:
                 yx_list.append(yx)
 
         for y, x in yx_list:
-            writes = list_str_by_y_x[y][x]
-            syx = writes[-1] if writes else ""
+            list_str = list_str_by_y_x[y][x]
+            syx = list_str[-1] if list_str else ""
 
             if syx not in ("⚪", "⚫", "🔴", "🟥"):
                 continue
@@ -2319,7 +2512,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
-        ⎋[M plain  #321 6^3 color  #204080 24-bit color  <Jabberwocky>
+        ⎋[M plain  #321 on #123 color  #204080 on #804020 color    <Jabberwocky>
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
