@@ -201,6 +201,8 @@ RI = "\x1b" "M"  # ESC 04/06 Reverse Index (RI) = C1 Control U+0086 REVERSE LINE
 _ICF_RIS_ = "\x1b" "c"  # ESC 06/03 Reset To Initial State (RIS) [an Independent Control Function]
 _ICF_CUP_ = "\x1b" "l"  # ESC 06/12 Cursor Position (CUP) [an Independent Control Function]
 
+X1 = 1  # counts Columns West from 1
+Y1 = 1  # counting Rows South from 1
 
 CUU_Y = "\x1b[" "{}" "A"  # CSI 04/01 Cursor Up
 CUD_Y = "\x1b[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
@@ -397,7 +399,7 @@ class ScreenEditor:
         slog = self.screen_bytes_log
         styles = self.styles
 
-        (y0, x0) = (row_y, column_x)
+        (ya, xa) = (row_y, column_x)
 
         stext = "\x1b[2J"
         sdata = stext.encode()
@@ -421,7 +423,7 @@ class ScreenEditor:
                     os.write(fileno, sdata)
                     slog.write(sdata)
 
-        self.write(f"\x1b[{y0};{x0}H")
+        self.write(f"\x1b[{ya};{xa}H")
 
         self.write("\x1b[m")
         for style in styles:
@@ -585,7 +587,7 @@ class ScreenEditor:
             return True
 
         if sdata == b"\t":
-            self.column_x = ((column_x - 1) // 8 + 1) * 8 + 1
+            self.column_x = X1 + ((column_x - X1) // 8 + 1) * 8
             return True
 
             # todo5: cap \t shadows by screen panel width
@@ -632,7 +634,7 @@ class ScreenEditor:
             pn = int(tbp.neck) if tbp.neck else 1
 
             if tbp.tail == b"A":
-                self.row_y = max(1, row_y - pn)
+                self.row_y = max(Y1, row_y - pn)
                 return True
             if tbp.tail == b"B":
                 self.row_y = min(y_height, row_y + pn)
@@ -641,7 +643,7 @@ class ScreenEditor:
                 self.column_x = min(x_width, column_x + pn)
                 return True
             if tbp.tail == b"D":
-                self.column_x = max(1, column_x - pn)
+                self.column_x = max(X1, column_x - pn)
                 return True
 
         # Write leaps to Y X into the Shadows
@@ -654,8 +656,8 @@ class ScreenEditor:
 
             neck_plus_splits = neck_splits + [b"1", b"1"]
 
-            row_y = int(neck_plus_splits[0]) if neck_plus_splits[0] else 1
-            column_x = int(neck_plus_splits[1]) if neck_plus_splits[1] else 1
+            row_y = int(neck_plus_splits[0]) if neck_plus_splits[0] else Y1
+            column_x = int(neck_plus_splits[1]) if neck_plus_splits[1] else X1
 
             self.row_y = row_y  # for .write_leap_shadows
             self.column_x = column_x  # for .write_leap_shadows
@@ -1877,7 +1879,7 @@ class ScreenEditor:
         for i, widget in widget_by_i.items():
             if x in range(1 + i, 1 + i + len(widget) + 1):
                 x_widget = widget
-                wx = 1 + i
+                wx = X1 + i
                 break
 
         if not x_widget:
@@ -2087,7 +2089,6 @@ class ScreenEditor:
         return sdata
 
 
-# todo9: count up from Y1 X1 by retiring x0 y0 x1 x1 etc into xa ya xb yb etc
 # todo9: do background colors as #321 on #456
 # todo9: click at cursor to vanish & run, click away to run without vanish
 
@@ -2178,9 +2179,9 @@ class ConwayLife:
         choice = 3
 
         if choice == 1:
-            (y0, x0) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
-            self.yx_board = (y0, x0)
-            self.yx_puck = (y0, x0)
+            (ya, xa) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
+            self.yx_board = (ya, xa)
+            self.yx_puck = (ya, xa)
             self.conway_print_some("⚪🔴⚪🔴⚪")  # todo5: Conway Gameboard at Cursor
             self.conway_print_some("⚪⚪🔴🔴⚪")
             self.conway_print_some("🔵⚪🔴⚪⚪")
@@ -2188,9 +2189,9 @@ class ConwayLife:
             # Southeast Glider
 
         if choice == 2:
-            (y0, x0) = self.yx_board_place(dy=-2, dx=-4)  # todo5: derive dy dx
-            self.yx_board = (y0, x0)
-            self.yx_puck = (y0, x0)
+            (ya, xa) = self.yx_board_place(dy=-2, dx=-4)  # todo5: derive dy dx
+            self.yx_board = (ya, xa)
+            self.yx_puck = (ya, xa)
             self.conway_print_some("🔴⚪⚪⚪🔴")
             self.conway_print_some("🔴🔴⚪🔴🔴")
             self.conway_print_some("🔴⚪🔴⚪🔴")
@@ -2202,9 +2203,9 @@ class ConwayLife:
             # todo6: compare/contrast web life at Wolf Face
 
         if choice == 3:
-            (y0, x0) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
-            self.yx_board = (y0, x0)
-            self.yx_puck = (y0, x0)
+            (ya, xa) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
+            self.yx_board = (ya, xa)
+            self.yx_puck = (ya, xa)
             self.conway_print_some("⚪🔴⚪🔴⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
             self.conway_print_some("⚪🔴🔴⚪⚪🔵🔵🔵🔵⚪⚪🔴🔴⚪")
             self.conway_print_some("⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
@@ -2245,19 +2246,19 @@ class ConwayLife:
 
         se = self.screen_editor
 
-        (y0, x0) = self.yx_puck
+        (ya, xa) = self.yx_puck
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        se.write(f"\x1b[{y0};{x0}H")  # for .conway_print_some
+        se.write(f"\x1b[{ya};{xa}H")  # for .conway_print_some
 
-        (y, x) = (y0, x0)
+        (y, x) = (ya, xa)
         for syx in s:
             self.conway_print_y_x_syx(y, x=x, syx=syx)
             x += 2
 
-        y1 = y0 + 1
-        x1 = x0
-        self.yx_puck = (y1, x1)
+        yb = ya + 1
+        xb = xa
+        self.yx_puck = (yb, xb)
 
     def do_conway_8x_redo(self) -> None:
         """Step the Game of Life forward at 8X Speed"""
@@ -2298,10 +2299,10 @@ class ConwayLife:
 
         se = self.screen_editor
 
-        (y0, x0) = self.yx_board_place(dy=0, dx=0)
+        (ya, xa) = self.yx_board_place(dy=0, dx=0)
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        se.write(f"\x1b[{y0};{x0}H")  # for ._leap_conway_between_half_steps_
+        se.write(f"\x1b[{ya};{xa}H")  # for ._leap_conway_between_half_steps_
 
     def _do_conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
@@ -2367,26 +2368,26 @@ class ConwayLife:
 
         count = 0
         for dy, dx in dydx_list:
-            y1 = y + dy
-            x1 = x + dx
+            yb = y + dy
+            xb = x + dx
 
             if syx == "⚪":
-                if y1 not in list_str_by_y_x.keys():
+                if yb not in list_str_by_y_x.keys():
                     continue
-                if x1 not in list_str_by_y_x[y1].keys():
+                if xb not in list_str_by_y_x[yb].keys():
                     continue
 
-            y1x1_write = ""
-            if not ((y1 in list_str_by_y_x.keys()) and (x1 in list_str_by_y_x[y1].keys())):
-                y1x1_write = "⚪"
-                self.conway_print_y_x_syx(y1, x=x1, syx=y1x1_write)
+            yaxa_write = ""
+            if not ((yb in list_str_by_y_x.keys()) and (xb in list_str_by_y_x[yb].keys())):
+                yaxa_write = "⚪"
+                self.conway_print_y_x_syx(yb, x=xb, syx=yaxa_write)
 
-            y1x1_writes = list_str_by_y_x[y1][x1]
-            shadow_sy1x1 = y1x1_writes[-1] if y1x1_writes else ""
-            if y1x1_write:
-                assert y1x1_write == shadow_sy1x1, (y1x1_write, shadow_sy1x1, y1, x1)
+            yaxa_writes = list_str_by_y_x[yb][xb]
+            shadow_syaxa = yaxa_writes[-1] if yaxa_writes else ""
+            if yaxa_write:
+                assert yaxa_write == shadow_syaxa, (yaxa_write, shadow_syaxa, yb, xb)
 
-            if shadow_sy1x1 in ("🔴", "🟥"):
+            if shadow_syaxa in ("🔴", "🟥"):
                 count += 1
 
         return count
