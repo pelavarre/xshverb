@@ -299,7 +299,7 @@ class ScreenEditor:
 
         # Init our Keyboard Chord Bindings
 
-        func_by_str = self.form_none_func_by_str()
+        func_by_str = self.form_func_by_str()
         self.func_by_str = func_by_str
 
         loopable_kdata_tuple = self.form_loopable_kdata_tuple()
@@ -422,10 +422,45 @@ class ScreenEditor:
 
         # todo4: .do_screen_redraw of Csi ⇧J ⇧H etc bypasses our shadowed writes
 
+    def read_shadowed_row_y_text(self, y: int, default: str) -> str:
+        """Read back just the Text Shadowed in the Row"""
+
+        assert len(default.encode()) == 1, (default, len(default.encode()))  # todo: other defaults
+
+        bt = self.bytes_terminal
+        list_str_by_y_x = self.list_str_by_y_x
+
+        x_width = bt.read_x_width()
+
+        if y not in list_str_by_y_x.keys():
+            return x_width * default
+
+        y_text = ""
+        list_str_by_x = list_str_by_y_x[y]
+        for x in range(1, x_width + 1):
+
+            syx = default
+            if x in list_str_by_x.keys():
+                list_str = list_str_by_x[x]
+                if list_str:
+                    syx = list_str[-1]
+
+            y_text += syx
+
+        return y_text
+
     def write_shadows(self, sdata: bytes) -> None:
         """Shadow the Screen Panel"""
 
+        assert BEL == "\x07"
+
         stext = sdata.decode()  # todo: may raise UnicodeDecodeError
+
+        if not stext:
+            return
+
+        if stext == "\x07":
+            return
 
         if self.write_text_shadows(stext):
             return
@@ -436,7 +471,7 @@ class ScreenEditor:
         if self.write_toggle_shadows(stext):
             return
 
-        tprint(f"Bytes written but not shadowed {stext=}")  # such as Empty
+        tprint(f"Bytes not shadowed {stext=}")  # such as Empty
 
     def write_text_shadows(self, stext: str) -> bool:
         """Shadow the Text"""
@@ -466,7 +501,7 @@ class ScreenEditor:
             x_width = self._str_guess_x_width(ch)
             self.column_x += x_width
 
-        return False
+        return True
 
     def _str_guess_x_width(self, text: str) -> int:
         """Guess the Width on Screen of printing a Text"""
@@ -560,8 +595,8 @@ class ScreenEditor:
 
             neck_plus_splits = neck_splits + [b"1", b"1"]
 
-            row_y = int(neck_plus_splits[0])
-            column_x = int(neck_plus_splits[1])
+            row_y = int(neck_plus_splits[0]) if neck_plus_splits[0] else 1
+            column_x = int(neck_plus_splits[1]) if neck_plus_splits[1] else 1
 
             self.row_y = row_y  # for .write_leap_shadows
             self.column_x = column_x  # for .write_leap_shadows
@@ -617,7 +652,7 @@ class ScreenEditor:
     # Bind Keyboard Chords to Funcs
     #
 
-    def form_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
+    def form_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         """Bind Keycaps to Funcs"""
 
         func_by_str: dict[str, abc.Callable[[], None]] = {
@@ -852,10 +887,10 @@ class ScreenEditor:
         kcaps = kdata_to_kcaps(kdata)
 
         if kcaps in func_by_str.keys():
-            none_func = func_by_str[kcaps]
-            tprint(f"{none_func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
+            func = func_by_str[kcaps]
+            tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
 
-            none_func()  # may raise SystemExit
+            func()  # may raise SystemExit
 
             return
 
@@ -1060,6 +1095,7 @@ class ScreenEditor:
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if (n == 1) and csi and tbp.tail and (tbp.tail == b"M"):
+            tprint("# _take_csi_mouse_press_if_")
             return True  # drops first 1/2 or 2/3 of Sgr Mouse
 
         return False
@@ -1076,6 +1112,8 @@ class ScreenEditor:
         splits = tbp.neck.removeprefix(b"<").split(b";")
         assert len(splits) == 3, (splits, tbp.neck, tbp)
         (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
+
+        tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
 
         # Decode f = 0b⌃⌥⇧00
 
@@ -1576,7 +1614,7 @@ class ScreenEditor:
     def do_kdata_fn_f2(self) -> None:
         """Play Conway's Game-of-Life for F2"""
 
-        with_none_func_by_str = self.func_by_str
+        with_func_by_str = self.func_by_str
 
         # Default to Replacing, not Inserting
 
@@ -1592,16 +1630,16 @@ class ScreenEditor:
 
         cl = ConwayLife(se=self)
 
-        func_by_str = dict(with_none_func_by_str)
-        conway_none_func_by_str = cl.form_conway_none_func_by_str()
-        func_by_str.update(conway_none_func_by_str)
+        func_by_str = dict(with_func_by_str)
+        conway_func_by_str = cl.form_conway_func_by_str()
+        func_by_str.update(conway_func_by_str)
 
         self.func_by_str = func_by_str
 
         try:
             cl.play_conway_life()
         finally:
-            self.func_by_str = with_none_func_by_str  # replaces
+            self.func_by_str = with_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
     def do_kdata_fn_f9(self) -> None:
@@ -1659,52 +1697,71 @@ class ScreenEditor:
     def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
         """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
 
-        # Find a Widget beneath the Mouse Release
+        # List the Widgets of the Row
 
         y_text = self.read_shadowed_row_y_text(y, default=" ")
 
-        wx = -1
-        widget = ""
+        widget_by_i = dict()
 
-        for m in re.finditer(r"<[^>]*?>|  .*?  ", string=y_text):
-            start = m.start()
-            end = m.end()
+        wi = -1
+        y_text_plus = y_text + "  "
+        for i, ich in enumerate(y_text):
 
-            if x in range(1 + start, 1 + end + 1):
-                group0 = m.group(0)
-                widget = group0.strip()
+            if wi == -1:
+                if ich != " ":
+                    wi = i
+                    widget_by_i[wi] = ich
 
-                lstrip = group0.lstrip()
-                dent = len(group0) - len(lstrip)
+            elif widget_by_i[wi][0] == "<":
+                widget_by_i[wi] += ich
+                if ich == ">":
+                    wi = -1
 
-                if group0 == lstrip:
-                    wx = 1 + start
+            else:
+                if y_text_plus[i:].startswith("  "):
+                    wi = -1
                 else:
-                    wx = 1 + start + dent
+                    widget_by_i[wi] += ich
 
+        # Find a Widget beneath the Mouse Release
+
+        x_widget = ""
+        wx = -1
+
+        for i, widget in widget_by_i.items():
+            if x in range(1 + i, 1 + i + len(widget) + 1):
+                x_widget = widget
+                wx = 1 + i
                 break
 
-        if not widget:
+        if not x_widget:
             self.write("\a")  # for .take_widget_at_yxf_mouse_release
             return
 
         # Vanish the Command Verb when pushed, if not inside a Button that endures
 
-        verb = widget
-        if (widget[0] == "<") and (widget[-1] == ">"):
-            verb = widget[1:-1]
+        verb = x_widget
+        vanisher = True
+
+        if x_widget[0] in ("⎋", "#"):
+            vanisher = False
+
+        elif (x_widget[0] == "<") and (x_widget[-1] == ">"):
+            verb = x_widget[1:-1]
+            vanisher = False
+
             if not verb:
                 self.write("\a")  # for .take_widget_at_yxf
                 return
 
-        if verb == widget:
-            self.disappear_widget_at_yxf(widget, y=y, x=wx)
+        if vanisher:
+            self.vanish_widget_at_yxf(x_widget, y=y, x=wx)
 
-        # Run the Widget at the Mouse
+        # Run the Widget at the Mouse Release
 
-        self.take_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
+        self.take_mouse_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
 
-    def disappear_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
+    def vanish_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
         """Vanish the Widget at the Mouse"""
 
         assert y >= 1, (y, x, widget)
@@ -1719,9 +1776,9 @@ class ScreenEditor:
         assert RM_IRM == "\x1b[" "4l"
         assert SM_IRM == "\x1b[" "4h"
 
-        self.write(f"\x1b7")
+        self.write("\x1b7")
 
-        self.write(f"\x1b[{y};{x}H")  # for .disappear_widget_at_yxf per Mouse Csi ⎋[M Release
+        self.write(f"\x1b[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
         assert self.row_y == y, (self.row_y, y)
         assert self.column_x == x, (self.column_x, x)
 
@@ -1739,14 +1796,22 @@ class ScreenEditor:
             # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
             self.write(f"\x1b[{y};{x}H")
 
-        self.write(f"\x1b8")
+        self.write("\x1b8")
 
-    def take_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
-        """Run the Verb at the Mouse"""
+    def take_mouse_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
+        """Run the Verb at the Mouse Release"""
+
+        # Eval some Keycaps
+
+        sdata = self.mouse_verb_to_sdata(verb)
+        tprint(f"{verb=} {sdata=}  # take_mouse_verb_at_yxf")
+        if sdata:
+            self.write(sdata.decode())
+            return
+
+        # Sample Jabberwocky
 
         casefold = verb.casefold()
-
-        #
 
         if casefold == "jabberwocky":
             splits = Jabberwocky.split()
@@ -1754,43 +1819,96 @@ class ScreenEditor:
             self.write(split + " ")
             return
 
-        #
-
-        starts = ["⎋", "⎋[", "⎋⇧O", "⎋⎋", "⎋⎋[", "⎋⎋⇧O"]
-
-        #
+        # Shout out no Verb found
 
         self.write(repr(verb))
         self.write("\a")  # for .take_widget_at_yxf
 
         # todo4: find an Italic that works at ⎋[3M or somewhere
 
-    def read_shadowed_row_y_text(self, y: int, default: str) -> str:
-        """Read back just the Text Shadowed in the Row"""
+    def mouse_verb_to_sdata(self, verb: str) -> bytes:
+        """Eval some Keycaps"""
 
-        assert len(default.encode()) == 1, (default, len(default.encode()))  # todo: other defaults
+        keycaps = verb.split()[0]
 
-        bt = self.bytes_terminal
-        list_str_by_y_x = self.list_str_by_y_x
+        # Eval Colors
 
-        x_width = bt.read_x_width()
+        if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
+            sdata = self.six_cubed_color(keycaps)
+            return sdata
 
-        if y not in list_str_by_y_x.keys():
-            return x_width * default
+        if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
+            sdata = self.twenty_four_bit_color(keycaps)
+            return sdata
 
-        y_text = ""
-        list_str_by_x = list_str_by_y_x[y]
-        for x in range(1, x_width + 1):
+        # Eval Keycaps
 
-            syx = default
-            if x in list_str_by_x.keys():
-                list_str = list_str_by_x[x]
-                if list_str:
-                    syx = list_str[-1]
+        if not keycaps.startswith("⎋"):
+            return b""  # encodes Eval not found
 
-            y_text += syx
+        sdata = b""
+        shifting = False
 
-        return y_text
+        for ch in keycaps:
+
+            if ch == "⎋":
+                sdata += b"\x1b"
+            elif ch == "␣":  # Spacebar as a single-wide Glyph
+                sdata += b" "
+            elif ch == "⇧":
+                shifting = True
+                continue
+            elif shifting:
+                sdata += ch.encode()
+            else:
+                sdata += ch.lower().encode()
+
+            shifting = False
+
+        return sdata
+
+        # todo7: background colors too, not just foreground
+
+    def six_cubed_color(self, verb: str) -> bytes:
+        """Eval a #RGB color"""
+
+        assert verb[0] == "#", (verb,)
+
+        r = int(verb[1])
+        g = int(verb[2])
+        b = int(verb[3])
+
+        assert len(verb) == 4, (verb,)
+
+        assert 0 <= r <= 5, (r, verb)
+        assert 0 <= g <= 5, (g, verb)
+        assert 0 <= b <= 5, (b, verb)
+
+        sdata = f"\x1b[38;5;{r * 36 + g * 6 + b + 16}m".encode()
+        return sdata
+
+    def twenty_four_bit_color(self, verb: str) -> bytes:
+        """Eval a #RRGGBB color"""
+
+        assert verb[0] == "#", (verb,)
+
+        rr = int(verb[1:][:2], base=0x10)
+        gg = int(verb[3:][:2], base=0x10)
+        bb = int(verb[5:][:2], base=0x10)
+
+        assert len(verb) == 7, (verb,)
+
+        sdata = f"\x1b[38;2;{rr};{gg};{bb}m".encode()
+
+        if sys_platform_darwin:
+            r = int((rr / 0xFF) * 5)
+            g = int((gg / 0xFF) * 5)
+            b = int((bb / 0xFF) * 5)
+
+            sdata = self.six_cubed_color(f"#{r}{g}{b}")
+            return sdata
+
+        return sdata
 
 
 #
@@ -2102,7 +2220,7 @@ class ConwayLife:
 
         self.yx_puck = (y, x)
 
-    def form_conway_none_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
+    def form_conway_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
 
         se = self.screen_editor
@@ -2188,7 +2306,7 @@ SCREEN_WRITER_HELP = r"""
 
     Csi ⎋[ Sequences
 
-        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←  ⎋[I ⌃I  ⎋[⇧Z ⇧Tab
+        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←  ⎋[⇧I ⌃I  ⎋[⇧Z ⇧Tab
         ⎋[D row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
@@ -2201,7 +2319,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
-        ⎋[M plain  #333 6^3 color  #808080 24-bit color  <Jabberwocky>
+        ⎋[M plain  #321 6^3 color  #204080 24-bit color  <Jabberwocky>
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
@@ -3363,6 +3481,7 @@ def tprint(*args: object) -> None:
 
     if tprinting:
         tlog.write(text + "\n")
+        tlog.flush()
 
 
 #
