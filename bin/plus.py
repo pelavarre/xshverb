@@ -406,17 +406,18 @@ class ScreenEditor:
         os.write(fileno, sdata)
         slog.write(sdata)
 
-        stext = "\x1b[m"
-        sdata = stext.encode()
-        os.write(fileno, sdata)
-        slog.write(sdata)
-
         for y in list_str_by_y_x.keys():
             list_str_by_x = list_str_by_y_x[y]
             for x in list_str_by_x.keys():
                 x_list_str = list_str_by_x[x]
 
                 self.write(f"\x1b[{y};{x}H")
+
+                stext = "\x1b[m"
+                sdata = stext.encode()
+                os.write(fileno, sdata)  # todo7: stop clearing unnecessarily
+                slog.write(sdata)
+
                 for stext in x_list_str:
 
                     sdata = stext.encode()
@@ -1981,10 +1982,7 @@ class ScreenEditor:
 
         # Eval some Keycaps
 
-        sdata = self.mouse_verb_to_sdata(verb)
-        tprint(f"{verb=} {sdata=}  # take_mouse_verb_at_yxf")
-        if sdata:
-            self.write(sdata.decode())
+        if self.mouse_verb_to_write_sdata(verb):
             return
 
         # Sample Jabberwocky
@@ -2004,25 +2002,25 @@ class ScreenEditor:
 
         # todo4: find an Italic that works at ⎋[3M or somewhere
 
-    def mouse_verb_to_sdata(self, verb: str) -> bytes:
+    def mouse_verb_to_write_sdata(self, verb: str) -> bool:
         """Eval some Keycaps"""
 
-        keycaps = verb.split()[0]
+        if self.mouse_verb_to_write_color_sdata(verb):
+            return True
 
-        # Eval Colors
+        if self.mouse_verb_to_write_keycaps_sdata(verb):
+            return True
 
-        if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
-            sdata = self.six_cubed_color(keycaps)
-            return sdata
+        return False
 
-        if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
-            sdata = self.twenty_four_bit_color(keycaps)
-            return sdata
+    def mouse_verb_to_write_keycaps_sdata(self, verb: str) -> bool:
+        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
 
-        # Eval Keycaps
+        splits = verb.split()
+        keycaps = splits[0]
 
         if not keycaps.startswith("⎋"):
-            return b""  # encodes Eval not found
+            return False
 
         sdata = b""
         shifting = False
@@ -2043,53 +2041,135 @@ class ScreenEditor:
 
             shifting = False
 
-        return sdata
+        # Succeed
 
-        # todo7: background colors too, not just foreground
+        stext = sdata.decode()  # may raise UnicodeDecodeError
+        self.write(stext)
 
-    def six_cubed_color(self, verb: str) -> bytes:
+        return True
+
+    def mouse_verb_to_write_color_sdata(self, verb: str) -> bool:
+        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
+
+        splits = verb.split()
+
+        if splits[2:]:
+            if splits[1].casefold() == "on":
+                fverb = splits[0]
+                bverb = splits[2]
+
+                fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
+                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
+                if fg and bg:
+                    self.write(bg.decode())
+                    self.write(fg.decode())
+                    return True
+
+        elif splits[1:]:
+            if splits[0].casefold() == "on":
+                bverb = splits[1]
+
+                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
+                if bg:
+                    self.write(bg.decode())
+                    return True
+
+        else:
+            fverb = splits[0]
+            fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
+            if fg:
+                self.write(fg.decode())
+                return True
+
+        return False
+
+    def verb_to_color_sdata_if(self, verb: str, kind: str) -> bytes:
+        """Eval a Keycap as a Foreground or a Background Color"""
+
+        splits = verb.split()
+        assert kind in ("Foreground", "Background"), (kind,)
+
+        keycaps = splits[0]
+
+        # Eval a 6^3 Color
+
+        if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
+            pn = self.six_cubed_color_verb_to_pn(keycaps)
+            if kind == "Foreground":
+                sdata = f"\x1b[38;5;{pn}m".encode()
+                return sdata
+            else:
+                sdata = f"\x1b[48;5;{pn}m".encode()
+                return sdata
+
+        # Eval a 24-Bit Color
+
+        if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
+            (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
+
+            if not sys_platform_darwin:
+                if kind == "Foreground":
+                    sdata = f"\x1b[38;2;{r};{b};{b}m".encode()
+                    return sdata
+                else:
+                    sdata = f"\x1b[48;2;{r};{g};{b}m".encode()
+                    return sdata
+
+            # Else emulate the 24-Bit Color with a 6^3 Color
+
+            r6 = int((r / 0xFF) * 5)
+            g6 = int((g / 0xFF) * 5)
+            b6 = int((b / 0xFF) * 5)
+
+            pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+
+            if kind == "Foreground":
+                sdata = f"\x1b[38;5;{pn}m".encode()
+                return sdata
+            else:
+                sdata = f"\x1b[48;5;{pn}m".encode()
+                return sdata
+
+        # Else don't succeed
+
+        return b""
+
+    def six_cubed_color_verb_to_pn(self, verb: str) -> int:
         """Eval a #RGB color"""
 
         assert verb[0] == "#", (verb,)
 
-        r = int(verb[1])
-        g = int(verb[2])
-        b = int(verb[3])
+        r6 = int(verb[1])
+        g6 = int(verb[2])
+        b6 = int(verb[3])
 
         assert len(verb) == 4, (verb,)
 
-        assert 0 <= r <= 5, (r, verb)
-        assert 0 <= g <= 5, (g, verb)
-        assert 0 <= b <= 5, (b, verb)
+        assert 0 <= r6 <= 5, (r6, verb)
+        assert 0 <= g6 <= 5, (g6, verb)
+        assert 0 <= b6 <= 5, (b6, verb)
 
-        sdata = f"\x1b[38;5;{r * 36 + g * 6 + b + 16}m".encode()
-        return sdata
+        pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
 
-    def twenty_four_bit_color(self, verb: str) -> bytes:
+        return pn
+
+    def twenty_four_bit_color_verb_to_r_g_b(self, verb: str) -> tuple[int, int, int]:
         """Eval a #RRGGBB color"""
 
         assert verb[0] == "#", (verb,)
 
-        rr = int(verb[1:][:2], base=0x10)
-        gg = int(verb[3:][:2], base=0x10)
-        bb = int(verb[5:][:2], base=0x10)
+        r = int(verb[1:][:2], base=0x10)
+        g = int(verb[3:][:2], base=0x10)
+        b = int(verb[5:][:2], base=0x10)
 
         assert len(verb) == 7, (verb,)
 
-        sdata = f"\x1b[38;2;{rr};{gg};{bb}m".encode()
-
-        if sys_platform_darwin:
-            r = int((rr / 0xFF) * 5)
-            g = int((gg / 0xFF) * 5)
-            b = int((bb / 0xFF) * 5)
-
-            sdata = self.six_cubed_color(f"#{r}{g}{b}")
-            return sdata
-
-        return sdata
+        return (r, g, b)
 
 
-# todo9: do background colors as #321 on #456
+# todo9: pick fun fg/bg mixes as our demos - how about green-on-black and yellow-on-blue ?
+# todo9: shadow ⎋[⇧K row-tail-erase, ⎋[⇧Z, etc till editing doesn't fail ⌃L so much
+# todo9: shadow colored ⎋[⇧K row-tail-erase correctly
 # todo9: click at cursor to vanish & run, click away to run without vanish
 
 # todo8: glider, sw glider, ne nw se gliders
@@ -2513,7 +2593,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
-        ⎋[M plain  #321 on #123 color  #204080 on #804020 color    <Jabberwocky>
+        ⎋[M plain  #420 on #344  #804020 on #CCCC99    <Jabberwocky>
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
