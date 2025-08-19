@@ -394,7 +394,7 @@ class ScreenEditor:
         row_y = self.row_y
         slog = self.screen_bytes_log
 
-        (y0, x0) = (self.row_y, self.column_x)
+        (y0, x0) = (row_y, column_x)
 
         stext = "\x1b[2J"
         sdata = stext.encode()
@@ -796,9 +796,9 @@ class ScreenEditor:
         #
 
         self.write("\x1b[J")
-        self.print("Want some Buttons?")
+        self.print("Want some Buttons? Try clicking on them")
         self.print()
-        self.print("<Bold> <Underline> <Plain>  <Blue> <Green> <Orange> <Red>  <Jabberwocky>")
+        self.print("<Jabberwocky>  <Bold> <Underline> <Plain>  <Blue> <Green> <Orange> <Red>  <Jabberwocky>")
         self.print()
         self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
 
@@ -1741,6 +1741,8 @@ class ScreenEditor:
                 # self.write(len(widget) * "\b")
                 self.write(f"\x1b[{y};{x}H")
 
+        # column_x = self.column_x
+
         #
 
         casefold = verb.casefold()
@@ -1795,7 +1797,13 @@ class ScreenEditor:
             splits = Jabberwocky.split()
             split = random.choice(splits)
             self.write(split + " ")
-            return
+
+            # if column_x == 1:
+            #     self.write(split + " ")
+            # else:
+            #     self.write("\b")
+            #     self.write(" " + split + " ")
+            # return
 
         #
 
