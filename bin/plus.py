@@ -704,14 +704,14 @@ class ScreenEditor:
             # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
             # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
-            "F9": self.do_kdata_fn_f9,  # Fn F9
+            "F9": self.do_kdata_fn_f9,  # FnF9
             #
             # Ss3 Esc Byte Sequences
             #
             # # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
             #
-            "F1": self.do_kdata_fn_f1,  # Fn F1  # todo4: Fn F1 vs F1
-            "F2": self.do_kdata_fn_f2,  # Fn F2
+            "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
+            "F2": self.do_kdata_fn_f2,  # FnF2
             #
             # Printable but named Characters
             #
@@ -793,14 +793,9 @@ class ScreenEditor:
         self.row_y = row_y  # for .play_screen_editor
         self.column_x = column_x  # for .play_screen_editor
 
-        #
+        # Prompt at Launch
 
-        self.write("\x1b[J")
-        self.print("Want some Buttons? Try clicking on them")
-        self.print()
-        self.print("<Jabberwocky>  <Bold> <Underline> <Plain>  <Blue> <Green> <Orange> <Red>  <Jabberwocky>")
-        self.print()
-        self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
+        self.print("Press ⌃D to quit, else FnF1 for help, else see what happens")
 
         # Walk one step after another
 
@@ -1096,7 +1091,7 @@ class ScreenEditor:
 
         if f in (Basic_0, Option_8):
 
-            self.take_verb_at_yxf_mouse_release(y, x=x, f=f)
+            self.take_widget_at_yxf_mouse_release(y, x=x, f=f)
 
             return True
 
@@ -1291,6 +1286,7 @@ class ScreenEditor:
         return tbp
 
         # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
+        # todo6: Debug why Arrow Burst buttons after the first frequently don't work, if still so?
 
     def do_write_spacebar(self) -> None:
         """Write 1 Space"""
@@ -1637,13 +1633,11 @@ class ScreenEditor:
             # self.print("macOS Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
 
             self.print("macOS Shell ⌘K clears Screen & Scrollback (but not Top Row)")
-            self.print()
+            self.print()  # each ⌘L at Shell erases the last Input & Output
 
             # macOS Shell has distinct ← ↑ → ↓ and ⌥ ← → and ⇧ ← → and ⇧ Fn ← ↑ → ↓
             # macOS Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
 
-        self.print("Press ⌃D to quit, else Fn F1 for help, else see what happens")
-        self.print()
         self.print()
 
         # XShVerb F1
@@ -1662,55 +1656,39 @@ class ScreenEditor:
     # Take ⌥ Mouse Release as a call for Read-Eval-Print
     #
 
-    def take_verb_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
+    def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
         """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
 
-        # Read the Widget at the Mouse
-
-        wx = x
-        widget = ""
+        # Find a Widget beneath the Mouse Release
 
         y_text = self.read_shadowed_row_y_text(y, default=" ")
 
-        syx = y_text[x]
-        if syx != " ":
+        wx = -1
+        widget = ""
 
-            suffix_text = y_text[:x]
-            suffix_splits = suffix_text.split()
-            assert suffix_splits, (suffix_splits, syx, y, x)
+        for m in re.finditer(r"<[^>]*?>|  .*?  ", string=y_text):
+            start = m.start()
+            end = m.end()
 
-            suffix = suffix_splits[-1]
-            left_text = suffix_text.removesuffix(suffix)
-            wx = 1 + len(left_text)
+            if x in range(1 + start, 1 + end + 1):
+                group0 = m.group(0)
+                widget = group0.strip()
 
-            index = len(suffix_splits) - 1
-            y_splits = y_text.split()
+                lstrip = group0.lstrip()
+                dent = len(group0) - len(lstrip)
 
-            assert index < len(y_splits), (index, len(y_splits), y_splits, suffix_splits)
-            widget = y_splits[index]
+                if group0 == lstrip:
+                    wx = 1 + start
+                else:
+                    wx = 1 + start + dent
 
-            # todo8: pick up phrases, not just words, till like a double-Space separator
-            # todo8: debug why Arrow Burst buttons after the first frequently don't work
-
-        # Run the Verb at the Mouse
-
-        self.take_widget_at_yxf(widget, y=y, x=wx, f=f)
-
-    def take_widget_at_yxf(self, widget: str, y: int, x: int, f: int) -> None:
-        """Run the Verb at the Mouse"""
-
-        assert BEL == "\a"
-        assert BS == "\b"
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        assert DCH_X == "\x1b[" "{}" "P"
-
-        # Require Widget found
+                break
 
         if not widget:
-            self.write("\a")  # for .take_widget_at_yxf
+            self.write("\a")  # for .take_widget_at_yxf_mouse_release
             return
 
-        # Decide to vanish and run once, or to persist
+        # Vanish the Command Verb when pushed, if not inside a Button that endures
 
         verb = widget
         if (widget[0] == "<") and (widget[-1] == ">"):
@@ -1719,77 +1697,54 @@ class ScreenEditor:
                 self.write("\a")  # for .take_widget_at_yxf
                 return
 
-        # Take the Cursor to the Verb (near to the Mouse), no matter if meaningless
+        if verb == widget:
+            self.disappear_widget_at_yxf(widget, y=y, x=wx)
 
-        if verb == widget:  # todo8: doc/ comment  # todo8: some visual feedback of the pushed button
+        # Run the Widget at the Mouse
 
-            self.write(f"\x1b[{y};{x}H")  # for .take_verb_at_yxf per Mouse Csi ⎋[M
-            assert self.row_y == y, (self.row_y, y)
-            assert self.column_x == x, (self.column_x, x)
+        self.take_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
 
-            # Vanish if the Widget is no more than the Verb, unmarked
+    def disappear_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
+        """Vanish the Widget at the Mouse"""
 
-            irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
-            if irm_stext == "\x1b[4h":
+        assert y >= 1, (y, x, widget)
+        assert x >= 1, (y, x, widget)
 
-                self.write(f"\x1b[{len(widget)}P")  # deletes a Verb, while inserting texts
+        assert BEL == "\a"  # todo7: more complete doc/ comment of Screen Encodings
+        assert BS == "\b"
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        assert DCH_X == "\x1b[" "{}" "P"
+        assert RM_IRM == "\x1b[" "4l"
+        assert SM_IRM == "\x1b[" "4h"
 
-            else:
-                assert (not irm_stext) or (irm_stext == "\x1b[4l"), (irm_stext,)
+        self.write(f"\x1b7")
 
-                self.write(len(widget) * " ")  # erases a Verb, while replacing texts
-                # self.write(len(widget) * "\b")
-                self.write(f"\x1b[{y};{x}H")
+        self.write(f"\x1b[{y};{x}H")  # for .disappear_widget_at_yxf per Mouse Csi ⎋[M Release
+        assert self.row_y == y, (self.row_y, y)
+        assert self.column_x == x, (self.column_x, x)
 
-        # column_x = self.column_x
+        # Vanish if the Widget is no more than the Verb, unmarked
 
-        #
+        irm_stext = self.read_shadow_settings("\x1b[4h", stext1="\x1b[4l")
+        if irm_stext == "\x1b[4h":
+
+            self.write(f"\x1b[{len(widget)}P")  # deletes a Verb, while inserting texts
+
+        else:
+            assert (not irm_stext) or (irm_stext == "\x1b[4l"), (irm_stext,)
+
+            self.write(len(widget) * " ")  # erases a Verb, while replacing texts
+            # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
+            self.write(f"\x1b[{y};{x}H")
+
+        self.write(f"\x1b8")
+
+    def take_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
+        """Run the Verb at the Mouse"""
 
         casefold = verb.casefold()
-
-        #
-
-        if casefold == "bold":  # ⎋[1M bold
-            self.write("\x1b[1m")
-            # if verb == widget:
-            #     self.write("bold")
-            return
-
-        if casefold == "underline":  # ⎋[4M underline
-            self.write("\x1b[4m")
-            # if verb == widget:
-            #     self.write("underline")
-            return
-
-        if casefold in ("reverse", "inverse"):  # ⎋[7M reverse/inverse
-            self.write("\x1b[7m")
-            # if verb == widget:
-            #     self.write("reverse")
-            return
-
-        if casefold == "plain":
-            self.write("\x1b[m")
-            # if verb == widget:
-            #     self.write("plain")
-            return
-
-        #
-
-        if casefold == "blue":
-            self.write("\x1b[34m")
-            return
-
-        if casefold == "green":
-            self.write("\x1b[32m")
-            return
-
-        if casefold == "orange":
-            self.write("\x1b[38;5;130m")  # Color '#310'
-            return
-
-        if casefold == "red":
-            self.write("\x1b[31m")
-            return
 
         #
 
@@ -1797,19 +1752,17 @@ class ScreenEditor:
             splits = Jabberwocky.split()
             split = random.choice(splits)
             self.write(split + " ")
-
-            # if column_x == 1:
-            #     self.write(split + " ")
-            # else:
-            #     self.write("\b")
-            #     self.write(" " + split + " ")
-            # return
+            return
 
         #
 
+        starts = ["⎋", "⎋[", "⎋⇧O", "⎋⎋", "⎋⎋[", "⎋⎋⇧O"]
+
+        #
+
+        self.write(repr(verb))
         self.write("\a")  # for .take_widget_at_yxf
 
-        # todo7: accept ⎋[M notation
         # todo4: find an Italic that works at ⎋[3M or somewhere
 
     def read_shadowed_row_y_text(self, y: int, default: str) -> str:
@@ -2219,7 +2172,7 @@ _ = """  # The 8 Half-Steps of a 5-Pixel Glider
 
 SCREEN_WRITER_HELP = r"""
 
-    Keycap Symbols are ⎋ Esc, ⌃ Control, ⌥ Option/ Alt, ⇧ Shift, ⌘ Command/ Os
+    Keycap Symbols are ⎋ Esc, ⌃ Control, ⌥ Option/ Alt, ⇧ Shift, ⌘ Command/ Os, ␣ Spacebar
 
         ⌃G ⌃H ⌃I ⌃J ⌃M mean \a \b \t \n \r, and ⌃[ means \e, also known as ⎋ Esc
         Tab means ⌃I \t, and Return means ⌃M \r
@@ -2235,8 +2188,7 @@ SCREEN_WRITER_HELP = r"""
 
     Csi ⎋[ Sequences
 
-        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←
-        ⎋[I ⌃I  ⎋[⇧Z ⇧Tab
+        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←  ⎋[I ⌃I  ⎋[⇧Z ⇧Tab
         ⎋[D row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
@@ -2244,12 +2196,12 @@ SCREEN_WRITER_HELP = r"""
         ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase  ⎋[⇧X columns-erase
         ⎋[⇧T rows-down  ⎋[⇧S rows-up  ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
-        ⎋[4H insert  ⎋[4L replace  ⎋[6 Q bar  ⎋[4 Q skid  ⎋[ Q unstyled
+        ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
         ⎋[?1049H screen-alt  ⎋[?1049L screen-main
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
-        ⎋[M plain
+        ⎋[M plain  #333 6^3 color  #808080 24-bit color  <Jabberwocky>
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
@@ -2290,7 +2242,7 @@ LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\x1b[" "B"
 CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\x1b[" "G"
 
 ESC = "\x1b"  # 01/11  ⌃[ Escape  # often known as Shell printf '\e', but Python doesn't define \e
-SS3 = "\x1bO"  # ESC 04/15 Single Shift Three  # in macOS F1 F2 F3 F4
+SS3 = "\x1bO"  # ESC 04/15 Single Shift Three  # ⎋⇧O in macOS F1 F2 F3 F4
 CSI = "\x1b["  # ESC 05/11 Control Sequence Introducer
 
 DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
@@ -2451,7 +2403,7 @@ class BytesTerminal:
                 if not extras:
                     if kdata == b"\x1bO":  # ⎋⇧O for Vim
                         if not self.kbhit(timeout=0.333):
-                            break  # rejects slow SS3 b"\x1bO" "P" of Fn F1..F4
+                            break  # rejects slow SS3 ⎋⇧O P Q R S of FnF1..FnF4
 
     def read_y_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
@@ -2939,19 +2891,21 @@ class TerminalBytePacket:
 
         assert ESC == "\x1b"  # ⎋
         assert CSI == "\x1b["  # ⎋[
-        assert SS3 == "\x1bO"  # ⎋O
+        assert SS3 == "\x1bO"  # ⎋⇧O
 
         # Look only outside of Mouse Reports
 
         assert not head.startswith(b"\x1b[M"), (head,)  # Mouse Report
 
-        # Look only at Undecodable, Unprintable, or Escaped Bytes
+        # Judge as printable or not
 
         printable = False
-        assert len(decodes) <= 1, (decodes, data)
         if decodes:
             assert len(decodes) == 1, (decodes, data)
             printable = decodes.isprintable()
+
+            # Require the Caller to route Printable Chars elsewhere till Head chosen
+
             assert head or not printable, (decodes, data, head, printable)
 
         # Take first 1 or 2 or 3 Bytes into Esc Sequences
@@ -2966,7 +2920,7 @@ class TerminalBytePacket:
             head.extend(data)
             return b""  # takes first 1 or 2 Bytes into Esc Sequences
 
-        # Take & close 1 Unprintable Char or 1..4 Undecodable Bytes, as Head
+        # Take & close 1 Unprintable Char as Head
 
         if not head:
             if not printable:
@@ -2976,11 +2930,8 @@ class TerminalBytePacket:
 
             # takes \b \t \n \r \x7f etc
 
-        # Take & close 1 Escaped Printable Decoded Char, as Tail
-        #
-        #   ⎋ Esc  # ⎋⎋ Esc Esc
-        #   ⎋O SS3  # ⎋⎋O Esc SS3
-        #
+        # Take & close 1 Escaped Printable Decoded Char,
+        # as Tail after Head of  ⎋ Esc  ⎋⎋ Esc Esc  ⎋O SS3  ⎋⎋O Esc SS3
 
         if bytes(head) in (b"\x1b", b"\x1b\x1b", b"\x1b\x1bO", b"\x1bO"):
             if printable:
@@ -3008,7 +2959,7 @@ class TerminalBytePacket:
         assert len(decodes) == 1, (decodes, data)
         assert data == decode.encode(), (data, decodes)
 
-        # Take or don't take 1 Printable Char into CSI or Esc CSI Sequence
+        # Take or don't take 1 Decodable Char into CSI or Esc CSI Sequence
 
         esc_csi_extras = self.take_one_esc_csi_if_(decode)
         return esc_csi_extras  # maybe empty
@@ -3098,12 +3049,12 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "\x08": "⎋⌃Delete",  # ⎋⌃Delete  # coded with ⌃H  # aka \b
     "\x1b" "\x0b": "⌥⇧Fn↑",  # ⎋⇧Fn↑   # coded with ⌃K
     "\x1b" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
-    "\x1b" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of Fn F1..F12  # not ⌥⇧Fn  # coded with ⌃P
+    "\x1b" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of FnF1..FnF12  # not ⌥⇧Fn  # coded with ⌃P
     "\x1b" "\x1b": "⎋⎋",  # Meta Esc  # not ⌥⎋
-    "\x1b" "\x1bO" "A": "⌃⌥↑",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧A  # gCloud Shell
-    "\x1b" "\x1bO" "B": "⌃⌥↓",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧B  # gCloud Shell
-    "\x1b" "\x1bO" "C": "⌃⌥→",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧C  # gCloud Shell
-    "\x1b" "\x1bO" "D": "⌃⌥←",  # ESC 04/15 Single-Shift Three (SS3)  # ESC SS3 ⇧D  # gCloud Shell
+    "\x1b" "\x1bO" "A": "⌃⌥↑",  # ESC SS3 ⇧A  # gCloud Shell
+    "\x1b" "\x1bO" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # gCloud Shell
+    "\x1b" "\x1bO" "C": "⌃⌥→",  # ESC SS3 ⇧C  # gCloud Shell
+    "\x1b" "\x1bO" "D": "⌃⌥←",  # ESC SS3 ⇧D  # gCloud Shell
     "\x1b" "\x1b" "[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
     "\x1b" "\x1b" "[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
     "\x1b" "\x1b" "[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
@@ -3111,7 +3062,7 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "\x1b" "[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
     "\x1b" "\x1b" "[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
     "\x1b" "\x28": "⎋FnDelete",  # not ⌥FnDelete
-    "\x1bO" "P": "F1",  # ESC 04/15 Single-Shift Three (SS3)  # SS3 ⇧P
+    "\x1bO" "P": "F1",  # SS3 ⇧P
     "\x1bO" "Q": "F2",  # SS3 ⇧Q
     "\x1bO" "R": "F3",  # SS3 ⇧R
     "\x1bO" "S": "F4",  # SS3 ⇧S
