@@ -18,6 +18,7 @@ from __future__ import annotations  # backports new datatype syntaxes into old P
 import collections
 import collections.abc as abc
 import datetime as dt
+import math
 import os
 import pathlib
 import pdb
@@ -909,6 +910,7 @@ class ScreenEditor:
             # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
             # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
+            "F8": self.do_kdata_fn_f8,  # FnF8
             "F9": self.do_kdata_fn_f9,  # FnF9
             #
             # Ss3 Esc Byte Sequences
@@ -1812,6 +1814,63 @@ class ScreenEditor:
             self.func_by_str = with_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
+    def do_kdata_fn_f8(self) -> None:
+        """Print a #555 Color Picker"""
+
+        se = self
+        bt = self.bytes_terminal
+
+        # Split a Landscape Terminal vertically
+
+        (y_height, x_width) = bt.read_y_height_x_width()
+
+        y_frame = 2
+        x_frame = 4
+
+        board_height = y_height - 2 * y_frame
+        board_height -= 1 - (board_height % 2)
+
+        board_width = (x_width - 4 * x_frame) // 2
+        board_width -= 1 - (board_width % 2)
+
+        color_picker_pns.clear()
+
+        # Plot the Left Panel
+
+        ya = Y1 + y_frame
+        yb = ya + board_height - 1
+
+        xa = X1 + x_frame
+        xb = xa + board_width - 1
+
+        color_picker_plot(se, ya=ya, xa=xa, yb=yb, xb=xb, dc=1)
+
+        # Plot the Right Panel
+
+        (yc, yd) = (ya, yb)
+
+        xd = x_width - x_frame
+        xc = xd - board_width + 1
+
+        color_picker_plot(se, ya=yc, xa=xc, yb=yd, xb=xd, dc=-1)
+
+        #
+
+        self.write("\x1b[m")
+
+        print_gaps = True
+        if print_gaps:
+
+            self.write("\x1b[32100H")
+            self.write("\x1b[A")
+            self.print("(((", end=" ")
+
+            # for pn in range(32, 231 + 1):
+            #     if pn not in color_picker_pns:
+            #         self.print(pn, end=" ")
+
+            self.print(")))", end=" ")
+
     def do_kdata_fn_f9(self) -> None:
         """Print the many Lines of Screen Writer Help for F9"""
 
@@ -2091,7 +2150,7 @@ class ScreenEditor:
 
         keycaps = splits[0]
 
-        # Eval a 6^3 Color
+        # Eval a 6**3 Color
 
         if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
             pn = self.six_cubed_color_verb_to_pn(keycaps)
@@ -2115,7 +2174,7 @@ class ScreenEditor:
                     sdata = f"\x1b[48;2;{r};{g};{b}m".encode()
                     return sdata
 
-            # Else emulate the 24-Bit Color with a 6^3 Color
+            # Else emulate the 24-Bit Color with a 6**3 Color
 
             r6 = int((r / 0xFF) * 5)
             g6 = int((g / 0xFF) * 5)
@@ -2167,6 +2226,8 @@ class ScreenEditor:
         return (r, g, b)
 
 
+# todo10: draw North Green, Southwest Red, Southeast Blue, about a White Center
+
 # todo9: pick fun fg/bg mixes as our demos - how about green-on-black and yellow-on-blue ?
 # todo9: shadow ⎋[⇧K row-tail-erase, ⎋[⇧Z, etc till editing doesn't fail ⌃L so much
 # todo9: shadow colored ⎋[⇧K row-tail-erase correctly
@@ -2193,6 +2254,100 @@ class ScreenEditor:
 # todo3: Each Y X gets a List Str. Last Item of List Str is the Text written after the Controls
 # todo3: Hide the Conway Cursor?
 # todo3: Discover the same drawing but translated to new Y X or new Rotation
+
+
+#
+# Plot 6**3 Colors
+#
+
+
+color_picker_pns = list()
+
+
+def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: int) -> None:
+    """Draw a Color Picker as Two Triangles, one with a Black Center, one with White"""
+
+    xab = (xa + xb) // 2
+    # yab = (ya + yb) // 2
+
+    glyph = unicodedata.lookup("Full Block")
+
+    max_rd = math.sqrt((yb - ya) ** 2 + (xb - xab) ** 2)
+    max_gd = math.sqrt((ya - yb) ** 2 + (xab - xa) ** 2)
+    max_bd = math.sqrt((ya - yb) ** 2 + (xab - xb) ** 2)
+
+    sw_n_m = (yb - ya) / (xa - xab)  # slope to SW (yb, xa) from N (ya, xab)
+    se_n_m = (yb - ya) / (xb - xab)  # slope to SE (yb, xb) from N (ya, xab)
+
+    for y in range(ya, yb + 1):
+
+        for x in range(xa, xab + 1):
+            sw_n_y = ya + sw_n_m * (x - xab)
+            if y >= sw_n_y:
+
+                rd = math.sqrt((y - ya) ** 2 + (x - xab) ** 2)
+                gd = math.sqrt((y - yb) ** 2 + (x - xa) ** 2)
+                bd = math.sqrt((y - yb) ** 2 + (x - xb) ** 2)
+
+                rf = rd / max_rd
+                gf = gd / max_gd
+                bf = bd / max_bd
+
+                r6 = int(rf * 3 / 2 * 5.5) if (rf < 2 / 3) else 0
+                g6 = int(gf * 3 / 2 * 5.5) if (gf < 2 / 3) else 0
+                b6 = int(bf * 3 / 2 * 5.5) if (bf < 2 / 3) else 0
+
+                # r6 = b6 = 0
+
+                hy = y
+                if dc < 0:
+                    r6 = 5 - r6
+                    g6 = 5 - g6
+                    b6 = 5 - b6
+
+                    hy = ya + (yb - y)
+
+                pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+                color_picker_pns.append(pn)
+
+                se.write(f"\x1b[{hy};{x}H")
+                se.write(f"\x1b[38;5;{pn}m")
+                # se.write(str(g6))
+                se.write(glyph)
+
+        for x in range(xab + 1, xb + 1):
+            se_n_y = ya + se_n_m * (x - xab)
+            if y >= se_n_y:
+
+                rd = math.sqrt((y - ya) ** 2 + (x - xab) ** 2)
+                gd = math.sqrt((y - yb) ** 2 + (x - xa) ** 2)
+                bd = math.sqrt((y - yb) ** 2 + (x - xb) ** 2)
+
+                rf = rd / max_rd
+                gf = gd / max_gd
+                bf = bd / max_bd
+
+                r6 = int(rf * 3 / 2 * 5.5) if (rf < 2 / 3) else 0
+                g6 = int(gf * 3 / 2 * 5.5) if (gf < 2 / 3) else 0
+                b6 = int(bf * 3 / 2 * 5.5) if (bf < 2 / 3) else 0
+
+                # r6 = b6 = 0
+
+                hy = y
+                if dc < 0:
+                    r6 = 5 - r6
+                    g6 = 5 - g6
+                    b6 = 5 - b6
+
+                    hy = ya + (yb - y)
+
+                pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+                color_picker_pns.append(pn)
+
+                se.write(f"\x1b[{hy};{x}H")
+                se.write(f"\x1b[38;5;{pn}m")
+                # se.write(str(g6))
+                se.write(glyph)
 
 
 #
@@ -2800,29 +2955,30 @@ class BytesTerminal:
     def read_y_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
-        fileno = self.fileno
-        size = os.get_terminal_size(fileno)
-        assert 5 <= size.lines <= _PN_MAX_32100_, (size,)
-
-        y_height = size.lines
+        (y_height, x_width) = self.read_y_height_x_width()
 
         return y_height
-
-        # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
 
     def read_x_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
-        fileno = self.fileno
-        size = os.get_terminal_size(fileno)
-
-        assert 20 <= size.columns <= _PN_MAX_32100_, (size,)
-
-        x_width = size.columns
+        (y_height, x_width) = self.read_y_height_x_width()
 
         return x_width
 
-        # macOS Terminal guarantees >= 20 Columns and >= 5 Rows
+    def read_y_height_x_width(self) -> tuple[int, int]:
+        """Count Terminal Screen Pane Rows & Columns"""
+
+        fileno = self.fileno
+        size = os.get_terminal_size(fileno)
+
+        assert 20 <= size.columns <= _PN_MAX_32100_, (size,)  # 20 <= macOS Terminal Width
+        assert 5 <= size.lines <= _PN_MAX_32100_, (size,)  # 5 <= macOS Terminal Height
+
+        y_height = size.lines
+        x_width = size.columns
+
+        return (y_height, x_width)  # reversed from Python's (x, y) standard
 
     def read_column_x(self) -> int:
         """Find the Terminal Cursor Column"""
