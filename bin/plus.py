@@ -131,10 +131,11 @@ def main() -> None:
 
     os.environ["PYTHONINSPECT"] = str(True)
 
-    print("To get started, press Return after typing:  tryme()", file=sys.stderr)
-    print(">>> ", file=sys.stderr)
-    print(">>> tryme()", file=sys.stderr)
+    # print("To get started, press Return after typing:  tryme()", file=sys.stderr)
+    # print(">>> ", file=sys.stderr)
+    # print(">>> tryme()", file=sys.stderr)
     tryme()
+    sys.exit(1)  # FIXME: #todo9
     print(">>> ", file=sys.stderr)
 
     sys.excepthook = with_excepthook
@@ -142,6 +143,10 @@ def main() -> None:
 
 def tryme() -> None:
     """Run when called"""
+
+    tprint()
+    tprint()
+    tprint()
 
     func = try_tbp_self_test
     func = try_read_byte_packet
@@ -191,7 +196,7 @@ def try_tbp_self_test() -> None:
 
 
 #
-# Loop Keyboard back to Screen, but as whole Packets or Emulations thereof  # todo4: name the helped
+# Loop Keyboard back to Screen, but as whole Packets or Emulations thereof  # todo7: name the helped
 #
 
 
@@ -210,14 +215,16 @@ CUD_Y = "\x1b[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last
 CUF_X = "\x1b[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
 CUB_X = "\x1b[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
 
+CHA_X = "\x1b[" "{}" "G"  # CSI 04/07 Cursor Character Absolute  # \r is Pn 1
+
 CUP_Y1_X1 = "\x1b[" "H"  # CSI 04/08 Cursor Position
 CUP_Y_X1 = "\x1b[" "{}" "H"  # CSI 04/08 Cursor Position
 CUP_Y_X = "\x1b[" "{};{}" "H"  # CSI 04/08 Cursor Position
 
-CHT_X = "\x1b" "[" "{}I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
+CHT_X = "\x1b[" "{}" "I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
 
-ED_P = "\x1b" "[" "{}" "J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
-EL_P = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
+ED_PS = "\x1b[" "{}" "J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
+EL_PS = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
 ICH_X = "\x1b[" "{}" "@"  # CSI 04/00 Insert Character
 IL_Y = "\x1b[" "{}" "L"  # CSI 04/12 Insert Line [Row]
@@ -226,30 +233,41 @@ DCH_X = "\x1b[" "{}" "P"  # CSI 05/00 Delete Character
 SU_Y = "\x1b[" "{}" "S"  # CSI 05/03 Scroll Up [Insert South Lines]
 SD_Y = "\x1b[" "{}" "T"  # CSI 05/04 Scroll Down [Insert North Lines]
 
-VPA_Y = "\x1b" "[" "{}" "d"  # CSI 06/04 Line Position Absolute
+ECH_X = "\x1b[" "{}" "X"  # CSI 05/08 Erase Character
+
+CBT_X = "\x1b[" "{}" "Z"  # CSI 05/10 Cursor Backward Tabulation
+
+VPA_Y = "\x1b[" "{}" "d"  # CSI 06/04 Line Position Absolute
 
 DECIC_X = "\x1b[" "{}" "'}}"  # CSI 02/07 07/13 VT420 DECIC_X  # "}}" to mean "}"
 DECDC_X = "\x1b[" "{}" "'~"  # CSI 02/07 07/14 VT420 DECDC_X
 
+
 SM_IRM = "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
 RM_IRM = "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
+
+SM_DECTCEM = "\x1b[?25h"  # 06/08 Set Mode (SMS) 25 VT220 Show Cursor
+RM_DECTCEM = "\x1b[?25l"  # 06/12 Reset Mode (RM) 25 VT220 Hide Cursor
+
+_SM_XTERM_ALT_ = "\x1b[" "?1049h"  # show Alt Screen
+_RM_XTERM_MAIN_ = "\x1b[" "?1049l"  # show Main Screen
+
 
 SGR = "\x1b[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
 DSR_6 = "\x1b[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
 CPR_Y_X_REGEX = r"\x1b\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
 
-_SM_XTERM_ALT_ = "\x1b[" "?1049h"  # show Alt Screen
-_RM_XTERM_MAIN_ = "\x1b[" "?1049l"  # show Main Screen
-
 
 DEL = "\x7f"  # 00/7F Delete [Control Character]  # aka ⌃?
 
-
-_PN_MAX_32100_ = 32100  # an Int beyond the Counts of Rows & Columns at any Terminal
+PS0 = 0  # often the default Int of a Selective [Enum] Parameter of a Csi Esc Sequence, etc
+PN1 = 1  # often the min & default Int of a Numeric [Int] Parameter of a Csi Esc Sequence, etc
+_PN_MAX_32100_ = 32100  # a Numeric [Int] beyond the Counts of Rows & Columns at any Terminal
 
 
 # todo2: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
+# todo: Stop writing "32100", like to cope with Terminals beyond 32100 Rows & Columns
 
 
 screen_editors: list[ScreenEditor] = list()
@@ -370,20 +388,23 @@ class ScreenEditor:
         self.write(end)
 
     def write(self, text: str) -> None:
+        """Write the Bytes, log them as written, and shadow them"""
+
+        self.write_out(text)
+        self.write_shadows(text)
+
+    def write_out(self, text: str) -> None:
         """Write the Bytes, and log them as written"""
+
+        schars = text
+        sdata = schars.encode()  # may raise UnicodeEncodeError
 
         bt = self.bytes_terminal
         fileno = bt.fileno
         slog = self.screen_bytes_log
 
-        schars = text
-
-        sdata = schars.encode()
         os.write(fileno, sdata)
-
         slog.write(sdata)
-
-        self.write_shadows(sdata)
 
     #
     # Read from the Shadows
@@ -394,42 +415,47 @@ class ScreenEditor:
 
         bt = self.bytes_terminal
         column_x = self.column_x
-        fileno = bt.fileno
         list_str_by_y_x = self.list_str_by_y_x
         row_y = self.row_y
-        slog = self.screen_bytes_log
         styles = self.styles
+        toggles = self.toggles
 
-        (ya, xa) = (row_y, column_x)
+        tprint(f"{row_y=} {column_x=}  # do_screen_redraw")
 
-        stext = "\x1b[2J"
-        sdata = stext.encode()
-        os.write(fileno, sdata)
-        slog.write(sdata)
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+        assert SGR == "\x1b[" "{}" "m"
+        assert RM_IRM == "\x1b[" "4l"
 
-        for y in list_str_by_y_x.keys():
-            list_str_by_x = list_str_by_y_x[y]
-            for x in list_str_by_x.keys():
-                x_list_str = list_str_by_x[x]
+        (y_height, x_width) = bt.read_y_height_x_width()
 
-                self.write(f"\x1b[{y};{x}H")
+        # Redraw the Screen per se
 
-                stext = "\x1b[m"
-                sdata = stext.encode()
-                os.write(fileno, sdata)  # todo7: stop clearing unnecessarily
-                slog.write(sdata)
+        self.write_out("\x1b[4l")
+        self.write_out("\x1b[m")
 
+        default = [" "]
+        for y in range(Y1, y_height):
+            list_str_by_x = list_str_by_y_x[y] if (y in list_str_by_y_x.keys()) else dict()
+            for x in range(X1, x_width):
+                x_list_str = list_str_by_x[x] if (x in list_str_by_x.keys()) else default
+
+                self.write_out(f"\x1b[{y};{x}H")  # todo7: stop redrawing Cursor unnecessarily
+
+                self.write_out("\x1b[m")  # todo7: stop redrawing Clear-Style unnecessarily
                 for stext in x_list_str:
+                    self.write_out(stext)  # todo7: stop redrawing Style unnecessarily
 
-                    sdata = stext.encode()
-                    os.write(fileno, sdata)
-                    slog.write(sdata)
+        self.write_out("\x1b[m")
 
-        self.write(f"\x1b[{ya};{xa}H")
+        # Restore the Terminal Setup
 
-        self.write("\x1b[m")
+        self.write_out(f"\x1b[{row_y};{column_x}H")
+
+        for toggle in toggles:
+            self.write_out(toggle)  # todo7: stop redrawing Toggles unnecessarily
+
         for style in styles:
-            self.write(style)
+            self.write_out(style)
 
         # todo4: .do_screen_redraw of Csi ⇧J ⇧H etc bypasses our shadowed writes
 
@@ -480,18 +506,74 @@ class ScreenEditor:
     # Write into the Shadows
     #
 
-    def write_shadows(self, sdata: bytes) -> None:
+    def write_shadows(self, text: str) -> None:
         """Shadow the Screen Panel"""
 
+        (y_height, x_width) = self.bytes_terminal.read_y_height_x_width()
+
+        # Test Preconditions
+
+        xa = self.column_x
+        ya = self.row_y
+
+        assert 1 <= ya <= y_height, (ya, y_height)
+        assert 1 <= xa <= x_width, (xa, x_width)
+
+        # Write into the Shadows
+
+        tws = self.try_write_shadows(text)
+
+        # Test Postconditions
+
+        xb = self.column_x
+        yb = self.row_y
+
+        assert 1 <= yb <= y_height, (yb, y_height)
+        assert 1 <= xb <= x_width, (xb, x_width)
+
+        # Trace this work
+
+        if not tws:
+            tprint(f"Did Not Shadow {text=} and now y={yb} x={xb}")
+        else:
+            tprint(f"Did Shadow {text=} till now y={yb} x={xb}")
+
+    def try_write_shadows(self, text: str) -> bool:
+        """Shadow the Screen Panel"""
+
+        schars = text
+        sdata = schars.encode()  # may raise UnicodeEncodeError
+
+        #
+
+        assert HT == "\t"
         assert LF == "\n"
         assert CR == "\r"
 
-        # Take CR and LF, but one at a time
+        # Take HT and CR and LF, but one at a time
+
+        pn = len(sdata)
+
+        if sdata == (pn * b"\t"):
+
+            ht_tbp = TerminalBytePacket(b"\t")
+            for _ in range(pn):
+                if not self.write_leap_byte_shadows(ht_tbp):
+                    assert False
+
+                    # todo4: allow more test of speech that we cannot shadow, such as meaningless Pn
+
+            return True
 
         if sdata == b"\r\n":
-            if self.write_leap_byte_shadows(TerminalBytePacket(b"\r")):
-                if self.write_leap_byte_shadows(TerminalBytePacket(b"\n")):
-                    return
+
+            cr_tbp = TerminalBytePacket(b"\r")
+            if self.write_leap_byte_shadows(cr_tbp):
+
+                lf_tbp = TerminalBytePacket(b"\n")
+                if self.write_leap_byte_shadows(lf_tbp):
+
+                    return True
                 assert False
             assert False
 
@@ -503,30 +585,36 @@ class ScreenEditor:
         tbp = TerminalBytePacket(sdata)
 
         if not stext:
-            return
+            return True
 
-        if self.write_text_shadows(stext):
-            return
+        if self.write_text_shadows(stext):  # todo8: self._write_text_shadows_ surely?
+            return True
 
         if self.write_leap_byte_shadows(tbp):
-            return
+            return True
 
         if self.write_leap_csi_shadows(tbp):
-            return
+            return True
+
+        if self.write_edit_csi_shadows(tbp):
+            return True
 
         if self.write_toggle_shadows(tbp):
-            return
+            return True
 
         if self.write_style_shadows(tbp):
-            return
+            return True
 
-        tprint(f"Bytes not shadowed {stext=}")  # such as Empty
+        return False
 
     def write_text_shadows(self, stext: str) -> bool:
         """Shadow the Text"""
 
+        bt = self.bytes_terminal
         list_str_by_y_x = self.list_str_by_y_x
         styles = self.styles
+
+        x_width = bt.read_x_width()
 
         if not stext.isprintable():
             return False
@@ -534,6 +622,9 @@ class ScreenEditor:
         for ch in stext:
             y = self.row_y
             x = self.column_x
+
+            if x == x_width:
+                return False
 
             if (y < 1) or (x < 1):  # todo4: How deep into the SW should .write_text_shadows run?
                 continue
@@ -554,6 +645,8 @@ class ScreenEditor:
             self.column_x += x_width
 
         return True
+
+        # todo6: detect and shadow wrap effects at and past width of Row correctly
 
     def _str_guess_x_width(self, text: str) -> int:
         """Guess the Width on Screen of printing a Text"""
@@ -576,23 +669,35 @@ class ScreenEditor:
         column_x = self.column_x
         row_y = self.row_y
 
-        y_height = bt.read_y_height()
+        (y_height, x_width) = bt.read_y_height_x_width()
 
         assert BEL == "\x07"
+        assert BS == "\b"
         assert HT == "\t"
         assert LF == "\n"
         assert CR == "\r"
+        assert DEL == "\x7f"
 
         # Write BEL, HT, LF, & CR into the Shadows
 
         if sdata == b"\x07":
             return True
 
-        if sdata == b"\t":
-            self.column_x = X1 + ((column_x - X1) // 8 + 1) * 8
+        if sdata == b"\b":
+            self.column_x = max(X1, column_x - 1)
             return True
 
-            # todo5: cap \t shadows by screen panel width
+        if sdata == b"\t":
+            tab_stop_1 = X1 + ((column_x - X1) // 8 + 1) * 8
+            x = min(x_width, tab_stop_1)
+
+            self.column_x = x
+
+            return True
+
+            # pn = x - column_x
+            # assert pn >= 0, (pn, column_x, x_width, tab_stop_1, x)
+            # self.write_text_shadows(pn * " ")
 
         if sdata == b"\n":
             self.row_y = min(y_height, row_y + 1)
@@ -611,7 +716,21 @@ class ScreenEditor:
         return False
 
     def write_leap_csi_shadows(self, tbp: TerminalBytePacket) -> bool:
-        """Write the simplest Byte Sequences into the Shadows"""
+        """Shadow the Csi Esc Byte Sequences that move the Terminal Cursor"""
+
+        if self.write_leap_csi_arrow_plus_shadows(tbp):
+            return True
+
+        if self.write_leap_csi_tab_and_forth_shadows(tbp):
+            return True
+
+        if self.write_leap_csi_cup_y_x_shadows(tbp):
+            return True
+
+        return False
+
+    def write_leap_csi_arrow_plus_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
 
         bt = self.bytes_terminal
         column_x = self.column_x
@@ -620,53 +739,228 @@ class ScreenEditor:
         y_height = bt.read_y_height()
         x_width = bt.read_x_width()
 
+        #
+
         assert CUU_Y == "\x1b[" "{}" "A"
         assert CUD_Y == "\x1b[" "{}" "B"
         assert CUF_X == "\x1b[" "{}" "C"
         assert CUB_X == "\x1b[" "{}" "D"
 
+        assert CHA_X == "\x1b[" "{}" "G"
+        assert VPA_Y == "\x1b[" "{}" "d"
+
+        #
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        if csi and tbp.tail in b"ABCDGd":  # "ABCD" Arrows per se, and also "Gd"
+            if not tbp.back:
+                pn = int(tbp.neck) if tbp.neck else PN1
+                if pn:
+
+                    if tbp.tail == b"A":
+                        self.row_y = max(Y1, row_y - pn)
+                        return True
+                    if tbp.tail == b"B":
+                        self.row_y = min(y_height, row_y + pn)
+                        return True
+                    if tbp.tail == b"C":
+                        self.column_x = min(x_width, column_x + pn)
+                        return True
+                    if tbp.tail == b"D":
+                        self.column_x = max(X1, column_x - pn)
+                        return True
+
+                    # And the leaps relative to Y1 X1 too
+
+                    if tbp.tail == b"G":
+                        self.column_x = min(x_width, pn)
+                        return True
+                    if tbp.tail == b"d":
+                        self.row_y = min(y_height, pn)
+                        return True
+
+        return False
+
+    def write_leap_csi_tab_and_forth_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
+
+        bt = self.bytes_terminal
+        column_x = self.column_x
+
+        x_width = bt.read_x_width()
+
+        #
+
+        assert CHT_X == "\x1b[" "{}" "I"  # Cursor Forward [Horizontal] Tabulation
+        assert CBT_X == "\x1b[" "{}" "Z"  # Cursor Backward [Horizontal] Tabulation
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        if csi and tbp.tail in b"IZ":
+            if not tbp.back:
+                pn = int(tbp.neck) if tbp.neck else PN1
+                if pn:
+
+                    if tbp.tail == b"I":
+                        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
+                        self.column_x = min(x_width, tab_stop_n)
+                        return True
+
+                    if tbp.tail == b"Z":
+                        tab_stop_n = X1 + ((column_x + (8 - 1) - X1) // 8 - pn) * 8
+                        self.column_x = max(X1, tab_stop_n)
+                        return True
+
+        return False
+
+    def write_leap_csi_cup_y_x_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the ⇧H leaps to Y X into the Shadows"""
+
+        bt = self.bytes_terminal
+        column_x = self.column_x
+        row_y = self.row_y
+
+        y_height = bt.read_y_height()
+        x_width = bt.read_x_width()
+
+        #
+
         assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        # Write the plainest Arrows into the Shadows, plus those with Repeat Counts
-
-        if csi and tbp.tail in b"ABCD":
-            assert not tbp.back, (tbp.back, tbp)
-            pn = int(tbp.neck) if tbp.neck else 1
-
-            if tbp.tail == b"A":
-                self.row_y = max(Y1, row_y - pn)
-                return True
-            if tbp.tail == b"B":
-                self.row_y = min(y_height, row_y + pn)
-                return True
-            if tbp.tail == b"C":
-                self.column_x = min(x_width, column_x + pn)
-                return True
-            if tbp.tail == b"D":
-                self.column_x = max(X1, column_x - pn)
-                return True
-
-        # Write leaps to Y X into the Shadows
-
         if csi and tbp.tail == b"H":
-            assert not tbp.back, (tbp.back, tbp)
+            if not tbp.back:
 
-            neck_splits = tbp.neck.split(b";")
-            assert len(neck_splits) <= 2, (neck_splits, tbp.neck, tbp)
+                neck_splits = tbp.neck.split(b";")
+                if len(neck_splits) <= 2:
 
-            neck_plus_splits = neck_splits + [b"1", b"1"]
+                    neck_plus_splits = neck_splits + [b"1", b"1"]
 
-            row_y = int(neck_plus_splits[0]) if neck_plus_splits[0] else Y1
-            column_x = int(neck_plus_splits[1]) if neck_plus_splits[1] else X1
+                    row_y_ = int(neck_plus_splits[0]) if neck_plus_splits[0] else Y1
+                    column_x_ = int(neck_plus_splits[1]) if neck_plus_splits[1] else X1
 
-            self.row_y = row_y  # for .write_leap_shadows
-            self.column_x = column_x  # for .write_leap_shadows
+                    row_y = min(y_height, max(Y1, row_y_))
+                    column_x = min(x_width, max(X1, column_x_))
 
+                    self.row_y = row_y  # for .write_leap_shadows
+                    self.column_x = column_x  # for .write_leap_shadows
+
+                    return True
+
+        return False
+
+    def write_edit_csi_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the Csi Esc Byte Sequences that edit the Rows and Columns"""
+
+        if self.write_erase_csi_shadows(tbp):
             return True
 
-        # Else don't succeed here
+        if self.write_delete_insert_csi_shadows(tbp):
+            return True
+
+        return False
+
+    def write_erase_csi_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the Csi Esc Byte Sequences that erase Rows and Columns"""
+
+        bt = self.bytes_terminal
+        column_x = self.column_x
+        row_y = self.row_y
+        list_str_by_y_x = self.list_str_by_y_x
+        styles = self.styles
+
+        (y_height, x_width) = bt.read_y_height_x_width()  # todo9: ED_PS ⎋[ ⇧J
+
+        assert ED_PS == "\x1b[" "{}" "J"
+        assert EL_PS == "\x1b[" "{}" "K"
+
+        # Shadow ⇧K Erases of Head or Tail or Whole Row
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        if csi and tbp.tail == b"K":
+            if not tbp.back:
+                ps = int(tbp.neck) if tbp.neck else 0
+                if ps in (0, 1, 2):
+
+                    (xa, xb) = (column_x, x_width)  # default to PS0 ⎋[⇧K row-tail-erase
+                    if ps == 1:  # ⎋[1⇧K row-head-erase
+                        (xa, xb) = (X1, column_x)  # includes the Character beneath the Cursor
+                    elif ps == 2:  # ⎋[2⇧K row-erase
+                        xa = 1
+
+                    y = row_y
+                    if y not in list_str_by_y_x.keys():
+                        list_str_by_y_x[y] = dict()
+
+                    strs_by_x = list_str_by_y_x[y]
+                    for x in range(xa, xb + 1):
+                        strs_by_x[x] = list(styles) + [" "]
+
+                    return True
+
+        return False
+
+    def write_delete_insert_csi_shadows(self, tbp: TerminalBytePacket) -> bool:
+        """Shadow the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
+
+        bt = self.bytes_terminal
+        column_x = self.column_x
+        row_y = self.row_y
+        list_str_by_y_x = self.list_str_by_y_x
+        styles = self.styles
+
+        x_width = bt.read_x_width()
+
+        assert DCH_X == "\x1b[" "{}" "P"
+        assert ECH_X == "\x1b[" "{}" "X"  # todo9:
+
+        # Shadow ⇧P Deletes of Pn Characters in the Row
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        if csi and tbp.tail == b"P":
+            if not tbp.back:
+                pn = max(PN1, int(tbp.neck) if tbp.neck else PN1)
+                if pn:
+
+                    y = row_y
+                    if y not in list_str_by_y_x.keys():
+                        list_str_by_y_x[y] = dict()
+
+                    strs_by_x = list_str_by_y_x[y]
+
+                    # Delete the Chars themselves
+
+                    xpn = column_x + pn
+                    for x in range(column_x, xpn):
+                        if x in strs_by_x.keys():
+                            del strs_by_x[x]
+
+                    # Shift Left each Char that follows
+
+                    x_list = sorted(_ for _ in strs_by_x.keys() if _ >= xpn)
+                    for from_x in x_list:
+                        to_x = from_x - pn
+
+                        strs_by_x[to_x] = strs_by_x[from_x]
+                        del strs_by_x[from_x]
+
+                    # Fill the far East with Spaces
+
+                    for x in range(x_width - pn + 1, x_width + 1):
+                        assert x not in strs_by_x.keys(), (x, x_width, pn)
+                        strs_by_x[x] = list(styles) + [" "]
+
+                    x = x_width - pn  # todo4: bug-for-bug compatible with macOS Terminal?
+                    if x not in strs_by_x.keys():
+                        strs_by_x[x] = list(styles) + [" "]
+
+                    # Succeed
+
+                    return True
 
         return False
 
@@ -762,7 +1056,7 @@ class ScreenEditor:
     def tbp_to_sgr_kind(self, tbp: TerminalBytePacket) -> str:
         """Say 'Foreground' or 'Background' or 'Colorless' or '' Empty Str"""
 
-        assert SGR == "\x1b[" "{}m"
+        assert SGR == "\x1b[" "{}" "m"
 
         if tbp.head != b"\x1b[":
             return ""
@@ -1002,7 +1296,11 @@ class ScreenEditor:
 
         # Prompt at Launch
 
-        self.print("Press ⌃D to quit, else FnF1 for help, else see what happens")
+        assert EL_PS == "\x1b[" "{}" "K"
+
+        self.write("\x1b[K")
+        self.print("On #345")  # todo9: next experiment
+        self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
 
         # Walk one step after another
 
@@ -1198,7 +1496,7 @@ class ScreenEditor:
 
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
 
-        n = int(tbp.neck) if tbp.neck else 1
+        pn = int(tbp.neck) if tbp.neck else PN1
         y_height = bt.read_y_height()
 
         (row_y, column_x) = bt.read_row_y_column_x()
@@ -1207,7 +1505,7 @@ class ScreenEditor:
 
         for y in range(1, y_height + 1):
             self.write(f"\x1b[{y}d")  # for .columns_delete_n
-            self.write(f"\x1b[{n}P")  # for .columns_delete_n
+            self.write(f"\x1b[{pn}P")  # for .columns_delete_n
         self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
 
         return True
@@ -1230,7 +1528,7 @@ class ScreenEditor:
 
         tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
 
-        n = int(tbp.neck) if tbp.neck else 1
+        pn = int(tbp.neck) if tbp.neck else PN1
         y_height = bt.read_y_height()
 
         (row_y, column_x) = bt.read_row_y_column_x()
@@ -1239,7 +1537,7 @@ class ScreenEditor:
 
         for y in range(1, y_height + 1):
             self.write(f"\x1b[{y}d")  # for .columns_delete_n
-            self.write(f"\x1b[{n}@")  # for .columns_delete_n
+            self.write(f"\x1b[{pn}@")  # for .columns_delete_n
         self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
 
         return True
@@ -1351,11 +1649,11 @@ class ScreenEditor:
         if not (csi and (tbp.tail == b"T")):
             return False
 
-        n = int(tbp.neck) if tbp.neck else 1
+        pn = int(tbp.neck) if tbp.neck else PN1
 
         self.write("\x1b7")
         self.write("\x1b[32100A")
-        self.write(f"\x1b[{n}L")
+        self.write(f"\x1b[{pn}L")
         self.write("\x1b8")
 
         return True
@@ -1378,11 +1676,11 @@ class ScreenEditor:
         if not (csi and (tbp.tail == b"S")):
             return False
 
-        n = int(tbp.neck) if tbp.neck else 1
+        pn = int(tbp.neck) if tbp.neck else PN1
 
         self.write("\x1b7")
         self.write("\x1b[32100B")
-        self.write(n * "\n")
+        self.write(pn * "\n")
         self.write("\x1b8")
 
         return True
@@ -1392,7 +1690,13 @@ class ScreenEditor:
     def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
+        bt = self.bytes_terminal
+        column_x = self.column_x
+
+        x_width = bt.read_x_width()
+
         assert HT == "\t"
+        assert CHA_X == "\x1b[" "{}" "G"
         assert CHT_X == "\x1b[" "{}" "I"
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -1401,9 +1705,12 @@ class ScreenEditor:
 
         tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
 
-        pn = int(tbp.neck) if tbp.neck else 1
+        pn = int(tbp.neck) if tbp.neck else PN1
         assert pn >= 1, (pn,)
-        self.write(pn * "\t")
+
+        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
+        x = min(x_width, tab_stop_n)
+        self.write(f"\x1b[{x}G")  # does Not fill with Background Color
 
         return True
 
@@ -1736,7 +2043,7 @@ class ScreenEditor:
     def do_row_tail_erase(self) -> None:
         """Erase from the Cursor to the Tail of the Row"""
 
-        assert EL_P == "\x1b[" "{}" "K"
+        assert EL_PS == "\x1b[" "{}" "K"
         self.write("\x1b[K")
 
         # Vim ⇧D  # Emacs ⌃K when not rightmost
@@ -1843,7 +2150,9 @@ class ScreenEditor:
         xa = X1 + x_frame
         xb = xa + board_width - 1
 
-        color_picker_plot(se, ya=ya, xa=xa, yb=yb, xb=xb, dc=1)
+        left_panel = True
+        if left_panel:
+            color_picker_plot(se, ya=ya, xa=xa, yb=yb, xb=xb, dc=1)
 
         # Plot the Right Panel
 
@@ -1852,7 +2161,9 @@ class ScreenEditor:
         xd = x_width - x_frame
         xc = xd - board_width + 1
 
-        color_picker_plot(se, ya=yc, xa=xc, yb=yd, xb=xd, dc=-1)
+        right_panel = True
+        if right_panel:
+            color_picker_plot(se, ya=yc, xa=xc, yb=yd, xb=xd, dc=-1)
 
         #
 
@@ -1865,9 +2176,9 @@ class ScreenEditor:
             self.write("\x1b[A")
             self.print("(((", end=" ")
 
-            # for pn in range(32, 231 + 1):
-            #     if pn not in color_picker_pns:
-            #         self.print(pn, end=" ")
+            for pn in range(32, 231 + 1):
+                if pn not in color_picker_pns:
+                    self.print(pn, end=" ")
 
             self.print(")))", end=" ")
 
@@ -1952,6 +2263,9 @@ class ScreenEditor:
         vanisher = True
 
         if x_widget[0] in ("⎋", "#"):
+            vanisher = False
+
+        elif x_widget.split()[0].casefold() == "on":
             vanisher = False
 
         elif (x_widget[0] == "<") and (x_widget[-1] == ">"):
@@ -2226,12 +2540,18 @@ class ScreenEditor:
         return (r, g, b)
 
 
-# todo10: draw North Green, Southwest Red, Southeast Blue, about a White Center
+# todo9: click at cursor to vanish & run, click away to run without vanish
+
+# todo9: draw the paint swatches of 6 R x 6x6 GB, 6 G x 6x6 RB, 6 B x 6x6 RG
+
+# todo9: try a tree of #555 to #455 #545 #554
+# todo9: and then then on to #445 #544 and #454 544 and #454 #554
+# todo9: and then on to #444 at each but then pick one at random
+# todo9: but first simulate all this with a click at cursor to vanish & run & add a full-block
+# todo9: run in insert mode to delete the trace of the verb
+# todo9: teach the mouseless Spacebar to look back for verb
 
 # todo9: pick fun fg/bg mixes as our demos - how about green-on-black and yellow-on-blue ?
-# todo9: shadow ⎋[⇧K row-tail-erase, ⎋[⇧Z, etc till editing doesn't fail ⌃L so much
-# todo9: shadow colored ⎋[⇧K row-tail-erase correctly
-# todo9: click at cursor to vanish & run, click away to run without vanish
 
 # todo8: glider, sw glider, ne nw se gliders
 # todo8: circle triangle square rectangle polygon
@@ -2744,11 +3064,11 @@ SCREEN_WRITER_HELP = r"""
         ⎋[⇧T rows-down  ⎋[⇧S rows-up  ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
         ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
-        ⎋[?1049H screen-alt  ⎋[?1049L screen-main
+        ⎋[?1049H screen-alt  ⎋[?1049L screen-main  ⎋[?25L cursor-hide  ⎋[?25H cursor-show
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
         ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
-        ⎋[M plain  #420 on #344  #804020 on #CCCC99    <Jabberwocky>
+        ⎋[M plain  #211 on #344  #333366 on #CCCC99    <Jabberwocky>
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
