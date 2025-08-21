@@ -276,11 +276,13 @@ screen_editors: list[ScreenEditor] = list()
 class ScreenEditor:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
+    bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
+    packets: list[TerminalBytePacket]
+    arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
+
     keyboard_bytes_log: typing.BinaryIO  # .klog  # logs Keyboard Delays & Bytes
     screen_bytes_log: typing.BinaryIO  # .slog  # logs Screen Delays & Bytes
-    bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
 
-    arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
     toggles: list[str]  # Replacing/ Inserting/ etc
     styles: list[str]  # Foreground on Background Colors, etc
     row_y: int  # Y places encoded as Southbound across 1 .. Height
@@ -298,7 +300,7 @@ class ScreenEditor:
 
         screen_editors.append(self)
 
-        # Init our Keyboard & Screen Drivers
+        # Open our Keyboard & Screen Logs
 
         klog_path = pathlib.Path("__pycache__/k.keyboard")
         slog_path = pathlib.Path("__pycache__/s.screen")
@@ -309,18 +311,20 @@ class ScreenEditor:
         klog = klog_path.open("ab")
         slog = slog_path.open("ab")
 
+        # Init per se
+
+        self.bytes_terminal = BytesTerminal()
+        self.packets = list()
+        self.arrows = 0
+
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
-        self.bytes_terminal = BytesTerminal()
 
-        self.arrows = 0
         self.toggles = list()
         self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
         self.row_y = -1
         self.column_x = -1
         self.list_str_by_y_x = dict()
-
-        # Init our Keyboard Chord Bindings
 
         func_by_str = self.form_func_by_str()
         self.func_by_str = func_by_str
@@ -1313,6 +1317,8 @@ class ScreenEditor:
     def read_eval_print_once(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
+        packets = self.packets
+
         # Reply to each Keyboard Chord Input, till quit
 
         # todo2: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
@@ -1322,6 +1328,8 @@ class ScreenEditor:
         (tbp, n) = self.read_some_byte_packets()
         t1 = time.time()
         t1t0 = t1 - t0
+
+        packets.append(tbp)
 
         arrows = self.arrows
         tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once")
@@ -1337,6 +1345,20 @@ class ScreenEditor:
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
         # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
+
+    def klog_to_kcount(self) -> int:
+        """Count how many times the same Keyboard Chord struck"""
+
+        packets = self.packets
+
+        depth = 0
+        kdata = packets[-1].to_bytes()
+        for tbp in reversed(packets):
+            if tbp.to_bytes() != kdata:  # todo: equality between TerminalBytePacket's
+                break
+            depth += 1
+
+        return depth  # fed by 'packets.append(tbp)' inside .read_eval_print_once
 
     def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
@@ -2009,9 +2031,31 @@ class ScreenEditor:
     def do_row_leap_first_column_leftmost(self) -> None:
         """Leap to the Leftmost Column of the First Row"""
 
-        assert CUP_Y1_X1 == "\x1b[" "H"
-        self.write("\x1b[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        depth = self.klog_to_kcount()
 
+        bt = self.bytes_terminal
+
+        x_width = bt.read_x_width()
+        mid_width = (x_width // 2) + (x_width % 2)
+
+        assert CUP_Y1_X1 == "\x1b[" "H"
+
+        if (depth % 3) == 1:
+            self.write("\x1b[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        elif (depth % 3) == 2:
+            x = mid_width
+            self.write(f"\x1b[1;{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        else:
+            self.write("\x1b[1;31200H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+
+        if (depth % 3) == 1:
+            (y, x) = (Y1, X1)  # todo: send "H" in place of "1;1H"
+        elif (depth % 3) == 2:
+            (y, x) = (Y1, mid_width)
+        else:
+            (y, x) = (Y1, 31200)
+
+        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
         # Vim ⇧H
 
         # todo3: Leap to First Shadow Row, if Column Shadowed
@@ -2019,9 +2063,24 @@ class ScreenEditor:
     def do_row_leap_last_column_leftmost(self) -> None:
         """Leap to the Leftmost Column of the Last Row"""
 
+        depth = self.klog_to_kcount()
+
+        bt = self.bytes_terminal
+
+        x_width = bt.read_x_width()
+        mid_width = (x_width // 2) + (x_width % 2)
+
         assert _PN_MAX_32100_ == 32100
         assert CUP_Y_X1 == "\x1b[" "{}" "H"
-        self.write("\x1b[32100H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
+
+        if (depth % 3) == 1:
+            (y, x) = (32100, X1)  # todo: send "H" in place of ";1H"
+        elif (depth % 3) == 2:
+            (y, x) = (32100, mid_width)
+        else:
+            (y, x) = (32100, 31200)
+
+        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
 
         # todo3: Leap to Last Shadow Row, if Column Shadowed
 
@@ -2030,13 +2089,25 @@ class ScreenEditor:
     def do_row_leap_middle_column_leftmost(self) -> None:
         """Leap to the Leftmost Column of the Middle Row"""
 
+        depth = self.klog_to_kcount()
+
         bt = self.bytes_terminal
 
-        y_height = bt.read_y_height()
+        y_height, x_width = bt.read_y_height_x_width()
         mid_height = (y_height // 2) + (y_height % 2)
+        mid_width = (x_width // 2) + (x_width % 2)
 
         assert CUP_Y_X1 == "\x1b[" "{}" "H"
-        self.write(f"\x1b[{mid_height}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
+        assert _PN_MAX_32100_ == 32100
+
+        if (depth % 3) == 1:
+            (y, x) = (mid_height, X1)  # todo: send "H" in place of ";1H"
+        elif (depth % 3) == 2:
+            (y, x) = (mid_height, mid_width)
+        else:
+            (y, x) = (mid_height, 31200)
+
+        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
 
         # Vim ⇧M
 
@@ -2540,18 +2611,35 @@ class ScreenEditor:
         return (r, g, b)
 
 
-# todo9: click at cursor to vanish & run, click away to run without vanish
+#
 
-# todo9: draw the paint swatches of 6 R x 6x6 GB, 6 G x 6x6 RB, 6 B x 6x6 RG
+# todo9: Discover repeated Key Chords, bind Vim ⎋ ⌃L ⇧H ⇧L ⇧M
+# todo9: Bind repeated Vim ⎋ ⌃L like Emacs, bind repeated ⇧H ⇧L ⇧M horizontally
 
-# todo9: try a tree of #555 to #455 #545 #554
-# todo9: and then then on to #445 #544 and #454 544 and #454 #554
-# todo9: and then on to #444 at each but then pick one at random
-# todo9: but first simulate all this with a click at cursor to vanish & run & add a full-block
-# todo9: run in insert mode to delete the trace of the verb
-# todo9: teach the mouseless Spacebar to look back for verb
+# todo9: bin/+: Correct ⌃L to redraw with ⎋[ ⇧K EL_X as its end-of-line
+# todo9: bin/+: Add shadows for ⎋[ ⇧J ⇧X ED_PS ECH_X
 
-# todo9: pick fun fg/bg mixes as our demos - how about green-on-black and yellow-on-blue ?
+# todo9: bin/+: Correct shadows for ⎋[ ⇧P, like it matters if ⌃L wrote the Rows
+
+# todo9: look to resize the Terminal to grow, vs such large F9 Help as ours
+
+#
+
+# todo8: Create Shell TPut buttons - Cup Bg Lf Lf Dch SLeep Lf Lf
+# todo8: printf '\e[H''\e[46m''\n''\n''abcde\b\b\b'; sleep 1; printf '\e[P\e[2B'; sleep 1; printf '\n\n'
+
+# todo8: click at cursor to vanish & run, click away to run without vanish
+
+# todo8: draw the paint swatches of 6 R x 6x6 GB, 6 G x 6x6 RB, 6 B x 6x6 RG
+
+# todo8: try a tree of #555 to #455 #545 #554
+# todo8: and then then on to #445 #544 and #454 544 and #454 #554
+# todo8: and then on to #444 at each but then pick one at random
+# todo8: but first simulate all this with a click at cursor to vanish & run & add a full-block
+# todo8: run in insert mode to delete the trace of the verb
+# todo8: teach the mouseless Spacebar to look back for verb
+
+# todo8: pick fun fg/bg mixes as our demos - how about green-on-black and yellow-on-blue ?
 
 # todo8: glider, sw glider, ne nw se gliders
 # todo8: circle triangle square rectangle polygon
@@ -3923,47 +4011,47 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x1b" "\x1bO" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # gCloud Shell
     "\x1b" "\x1bO" "C": "⌃⌥→",  # ESC SS3 ⇧C  # gCloud Shell
     "\x1b" "\x1bO" "D": "⌃⌥←",  # ESC SS3 ⇧D  # gCloud Shell
-    "\x1b" "\x1b" "[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
-    "\x1b" "\x1b" "[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
-    "\x1b" "\x1b" "[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
-    "\x1b" "\x1b" "[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # gCloud Shell
-    "\x1b" "\x1b" "[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
-    "\x1b" "\x1b" "[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
+    "\x1b" "\x1b[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
+    "\x1b" "\x1b[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
+    "\x1b" "\x1b[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
+    "\x1b" "\x1b[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # gCloud Shell
+    "\x1b" "\x1b[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
+    "\x1b" "\x1b[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
     "\x1b" "\x28": "⎋FnDelete",  # not ⌥FnDelete
     "\x1bO" "P": "F1",  # SS3 ⇧P
     "\x1bO" "Q": "F2",  # SS3 ⇧Q
     "\x1bO" "R": "F3",  # SS3 ⇧R
     "\x1bO" "S": "F4",  # SS3 ⇧S
-    "\x1b" "[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
-    "\x1b" "[" "17~": "F6",  # ⌥F1  # ⎋F1
-    "\x1b" "[" "18~": "F7",  # ⌥F2  # ⎋F2
-    "\x1b" "[" "19~": "F8",  # ⌥F3  # ⎋F3
-    "\x1b" "[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # macOS
-    "\x1b" "[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # macOS
-    "\x1b" "[" "20~": "F9",  # ⌥F4  # ⎋F4
-    "\x1b" "[" "21~": "F10",  # ⌥F5  # ⎋F5
-    "\x1b" "[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
-    "\x1b" "[" "24~": "F12",  # ⌥F7  # ⎋F7
-    "\x1b" "[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
-    "\x1b" "[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
-    "\x1b" "[" "28~": "⇧F7",  # ⌥F10  # ⎋F10
-    "\x1b" "[" "29~": "⇧F8",  # ⌥F11  # ⎋F11
-    "\x1b" "[" "31~": "⇧F9",  # ⌥F12  # ⎋F12
-    "\x1b" "[" "32~": "⇧F10",
-    "\x1b" "[" "33~": "⇧F11",
-    "\x1b" "[" "34~": "⇧F12",
-    "\x1b" "[" "3;2~": "⇧FnDelete",
-    "\x1b" "[" "3;5~": "⌃FnDelete",
-    "\x1b" "[" "3~": "FnDelete",
-    "\x1b" "[" "5~": "⇧Fn↑",  # macOS
-    "\x1b" "[" "6~": "⇧Fn↓",  # macOS
-    "\x1b" "[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ macOS
-    "\x1b" "[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ macOS
-    "\x1b" "[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ macOS
-    "\x1b" "[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← macOS
-    "\x1b" "[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
-    "\x1b" "[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
-    "\x1b" "[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
+    "\x1b[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
+    "\x1b[" "17~": "F6",  # ⌥F1  # ⎋F1
+    "\x1b[" "18~": "F7",  # ⌥F2  # ⎋F2
+    "\x1b[" "19~": "F8",  # ⌥F3  # ⎋F3
+    "\x1b[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # macOS
+    "\x1b[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # macOS
+    "\x1b[" "20~": "F9",  # ⌥F4  # ⎋F4
+    "\x1b[" "21~": "F10",  # ⌥F5  # ⎋F5
+    "\x1b[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
+    "\x1b[" "24~": "F12",  # ⌥F7  # ⎋F7
+    "\x1b[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
+    "\x1b[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
+    "\x1b[" "28~": "⇧F7",  # ⌥F10  # ⎋F10
+    "\x1b[" "29~": "⇧F8",  # ⌥F11  # ⎋F11
+    "\x1b[" "31~": "⇧F9",  # ⌥F12  # ⎋F12
+    "\x1b[" "32~": "⇧F10",
+    "\x1b[" "33~": "⇧F11",
+    "\x1b[" "34~": "⇧F12",
+    "\x1b[" "3;2~": "⇧FnDelete",
+    "\x1b[" "3;5~": "⌃FnDelete",
+    "\x1b[" "3~": "FnDelete",
+    "\x1b[" "5~": "⇧Fn↑",  # macOS
+    "\x1b[" "6~": "⇧Fn↓",  # macOS
+    "\x1b[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ macOS
+    "\x1b[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ macOS
+    "\x1b[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ macOS
+    "\x1b[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← macOS
+    "\x1b[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
+    "\x1b[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
+    "\x1b[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
     "\x1b" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # macOS
     "\x1b" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # macOS
     "\x20": "Spacebar",  # ' ' ␠ ␣ ␢
