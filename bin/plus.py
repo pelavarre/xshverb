@@ -427,6 +427,7 @@ class ScreenEditor:
         tprint(f"{row_y=} {column_x=}  # do_screen_redraw")
 
         assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+        assert EL_PS == "\x1b[" "{}" "K"
         assert SGR == "\x1b[" "{}" "m"
         assert RM_IRM == "\x1b[" "4l"
 
@@ -440,14 +441,44 @@ class ScreenEditor:
         default = [" "]
         for y in range(Y1, y_height):
             list_str_by_x = list_str_by_y_x[y] if (y in list_str_by_y_x.keys()) else dict()
-            for x in range(X1, x_width):
-                x_list_str = list_str_by_x[x] if (x in list_str_by_x.keys()) else default
 
+            x_sorted = sorted(list_str_by_x.keys())
+            if not x_sorted:
+                self.write_out("\x1b[H")
+            else:
+                boring = False
+                for x in range(X1, x_sorted[-1] + 1):
+                    x_list_str = list_str_by_x[x] if (x in list_str_by_x.keys()) else default
+                    assert x_list_str[-1].isprintable(), (
+                        y,
+                        x,
+                        x_list_str,
+                    )  # todo6: spread this around
+
+                    if not boring:  # todo7: stop redrawing Cursor unnecessarily
+                        self.write_out(f"\x1b[{y};{x}H")
+
+                    if not boring:  # todo7: stop redrawing Clear-Style unnecessarily
+                        self.write_out("\x1b[m")
+
+                    for stext in x_list_str:
+                        self.write_out(stext)  # todo7: stop redrawing Style unnecessarily
+
+                    if len(x_list_str) == 1:
+                        last_stext = x_list_str[-1]
+                        if len(last_stext) == 1:
+                            if 0x20 <= ord(last_stext) <= 0x7E:
+                                boring = True
+
+            x = (x_sorted[-1] + 1) if x_sorted else X1
+            if x < x_width:
                 self.write_out(f"\x1b[{y};{x}H")  # todo7: stop redrawing Cursor unnecessarily
 
                 self.write_out("\x1b[m")  # todo7: stop redrawing Clear-Style unnecessarily
-                for stext in x_list_str:
-                    self.write_out(stext)  # todo7: stop redrawing Style unnecessarily
+                for style in styles:
+                    self.write_out(text=style)  # todo7: stop redrawing Style unnecessarily
+
+                self.write_out("\x1b[K")
 
         self.write_out("\x1b[m")
 
@@ -914,9 +945,6 @@ class ScreenEditor:
         column_x = self.column_x
         row_y = self.row_y
         list_str_by_y_x = self.list_str_by_y_x
-        styles = self.styles
-
-        x_width = bt.read_x_width()
 
         assert DCH_X == "\x1b[" "{}" "P"
         assert ECH_X == "\x1b[" "{}" "X"  # todo9:
@@ -951,16 +979,6 @@ class ScreenEditor:
 
                         strs_by_x[to_x] = strs_by_x[from_x]
                         del strs_by_x[from_x]
-
-                    # Fill the far East with Spaces
-
-                    for x in range(x_width - pn + 1, x_width + 1):
-                        assert x not in strs_by_x.keys(), (x, x_width, pn)
-                        strs_by_x[x] = list(styles) + [" "]
-
-                    x = x_width - pn  # todo4: bug-for-bug compatible with macOS Terminal?
-                    if x not in strs_by_x.keys():
-                        strs_by_x[x] = list(styles) + [" "]
 
                     # Succeed
 
@@ -1304,6 +1322,7 @@ class ScreenEditor:
 
         self.write("\x1b[K")
         self.print("On #345")  # todo9: next experiment
+        self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")  # todo9:
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
 
         # Walk one step after another
@@ -2613,15 +2632,16 @@ class ScreenEditor:
 
 #
 
-# todo9: Discover repeated Key Chords, bind Vim ⎋ ⌃L ⇧H ⇧L ⇧M
-# todo9: Bind repeated Vim ⎋ ⌃L like Emacs, bind repeated ⇧H ⇧L ⇧M horizontally
-
 # todo9: bin/+: Correct ⌃L to redraw with ⎋[ ⇧K EL_X as its end-of-line
+# todo9: bin/+: Test ⌃L vs ConwayLife
 # todo9: bin/+: Add shadows for ⎋[ ⇧J ⇧X ED_PS ECH_X
 
+# todo9: bin/+: Tease out macOS v gCloud Shell @ BG + EL
 # todo9: bin/+: Correct shadows for ⎋[ ⇧P, like it matters if ⌃L wrote the Rows
 
 # todo9: look to resize the Terminal to grow, vs such large F9 Help as ours
+
+# todo9: put an F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 row on screen for gCloud
 
 #
 
@@ -2648,6 +2668,8 @@ class ScreenEditor:
 # todo8: Unicode Large Squares ⬛ ⬜ 🟥 🟦 🟧 🟨 🟩 🟪 🟫
 # todo8: \e notation
 
+#
+
 # todo7: attach an emoji to drag behind a cursor
 
 # todo7: plain bold italic
@@ -2657,7 +2679,14 @@ class ScreenEditor:
 # todo7: more test of Arrow Bursts at ⌥ Mouse Release
 # todo7: choose to cursor chase the ⌥ Mouse Release, or not - maybe when there is no button there?
 
+#
+
+# todo6: Bind repeated Vim ⎋ ⌃L like Emacs to Scroll to Center/ Top/ Bottom
+
+# todo6: ⌃H K lookup of __doc__ per Keychord Sequence Bound, as in Emacs
 # todo6: full UnicodeData Name as Verb, and partial
+
+#
 
 # todo3: Each Y X gets a List Str. Last Item of List Str is the Text written after the Controls
 # todo3: Hide the Conway Cursor?
