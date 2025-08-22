@@ -2175,7 +2175,8 @@ class ScreenEditor:
         self.print()
         self.print()
 
-        self.print(f1_text.replace("\n", "\r\n"))
+        for line in f1_text.splitlines():
+            self.print(line)
 
         self.print()
         self.print()
@@ -2366,6 +2367,8 @@ class ScreenEditor:
                 self.write("\a")  # for .take_widget_at_yxf
                 return
 
+        vanisher = False  # todo8: do vanish each verb run almost at left of cursor
+
         if vanisher:
             self.vanish_widget_at_yxf(x_widget, y=y, x=wx)
 
@@ -2468,10 +2471,27 @@ class ScreenEditor:
     def mouse_verb_to_write_sdata(self, verb: str) -> bool:
         """Eval some Keycaps"""
 
+        if self.mouse_verb_to_push_kdata(verb):
+            return True
+
         if self.mouse_verb_to_write_color_sdata(verb):
             return True
 
         if self.mouse_verb_to_write_keycaps_sdata(verb):
+            return True
+
+        return False
+
+    def mouse_verb_to_push_kdata(self, verb: str) -> bool:
+        """Eval a Keycap as 1 Packet of KData"""
+
+        bt = self.bytes_terminal
+
+        kcap_list = list(_[0] for _ in KCAP_BY_KCHARS.items() if _[-1] == verb)
+        if len(kcap_list) == 1:
+            kdata = kcap_list[0].encode()
+            tbp = TerminalBytePacket(kdata)
+            bt.prefetches.append(tbp)
             return True
 
         return False
@@ -3245,6 +3265,7 @@ class BytesTerminal:
     tcgetattr: list[int | list[bytes | int]]  # replaced by Enter
     after: int  # for writing at Exit  # todo: .TCSAFLUSH vs large Paste
 
+    prefetches: list[TerminalBytePacket]
     extras: bytearray  # Bytes from 'os.read' not yet returned inside some TerminalBytePacket
 
     y_height: int  # Terminal Screen Pane Rows, else -1
@@ -3266,6 +3287,7 @@ class BytesTerminal:
         self.tcgetattr = list()  # replaced by Enter
         self.after = termios.TCSADRAIN  # for writing at Exit  # todo: .TCSAFLUSH vs large Paste
 
+        self.prefetches = list()
         self.extras = bytearray()
 
         self.y_height = -1
@@ -3339,6 +3361,11 @@ class BytesTerminal:
 
     def read_byte_packet(self, timeout: float | None) -> TerminalBytePacket:
         """Read 1 TerminalBytePacket, closed immediately, or not"""
+
+        prefetches = self.prefetches
+        if prefetches:
+            tbp = prefetches.pop(0)
+            return tbp
 
         tbp = TerminalBytePacket()
         self.close_byte_packet_if(tbp, timeout=timeout)
