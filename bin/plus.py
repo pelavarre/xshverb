@@ -45,7 +45,7 @@ _: object
 
 
 #
-# Exit nonzero into the Pdb-Pm Post-Mortem Debugger, when not KeyboardInterrupt nor SystemExit
+# Call Main, and also launch the Repl if Main doesn't raise SystemExit
 #
 
 
@@ -96,12 +96,7 @@ def excepthook(
 sys.excepthook = excepthook
 
 
-#
-# Run from the Shell Command Line
-#
-
-
-def main() -> None:
+def try_main_else_repl() -> None:
     """Run from the Shell Command Line, and exit into the Py Repl"""
 
     if os.path.basename(sys.argv[0]) != "+":
@@ -125,7 +120,7 @@ def main() -> None:
     d["__main__"] = module
     d["plus"] = plus
 
-    d["tryme"] = tryme
+    d["main"] = main
 
     # Launch the Py Repl at Process Exit, as if:  python3 -i -c ''
 
@@ -134,15 +129,21 @@ def main() -> None:
     # print("To get started, press Return after typing:  tryme()", file=sys.stderr)
     # print(">>> ", file=sys.stderr)
     # print(">>> tryme()", file=sys.stderr)
-    tryme()
-    sys.exit(1)  # FIXME: #todo9
-    print(">>> ", file=sys.stderr)
+
+    main()
+
+    # print(">>> ", file=sys.stderr)
 
     sys.excepthook = with_excepthook
 
 
-def tryme() -> None:
-    """Run when called"""
+#
+# Run from the Shell Command Line
+#
+
+
+def main() -> None:
+    """Run from the Shell Command Line"""
 
     tprint()
     tprint()
@@ -449,11 +450,7 @@ class ScreenEditor:
                 boring = False
                 for x in range(X1, x_sorted[-1] + 1):
                     x_list_str = list_str_by_x[x] if (x in list_str_by_x.keys()) else default
-                    assert x_list_str[-1].isprintable(), (
-                        y,
-                        x,
-                        x_list_str,
-                    )  # todo6: spread this around
+                    assert x_list_str[-1].isprintable(), (y, x, x_list_str)  # todo6: check often
 
                     if not boring:  # todo7: stop redrawing Cursor unnecessarily
                         self.write_out(f"\x1b[{y};{x}H")
@@ -472,12 +469,8 @@ class ScreenEditor:
 
             x = (x_sorted[-1] + 1) if x_sorted else X1
             if x < x_width:
-                self.write_out(f"\x1b[{y};{x}H")  # todo7: stop redrawing Cursor unnecessarily
-
-                self.write_out("\x1b[m")  # todo7: stop redrawing Clear-Style unnecessarily
-                for style in styles:
-                    self.write_out(text=style)  # todo7: stop redrawing Style unnecessarily
-
+                self.write_out(f"\x1b[{y};{x}H")
+                self.write_out("\x1b[m")  # SGR before EL_X needed at macOS
                 self.write_out("\x1b[K")
 
         self.write_out("\x1b[m")
@@ -939,7 +932,6 @@ class ScreenEditor:
     def write_delete_insert_csi_shadows(self, tbp: TerminalBytePacket) -> bool:
         """Shadow the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
 
-        bt = self.bytes_terminal
         column_x = self.column_x
         row_y = self.row_y
         list_str_by_y_x = self.list_str_by_y_x
@@ -2650,17 +2642,20 @@ class ScreenEditor:
 
 #
 
-# todo9: bin/+: Test ⌃L vs ConwayLife
-# todo9: bin/+: Add shadows for ⎋[ ⇧J ⇧X ED_PS ECH_X
+# todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
 
-# todo9: bin/+: Tease out macOS v gCloud Shell @ BG + EL
-# todo9: bin/+: Correct shadows for ⎋[ ⇧P, like it matters if ⌃L wrote the Rows
+# todo9: less perfect symmetry in the Conway Life
 
-# todo9: look to resize the Terminal to grow, vs such large F9 Help as ours
-
-# todo9: put an F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 row on screen for gCloud
+# todo9: open up |d |e |f |l |m |p |q |v |y |z
+# todo9: keep |a |c |g |h |i |j |k |n |o |r |s |t |u |w |x
 
 #
+
+# todo8: do we now want fill with Color or not, and do we get it natively, and squelch insert mode
+# todo8: fix up all the fills, including \n
+# todo8: bin/+: Tease out macOS v gCloud Shell @ BG + EL
+
+# todo8: look to resize the Terminal to grow, vs such large F9 Help as ours
 
 # todo8: Create Shell TPut buttons - Cup Bg Lf Lf Dch SLeep Lf Lf
 # todo8: printf '\e[H''\e[46m''\n''\n''abcde\b\b\b'; sleep 1; printf '\e[P\e[2B'; sleep 1; printf '\n\n'
@@ -2892,12 +2887,16 @@ class ConwayLife:
             # todo6: compare/contrast web life at Wolf Face
 
         if choice == 3:
-            (ya, xa) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
+            (ya, xa) = self.yx_board_place(dy=-2, dx=-4)
             self.yx_board = (ya, xa)
             self.yx_puck = (ya, xa)
-            self.conway_print_some("⚪🔴⚪🔴⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
-            self.conway_print_some("⚪🔴🔴⚪⚪🔵🔵🔵🔵⚪⚪🔴🔴⚪")
-            self.conway_print_some("⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
+            self.conway_print_some("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print_some("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print_some("⚪🔴⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print_some("⚪🔴🔴🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print_some("⚪⚪⚪⚪⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
+            self.conway_print_some("🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪⚪🔴🔴⚪")
+            self.conway_print_some("🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
 
             # Southwest Glider & Southeast Glider
 
@@ -4389,7 +4388,7 @@ _ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
 
 
 if __name__ == "__main__":
-    main()
+    try_main_else_repl()
 
 
 # 3456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789
