@@ -667,16 +667,14 @@ class ScreenEditor:
             if y not in list_str_by_y_x.keys():
                 list_str_by_y_x[y] = dict()
 
-            if x not in list_str_by_y_x[y].keys():
-                list_str_by_y_x[y][x] = list()
+            list_str_by_x = list_str_by_y_x[y]
 
-            list_str = list_str_by_y_x[y][x]
-
-            list_str.clear()
-            list_str.extend(styles)
-            list_str.append(ch)
+            list_str_by_x[x] = list(styles) + [ch]  # replace  # todo6: prefer mutate?
 
             x_width = self._str_guess_x_width(ch)
+            for x_plus in range(x + 1, x + x_width):  # encodes Wider Chars as "" Empty Str's
+                list_str_by_x[x_plus] = list(styles) + [""]  # replace
+
             self.column_x += x_width
 
         return True
@@ -1322,7 +1320,7 @@ class ScreenEditor:
 
         self.write("\x1b[K")
         self.print("On #345")  # todo9: next experiment
-        self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")  # todo9:
+        self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
 
         # Walk one step after another
@@ -2652,7 +2650,6 @@ class ScreenEditor:
 
 #
 
-# todo9: bin/+: Correct ⌃L to redraw with ⎋[ ⇧K EL_X as its end-of-line
 # todo9: bin/+: Test ⌃L vs ConwayLife
 # todo9: bin/+: Add shadows for ⎋[ ⇧J ⇧X ED_PS ECH_X
 
@@ -2946,7 +2943,7 @@ class ConwayLife:
         (y, x) = (ya, xa)
         for syx in s:
             self.conway_print_y_x_syx(y, x=x, syx=syx)
-            x += 2
+            x += 2  # todo3: because unicodedata.east_asian_width(syx) == 2
 
         yb = ya + 1
         xb = xa
