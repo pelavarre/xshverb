@@ -102,7 +102,7 @@ def try_main_else_repl() -> None:
 
     if os.path.basename(sys.argv[0]) != "+":
         assert sys.argv[1:], sys.argv
-        assert "--plus".startswith(sys.argv[1]) and sys.argv[1].startswith("--"), sys.argv
+        assert "--yolo".startswith(sys.argv[1]) and sys.argv[1].startswith("--"), sys.argv
 
     # Emulate having imported the enclosing Module as ./plus.py
 
@@ -272,24 +272,360 @@ _PN_MAX_32100_ = 32100  # a Numeric [Int] beyond the Counts of Rows & Columns at
 # todo: Stop writing "32100", like to cope with Terminals beyond 32100 Rows & Columns
 
 
+#
+# Play Conway's Game-of-Life
+#
+
+
+class ConwayLife:
+    """Play Conway's Game-of-Life"""
+
+    screen_editor: ScreenEditor
+
+    conway_half_steps: int  # counts steps, after -1
+    conway_yx_list: list[tuple[int, int]]  # where Cells written lately
+
+    def __init__(self, se: ScreenEditor) -> None:
+
+        self.screen_editor = se
+
+        self.conway_half_steps = -1
+        self.conway_yx_list = list()
+
+    def play_conway_life(self) -> None:
+        """Play Conway's Game-of-Life"""
+
+        se = self.screen_editor
+
+        # Say Hello
+
+        se.print()
+        se.print("Hello from Conway's Game-of-Life")
+        se.print()
+        se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
+        # se.print("+ - to make a Cell older or younger")  # todo4:
+        se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
+        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
+        se.print()
+        se.print()
+        se.print()
+
+        self.restart_conway_life()
+
+        # Walk one step after another
+
+        while True:
+            try:
+                se.read_eval_print_once()
+            except SystemExit:
+                break
+
+        # Say Goodbye
+
+        se.print()
+        se.print("Goodbye from Conway's Game-of-Life")
+
+        # todo6: ⌃L goes wrong after Conway Goodbye in one row of White Dots
+
+    def restart_conway_life(self) -> None:
+        """Start again, with the most famous Conway Life Glider"""
+
+        conway_yx_list = self.conway_yx_list
+        se = self.screen_editor
+        tp = se.terminal_proxy
+
+        bt = tp.bytes_terminal
+        list_str_by_y_x = tp.list_str_by_y_x
+
+        (ya, xa) = bt.read_row_y_column_x()
+        x_width = bt.read_x_width()
+
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+
+        conway_yx_list.clear()
+
+        choice = 1
+
+        if choice == 1:
+
+            x_mid = x_width // 3
+            se.write(f"\x1b[{ya};{x_mid}H")
+
+            self.conway_print("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪🔴⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪🔴🔴🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪⚪⚪⚪⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
+            self.conway_print("🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪⚪🔴🔴⚪")
+            self.conway_print("🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
+
+            # Southwest Glider & Southeast Glider
+
+        if choice == 3:
+
+            self.conway_print("🔴⚪⚪⚪🔴")
+            self.conway_print("🔴🔴⚪🔴🔴")
+            self.conway_print("🔴⚪🔴⚪🔴")
+            self.conway_print("⚪🔴⚪🔴⚪")
+            self.conway_print("⚪⚪🔴⚪⚪")
+
+            # https://imgur.com/a/interesting-face-pattern-conways-game-of-life-epMFxEb
+
+            # todo6: compare/contrast web life at Wolf Face
+
+        # Add the Next Spots as a Perimeter around the Spots, if need be
+
+        yx_tuple = tp.by_yx_tuple()
+        for y, x in yx_tuple:
+            list_str = list_str_by_y_x[y][x]
+            if list_str and list_str[-1] == "🔴":
+                self.y_x_count_around(y, x)  # adds its Next Spots
+
+        # Choose the first place of the Cursor
+
+        y_list = list(_[0] for _ in conway_yx_list)
+        x_list = list(_[-1] for _ in conway_yx_list)
+
+        y_min = min(y_list)
+        y_max = max(y_list)
+        x_min = min(x_list)
+        x_max = max(x_list)
+
+        y_mid = (y_min + y_max) // 2
+        x_mid = (x_min + x_max) // 2
+
+        se.write(f"\x1b[{y_mid};{x_mid}H")
+
+    def conway_print(self, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
+
+        se = self.screen_editor
+        tp = se.terminal_proxy
+
+        (ya, xb) = (tp.row_y, tp.column_x)
+
+        (y, x) = (ya, xb)
+        for t in text:
+            if t == "🔵":
+                se.write("\x1b[2C")  # todo: Conway Spots always 2 Columns wide?
+            else:
+                self.conway_write_y_x_text(y, x=x, text=t)
+
+            x += 2
+
+        y += 1
+
+        se.write(f"\x1b[{y};{xb}H")  # for .conway_print
+
+    def conway_write_y_x_text(self, y: int, x: int, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
+
+        se = self.screen_editor
+        conway_yx_list = self.conway_yx_list
+
+        tp = se.terminal_proxy
+
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+
+        se.write(f"\x1b[{y};{x}H")
+        se.write(text)
+
+        x_width = tp._str_guess_x_width(text)
+        for x in range(x, x + x_width):
+            yx = (y, x)
+            conway_yx_list.append(yx)
+
+    def do_conway_8x_redo(self) -> None:
+        """Step the Game of Life forward at 8X Speed"""
+
+        for _ in range(8):
+            self.do_conway_half_step()  # once
+            self.do_conway_half_step()  # twice
+
+        # Tab
+
+    def do_conway_full_step(self) -> None:
+        """Step the Game of Life forward by 1 Full Step"""
+
+        conway_half_steps = self.conway_half_steps
+
+        if (conway_half_steps % 2) == 0:  # if halfway
+            self.do_conway_half_step()  # out-of-phase
+
+        self.do_conway_half_step()  # once
+        self.do_conway_half_step()  # twice
+
+        # ⌃Spacebar
+
+    def do_conway_half_step(self) -> None:
+        """Step the Game of Life forward by 1/2 Step"""
+
+        se = self.screen_editor
+
+        assert DECSC == "\x1b" "7"  # DECSC 7 Cursor Save
+        assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
+
+        se.write("\x1b7")
+        self._do_conway_half_step_()
+        se.write("\x1b8")
+
+        # Spacebar
+
+    def _do_conway_half_step_(self) -> None:
+        """Step the Game of Life forward by 1/2 Step"""
+
+        se = self.screen_editor
+        tp = se.terminal_proxy
+        list_str_by_y_x = tp.list_str_by_y_x
+
+        self.conway_half_steps += 1
+        conway_half_steps = self.conway_half_steps
+
+        yx_list = list()
+        for y in list_str_by_y_x.keys():
+            for x in list_str_by_y_x[y].keys():
+                yx = (y, x)
+                yx_list.append(yx)
+
+        for y, x in yx_list:
+            list_str = list_str_by_y_x[y][x]
+            text = list_str[-1] if list_str else ""
+
+            if text not in ("⚪", "⚫", "🔴", "🟥"):
+                continue
+
+            if conway_half_steps % 2 == 0:
+                assert text in ("⚪", "🔴"), (text,)
+                n = self.y_x_count_around(y, x)
+
+                if (n < 2) and (text == "🔴"):
+                    self.conway_write_y_x_text(y, x=x, text="🟥")
+                elif (n == 3) and (text == "⚪"):
+                    self.conway_write_y_x_text(y, x=x, text="⚫")
+                    self.y_x_count_around(y, x)  # adds its Next Spots
+                elif (n > 3) and (text == "🔴"):
+                    self.conway_write_y_x_text(y, x=x, text="🟥")
+
+            else:
+                assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
+
+                if text == "⚫":
+                    self.conway_write_y_x_text(y, x=x, text="🔴")
+                elif text == "🟥":
+                    self.conway_write_y_x_text(y, x=x, text="⚪")
+
+    def y_x_count_around(self, y: int, x: int) -> int:
+        """Count the Neighbors of a Cell"""
+
+        se = self.screen_editor
+        tp = se.terminal_proxy
+        list_str_by_y_x = tp.list_str_by_y_x
+
+        yx_writes = list_str_by_y_x[y][x]
+        syx = yx_writes[-1] if yx_writes else ""
+
+        dydx_list = list()
+        for dy in range(-1, 1 + 1):
+            for dx in range(-2, 2 + 1, 2):
+                if dy == 0 and dx == 0:
+                    continue
+
+                dydx = (dy, dx)
+                dydx_list.append(dydx)
+
+        count = 0
+        for dy, dx in dydx_list:
+            yb = y + dy
+            xb = x + dx
+
+            if syx == "⚪":
+                if yb not in list_str_by_y_x.keys():
+                    continue
+                if xb not in list_str_by_y_x[yb].keys():
+                    continue
+
+            yaxa_write = ""
+            if not ((yb in list_str_by_y_x.keys()) and (xb in list_str_by_y_x[yb].keys())):
+                yaxa_write = "⚪"
+                se.print_y_x_text(yb, x=xb, text=yaxa_write)
+
+            yaxa_writes = list_str_by_y_x[yb][xb]
+            shadow_syaxa = yaxa_writes[-1] if yaxa_writes else ""
+            if yaxa_write:
+                assert yaxa_write == shadow_syaxa, (yaxa_write, shadow_syaxa, yb, xb)
+
+            if shadow_syaxa in ("🔴", "🟥"):
+                count += 1
+
+        return count
+
+    def form_conway_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
+        "Bind Keycaps to Funcs"
+
+        se = self.screen_editor
+
+        func_by_str: dict[str, abc.Callable[[], None]] = {
+            "⌃D": se.do_raise_system_exit,
+            "Tab": self.do_conway_8x_redo,
+            # "⇧Tab": self.do_conway_8x_undo,
+            "Spacebar": self.do_conway_full_step,
+            "⌃Spacebar": self.do_conway_half_step,
+            # "⌥Spacebar": self.do_conway_undo,
+            # "+": self.do_conway_older,  # todo4:
+            # "-": self.do_conway_younger,  # todo4:
+            # "MousePress": self.do_conway_pass,  # todo4:
+            # "MouseRelease": self.do_conway_leap_here,  # todo4:
+            "F2": self.restart_conway_life,
+        }
+
+        return func_by_str
+
+        # why does MyPy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
+
+
+_ = """  # The 8 Half-Steps of a 5-Pixel Glider
+
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
+    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
+    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
+    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+"""
+
+
 screen_editors: list[ScreenEditor] = list()
 
 
 class ScreenEditor:
     """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
-    bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
+    terminal_proxy: TerminalProxy
     packets: list[TerminalBytePacket]
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
-
-    keyboard_bytes_log: typing.BinaryIO  # .klog  # logs Keyboard Delays & Bytes
-    screen_bytes_log: typing.BinaryIO  # .slog  # logs Screen Delays & Bytes
-
-    toggles: list[str]  # Replacing/ Inserting/ etc
-    styles: list[str]  # Foreground on Background Colors, etc
-    row_y: int  # Y places encoded as Southbound across 1 .. Height
-    column_x: int  # X places encoded as Eastbound across 1 .. Width
-    list_str_by_y_x: dict[int, dict[int, list[str]]] = dict()  # shadows the last Write at each Place
 
     func_by_str: dict[str, abc.Callable[[], None]] = dict()
     loopable_kdata_tuple: tuple[bytes, ...] = tuple()
@@ -302,7 +638,1628 @@ class ScreenEditor:
 
         screen_editors.append(self)
 
-        # Open our Keyboard & Screen Logs
+        tp = TerminalProxy()
+
+        self.terminal_proxy = tp
+        self.packets = list()
+        self.arrows = 0
+
+        func_by_str = self.form_func_by_str()
+        self.func_by_str = func_by_str
+
+        loopable_kdata_tuple = self.form_loopable_kdata_tuple()
+        self.loopable_kdata_tuple = loopable_kdata_tuple
+
+    def __enter__(self) -> typing.Self:
+        r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
+
+        tp = self.terminal_proxy
+        tp.__enter__()
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        r"""Start line-buffering Input, start replacing \n Output with \r\n, etc"""
+
+        tp = self.terminal_proxy  # todo7: write up MyPy Strict forbids kwarg [call-arg]
+        tp.__exit__(exc_type, exc_val, exc_tb)
+
+        return None
+
+    def print_y_x_text(self, y: int, x: int, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
+
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+
+        self.write(f"\x1b[{y};{x}H")
+        self.write(text)
+
+    def print(self, *args: object, end: str = "\r\n") -> None:
+        """Join the Args by Space, add the End, and write the Encoded Chars"""
+
+        schars = " ".join(str(_) for _ in args)
+        self.write(schars)
+        self.write(end)
+
+    def write(self, text: str) -> None:
+        """Write the Bytes, log them as written, and shadow them"""
+
+        tp = self.terminal_proxy
+
+        tp.write_out(text)
+        tp.write_shadows(text)
+
+    #
+    # Bind Keyboard Chords to Funcs
+    #
+
+    def form_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
+        """Bind Keycaps to Funcs"""
+
+        func_by_str: dict[str, abc.Callable[[], None]] = {
+            #
+            # 1-Byte 7-Bit C0 Controls
+            #
+            "⌃A": self.do_column_leap_leftmost,  # ⌃A for Emacs
+            "⌃B": self.do_column_left,  # ⌃B for Emacs
+            # "\x03",  # ⌃C
+            "⌃D": self.do_char_delete_here,  # ⌃D for Emacs
+            "⌃E": self.do_column_leap_rightmost,  # ⌃E for Emacs
+            "⌃F": self.do_column_right,  # ⌃F for Emacs
+            # b"\x07",  # ⌃G \a bell-ring
+            # b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
+            # b"\x09",  # ⌃I \t Tab
+            # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
+            "⌃K": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
+            "⌃L": self.terminal_proxy.do_screen_redraw,  # ⌃L for Vim  # not ⌃L for Emacs a la Vim ⇧H ⇧M ⇧L
+            # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
+            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
+            "⌃N": self.do_row_down,  # ⌃N
+            "⌃O": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
+            "⌃P": self.do_row_up,  # ⌃P
+            "⌃Q": self.do_quote_one_kdata,  # ⌃Q for Emacs
+            # # b"\x12",  # ⌃R
+            # # b"\x13",  # ⌃S
+            # # b"\x14",  # ⌃T
+            # # b"\x15",  # ⌃U
+            "⌃V": self.do_quote_one_kdata,  # ⌃V for Vim
+            # # b"\x17",  # ⌃W
+            # # b"\x18",  # ⌃X
+            # # b"\x19",  # ⌃Y
+            # # b"\x1a",  # ⌃Z
+            # todo2: ⌃X⌃C ⌃X⌃S for Emacs
+            #
+            # Esc and Esc Byte Pairs
+            #
+            # # b"\x1b": self.print_kcaps_plus,  # ⎋
+            #
+            "⎋$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim  # todo4: ⎋⇧$ vs ⎋$
+            "⎋0": self.do_column_leap_leftmost,  # ⎋0 for Vim
+            # # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
+            # # b"\x1b" b"8",  # ⎋8 cursor-revert
+            # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
+            #
+            "⎋⇧A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
+            "⎋⇧C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
+            # # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
+            "⎋⇧D": self.do_row_tail_erase,  # Vim ⇧D
+            # # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
+            # "\x1b" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
+            "⎋⇧H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
+            "⎋⇧L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
+            # # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
+            "⎋⇧M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
+            "⎋⇧O": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
+            "⎋⇧Q": self.do_assert_false,  # ⎋⇧Q for Vim
+            "⎋⇧R": self.do_replacing_start,  # ⎋⇧R for Vim
+            "⎋⇧S": self.do_row_delete_start_inserting,  # ⎋S for Vim
+            "⎋⇧X": self.do_char_delete_left,  # ⎋⇧X for Vim
+            # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
+            #
+            "⎋A": self.do_column_right_inserting_start,  # ⎋A for Vim
+            # # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
+            "⎋H": self.do_column_left,  # ⎋H for Vim
+            "⎋I": self.do_inserting_start,  # ⎋I for Vim
+            "⎋J": self.do_row_down,  # ⎋J for Vim
+            "⎋K": self.do_row_up,  # ⎋K for Vim
+            # # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            "⎋L": self.do_column_right,  # ⎋L for Vim
+            "⎋O": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
+            "⎋R": self.do_replacing_one_kdata,  # ⎋R for Vim
+            "⎋S": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
+            "⎋X": self.do_char_delete_here,  # ⎋X for Vim
+            #
+            # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
+            #
+            # # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
+            #
+            # b"\x1b[" b"A",  # ⎋[⇧A ↑
+            # b"\x1b[" b"B",  # ⎋[⇧B ↓
+            # b"\x1b[" b"C",  # ⎋[⇧C →
+            # b"\x1b[" b"D",  # ⎋[⇧D ←
+            # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
+            #
+            "F7": self.do_kdata_fn_f7,  # FnF7
+            "F8": self.do_kdata_fn_f8,  # FnF8
+            "F9": self.do_kdata_fn_f9,  # FnF9
+            #
+            # Ss3 Esc Byte Sequences
+            #
+            # # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            #
+            "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
+            "F2": self.do_kdata_fn_f2,  # FnF2
+            #
+            # Printable but named Characters
+            #
+            "Spacebar": self.do_write_spacebar,  # Spacebar
+            #
+            # The Last 1-Byte 7-Bit Control, which looks lots like a C0 Control
+            #
+            "Delete": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
+        }
+
+        return func_by_str
+
+        # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
+        #
+        # items = list(func_by_str.items())
+        #
+        # for (kstr, func) in items:
+        #     if len(kstr) == 2:
+        #         if kstr.startswith("\x1b"):
+        #             alt_kstr = b"\x15" + kdata[1:]  # ⌃O
+        #
+        #             assert alt_kstr not in func_by_str.keys()
+        #             func_by_str[alt_kstr] = func  # todo4: need Chord Sequences to do Vim I ⌃O
+
+    def form_loopable_kdata_tuple(self) -> tuple[bytes, ...]:
+        """List Keyboard Encodings that run well when looped back to Screen"""
+
+        d = (
+            b"\x07",  # ⌃G \a bell-ring
+            b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
+            b"\x09",  # ⌃I \t Tab
+            b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
+            # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
+            #
+            # b"\x1b": self.print_kcaps_plus,  # ⎋
+            #
+            # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
+            # b"\x1b" b"8",  # ⎋8 cursor-revert
+            # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
+            # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
+            # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
+            # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
+            # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            #
+            # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            #
+            # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
+            b"\x1b[" b"A",  # ⎋[⇧A ↑
+            b"\x1b[" b"B",  # ⎋[⇧B ↓
+            b"\x1b[" b"C",  # ⎋[⇧C →
+            b"\x1b[" b"D",  # ⎋[⇧D ←
+            # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
+        )
+
+        loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please PyLance
+
+        return loopable_kdata_tuple
+
+        # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
+
+        # todo2: bind Keyboard Chord Sequences, no longer just Keyboard Chords
+        # todo2: bind ⌃C ⇧O for Emacs overwrite-mode, or something
+        # todo2: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
+        # todo2: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
+
+    #
+    # Loop Keyboard back to Screen, but as whole Packets, & with some emulations
+    #
+
+    def play_screen_editor(self: ScreenEditor) -> None:
+        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        # Tell our Shadow where our next Write will land
+
+        assert tp.row_y == -1, (tp.row_y,)  # for .play_screen_editor
+        assert tp.column_x == -1, (tp.column_x,)  # for .play_screen_editor
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+
+        tp.row_y = row_y  # for .play_screen_editor
+        tp.column_x = column_x  # for .play_screen_editor
+
+        # Prompt at Launch
+
+        assert EL_PS == "\x1b[" "{}" "K"
+
+        self.write("\x1b[K")
+        self.print("On #345")  # todo9: next experiment
+        self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
+        self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
+        self.print()
+
+        # Walk one step after another
+
+        while True:
+            try:
+                self.read_eval_print_once()
+            except SystemExit:
+                break
+
+    def read_eval_print_once(self) -> None:
+        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+
+        packets = self.packets
+
+        tp = self.terminal_proxy
+        klog = tp.keyboard_bytes_log
+
+        # Reply to each Keyboard Chord Input, till quit
+
+        # todo2: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
+        # todo2: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
+
+        t0 = time.time()
+        (tbp, n) = self.read_some_byte_packets()
+        t1 = time.time()
+        t1t0 = t1 - t0
+
+        packets.append(tbp)
+
+        arrows = self.arrows
+        tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once")
+        assert tbp, (tbp, n)  # because .timeout=None
+
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
+
+        klog.write(kdata)
+
+        self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
+
+        if kdata == b"\x04":  # ⌃D
+            raise SystemExit()
+
+        # todo2: Read Str not Bytes from Keyboard, and then List[Str]
+        # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
+
+    def klog_to_kcount(self) -> int:
+        """Count how many times the same Keyboard Chord struck"""
+
+        packets = self.packets
+
+        depth = 0
+        kdata = packets[-1].to_bytes()
+        for tbp in reversed(packets):
+            if tbp.to_bytes() != kdata:  # todo: equality between TerminalBytePacket's
+                break
+            depth += 1
+
+        return depth  # fed by 'packets.append(tbp)' inside .read_eval_print_once
+
+    def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
+        """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
+
+        func_by_str = self.func_by_str
+        loopable_kdata_tuple = self.loopable_kdata_tuple
+
+        # Append to our __pycache__/k.keyboard Keylogger Keylogging File
+
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
+
+        # Call 1 Func Def by Keycaps
+
+        kcaps = kdata_to_kcaps(kdata)
+
+        if kcaps in func_by_str.keys():
+            func = func_by_str[kcaps]
+            tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
+
+            func()  # may raise SystemExit
+
+            return
+
+        if kdata in loopable_kdata_tuple:
+            tprint(f"{kdata=} # do_write_kdata_as_sdata reply_to_kdata")  # not .__qualname__
+
+            self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
+
+            return
+
+        # Write the KData, but as Keycaps, when it is a Keycap but not a Func Def
+
+        kchars = kdata.decode()  # may raise UnicodeDecodeError
+        if kchars in KCAP_BY_KCHARS.keys():  # already handled above
+            tprint(f"Keycap {kchars=} {str(tbp)=}   # reply_to_kdata")
+
+            if (n == 1) or (tbp.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
+
+                self.print_kcaps_plus(tbp)
+
+                return
+
+        # Pass through 1 Unicode Character
+
+        if tbp.text:
+            tprint(f"tbp.text {kdata=}  # reply_to_kdata")
+
+            self.write(tbp.text)
+
+            return
+
+            # todo2: stop wrongly passing through multibyte Control Characters
+
+        # Pass-Through, or emulate, the famous Control Byte Sequences
+
+        if self.take_tbp_n_kdata_if(tbp, n=n, kdata=kdata):
+
+            return
+
+        # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
+
+        tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
+        self.print_kcaps_plus(tbp)
+
+    def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
+        """Emulate the KData Control Sequence and return it, else return False"""
+
+        # Emulate famous Esc Byte Pairs
+
+        if self._take_csi_row_1_column_1_leap_if_(kdata):  # ⎋L
+            return True
+
+        # Emulate famous Csi Control Byte Sequences,
+        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
+        # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
+        csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
+
+        csi_famous = csi and tbp.tail and (tbp.tail in csi_timeless_tails)
+        if (n > 1) and csi and tbp.tail and (tbp.tail in csi_slow_tails):
+            csi_famous = True
+
+        # Shrug off a Mouse Press if quick
+        # Reply to a Mouse Release, no matter if slow or quick
+        # And kick back on anything else that's not Csi Famous
+
+        if not csi_famous:
+            if self._take_csi_mouse_press_if_(tbp, n=n):
+                return True
+            if self._take_csi_mouse_release_if_(tbp):
+                return True
+
+            return False
+
+        # Emulate the Csi Famous that don't work so well when passed through
+
+        if self._take_csi_tab_right_leap_if_(tbp):  # ⎋[{}⇧I
+            return True
+
+        if self._take_csi_rows_up_if_(tbp):  # ⎋[{}⇧S
+            return True
+
+        if self._take_csi_rows_down_if_(tbp):  # ⎋[{}⇧T
+            return True
+
+        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
+            return True
+
+        if tbp.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
+            self._take_csi_cols_insert_if_(tbp)
+            return True
+
+        if tbp.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
+            self._take_csi_cols_delete_if_(tbp)
+            return True
+
+        # Pass-through the .csi_slow_tails when slow.
+        # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
+
+        tprint(f"Pass-through {kdata=} {str(tbp)=}   # take_tbp_n_kdata_if")
+        self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
+
+        return True
+
+    #
+    # Define some emulations
+    #
+
+    def print_kcaps_plus(self, tbp: TerminalBytePacket) -> None:
+        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
+
+        kdata = tbp.to_bytes()
+        assert kdata, (kdata,)
+
+        kcaps = kdata_to_kcaps(kdata)
+        self.print(kcaps, end=" ")
+
+    def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧~ cols-delete"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        assert DCH_X == "\x1b[" "{}" "P"
+        assert VPA_Y == "\x1b[" "{}" "d"
+        assert DECDC_X == "\x1b[" "{}" "'~"
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((tbp.back + tbp.tail) == b"'~")):
+            return False
+
+        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
+
+        pn = int(tbp.neck) if tbp.neck else PN1
+        y_height = bt.read_y_height()
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for ._take_csi_cols_delete_if_
+        self.column_x = column_x  # for ._take_csi_cols_delete_if_
+
+        for y in range(1, y_height + 1):
+            self.write(f"\x1b[{y}d")  # for .columns_delete_n
+            self.write(f"\x1b[{pn}P")  # for .columns_delete_n
+        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
+
+        return True
+
+        # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
+
+    def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧} cols-insert"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        assert ICH_X == "\x1b[" "{}" "@"
+        assert VPA_Y == "\x1b[" "{}" "d"
+        assert DECDC_X == "\x1b[" "{}" "'~"
+        assert DECIC_X == "\x1b[" "{}" "'}}"
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((tbp.back + tbp.tail) == b"'}")):
+            return False
+
+        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
+
+        pn = int(tbp.neck) if tbp.neck else PN1
+        y_height = bt.read_y_height()
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for ._take_csi_cols_insert_if_
+        self.column_x = column_x  # for ._take_csi_cols_insert_if_
+
+        for y in range(1, y_height + 1):
+            self.write(f"\x1b[{y}d")  # for .columns_delete_n
+            self.write(f"\x1b[{pn}@")  # for .columns_delete_n
+        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
+
+        return True
+
+        # macOS Terminal & gCloud Shell lack ⎋['⇧} cols-insert
+
+    def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
+        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
+
+        assert CUP_Y1_X1 == "\x1b[" "H"
+
+        if kdata != b"\x1b" b"l":
+            return False
+
+        tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
+
+        self.write("\x1b[H")  # for ⎋L
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋L
+
+    def _take_csi_mouse_press_if_(self, tbp: TerminalBytePacket, n: int) -> bool:
+        """Shrug off a Mouse Press if quick"""
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if (n == 1) and csi and tbp.tail and (tbp.tail == b"M"):
+            tprint("# _take_csi_mouse_press_if_")
+            return True  # drops first 1/2 or 2/3 of Sgr Mouse
+
+        return False
+
+    def _take_csi_mouse_release_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Reply to a Mouse Release, no matter if slow or quick"""
+
+        # Eval the Sgr Mouse Report
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and tbp.tail and (tbp.tail == b"m")):
+            return False
+
+        splits = tbp.neck.removeprefix(b"<").split(b";")
+        assert len(splits) == 3, (splits, tbp.neck, tbp)
+        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
+
+        tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
+
+        # Decode f = 0b⌃⌥⇧00
+
+        Basic_0 = 0b00000
+
+        Shift_4 = 0b00100
+        Option_8 = 0b01000
+        Control_16 = 0b10000
+
+        assert (f & ~(Shift_4 | Option_8 | Control_16)) == 0, (hex(f),)
+
+        # Dispatch ⌥ Mouse Release
+
+        if f in (Basic_0, Option_8):
+
+            self.take_widget_at_yxf_mouse_release(y, x=x, f=f)
+
+            return True
+
+        # Reply to Shifting or no Shifting at Mouse Release
+
+        if f == 0:
+            self.write("*")  # unreached when f == 0 because Code far above
+
+        if f & Control_16:
+            self.write("⌃")
+        if f & Option_8:
+            self.write("⌥")  # unreached when f == 8 because Code far above
+        if f & Shift_4:
+            self.write("⇧")
+
+        return True
+
+        # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
+
+    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
+        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
+
+        assert VPA_Y == "\x1b[" "{}" "d"
+
+        if kdata != b"\x1b[d":
+            return False
+
+        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
+
+        self.write("\x1b[1d")  # carefully not empty Parameters via "\x1b[d"
+
+        return True
+
+        # gCloud Shell needs ⎋[1D for ⎋[D
+
+    def _take_csi_rows_down_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Scroll Down [Insert North Lines]"""
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+
+        assert CUU_Y == "\x1b[" "{}" "A"
+        assert IL_Y == "\x1b[" "{}" "L"
+        assert SD_Y == "\x1b[" "{}" "T"
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (tbp.tail == b"T")):
+            return False
+
+        pn = int(tbp.neck) if tbp.neck else PN1
+
+        self.write("\x1b7")
+        self.write("\x1b[32100A")
+        self.write(f"\x1b[{pn}L")
+        self.write("\x1b8")
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋[{}⇧T
+
+    def _take_csi_rows_up_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Scroll Up [Insert South Lines]"""
+
+        assert LF == "\n"
+
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+
+        assert CUD_Y == "\x1b[" "{}" "B"
+        assert SU_Y == "\x1b[" "{}" "S"
+        assert _PN_MAX_32100_ == 32100
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (tbp.tail == b"S")):
+            return False
+
+        pn = int(tbp.neck) if tbp.neck else PN1
+
+        self.write("\x1b7")
+        self.write("\x1b[32100B")
+        self.write(pn * "\n")
+        self.write("\x1b8")
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋[{}⇧S
+
+    def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
+        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
+
+        column_x = self.column_x
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+        x_width = bt.read_x_width()
+
+        assert HT == "\t"
+        assert CHA_X == "\x1b[" "{}" "G"
+        assert CHT_X == "\x1b[" "{}" "I"
+
+        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (tbp.tail == b"I")):
+            return False
+
+        tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
+
+        pn = int(tbp.neck) if tbp.neck else PN1
+        assert pn >= 1, (pn,)
+
+        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
+        x = min(x_width, tab_stop_n)
+        self.write(f"\x1b[{x}G")  # does Not fill with Background Color
+
+        return True
+
+        # gCloud Shell lacks ⎋[ {}I
+
+    def do_write_cr_lf(self) -> None:
+        """Write CR LF"""
+
+        assert CR == "\r"
+        assert LF == "\n"
+
+        self.write("\r\n")
+
+        # todo3: Emacs ⌃M and ⌃K need the Rows shadowed, as does Vim I ⌃M
+        # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
+
+    #
+    #
+    #
+
+    def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
+        """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
+
+        arrows = self.arrows
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        # Count out a rapid burst of >= 2 Arrows
+
+        arrows_timeout = 0.010
+
+        n = 1
+
+        t0 = time.time()
+
+        if not arrows:
+            tbp = bt.read_byte_packet(timeout=None)
+        else:
+            tbp = bt.read_byte_packet(timeout=arrows_timeout)
+            if not tbp:
+                self.arrows = 0  # written only by Init & this Def
+
+                tbp = self.read_arrows_as_byte_packet()
+                assert tbp, (tbp,)
+
+                return (tbp, n)
+
+        t1 = time.time()
+
+        kdata = tbp.to_bytes()
+        t1t0 = t1 - t0
+
+        if kdata not in (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D"):
+            self.arrows = 0  # written only by Init & this Def
+        elif t1t0 >= arrows_timeout:
+            self.arrows = 0  # written only by Init & this Def
+        else:
+            self.arrows += 1
+
+        while (not tbp.text) and (not tbp.closed) and (not bt.extras):
+
+            kdata = tbp.to_bytes()
+            # if kdata in (b"\x1b", b"\x1bO", b"\x1b[", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b["):
+            if kdata == b"\x1bO":  # ⎋⇧O for Vim
+                break
+
+            n += 1
+            bt.close_byte_packet_if(tbp, timeout=None)
+
+        # Succeed
+
+        return (tbp, n)
+
+        # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
+
+    def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
+        """Take Slow-after-Arrow-Burst as a ⌥ Mouse Release, with never a Press"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for .read_arrows_as_byte_packet
+        self.column_x = column_x  # for .read_arrows_as_byte_packet
+
+        option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
+        ktext = f"\x1b[<{option_f};{column_x};{row_y}m"
+        kdata = ktext.encode()
+
+        tbp = TerminalBytePacket(kdata)
+
+        return tbp
+
+        # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
+        # todo6: Debug why Arrow Burst buttons after the first frequently don't work, if still so?
+
+    def do_write_spacebar(self) -> None:
+        """Write 1 Space"""
+
+        self.write(" ")
+
+    def do_write_kdata_as_sdata(self, kdata: bytes) -> None:
+        """Write the Keyboard Bytes looped back to the Screen"""
+
+        sdata = kdata
+        stext = sdata.decode()  # may raise UnicodeDecodeError
+
+        self.write(stext)
+
+    def do_replacing_one_kdata(self) -> None:
+        """Start replacing, quote 1 Keyboard Chord, then start inserting"""
+
+        self.do_replacing_start()  # Vim ⇧R
+        self.do_quote_one_kdata()  # Emacs ⌃Q  # Vim ⌃V
+        self.do_inserting_start()  # Vim I
+
+        # Vim R
+
+    def do_quote_one_kdata(self) -> None:
+        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
+
+        (tbp, n) = self.read_some_byte_packets()
+
+        kdata = tbp.to_bytes()
+        self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
+
+        # Emacs ⌃Q  # Vim ⌃V
+
+    def do_assert_false(self) -> None:
+        """Assert False"""
+
+        assert False
+
+        # Vim ⇧Q  # (traditionally swaps Ex Key Bindings in place of Vim Key Bindings)
+
+    def do_raise_system_exit(self) -> None:
+        """Raise SystemExit"""
+
+        raise SystemExit()
+
+        # Emacs ⎋ X revert-buffer Return ⌃X ⌃C
+        # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
+        # Vim ⇧Z⇧Q
+
+    #
+    # Reply to Emacs & Vim Keyboard Chords
+    #
+
+    def do_column_left(self) -> None:
+        """Go left by 1 Column"""
+
+        assert BS == "\b"
+        self.write("\b")
+
+        # Emacs Delete
+
+    def do_column_right(self) -> None:
+        """Go right by 1 Column"""
+
+        assert CUF_X == "\x1b[" "{}" "C"
+        self.write("\x1b[C")
+
+        # Emacs ⌃F
+
+    def do_column_right_inserting_start(self) -> None:
+        """Insert 1 Space at the Cursor, then go right by 1 Column"""
+
+        self.do_column_right()  # Vim L
+        self.do_inserting_start()  # Vim I
+
+        # Vim A = Vim L I
+
+        # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
+
+    def do_char_delete_here(self) -> None:
+        """Delete the Character beneath the Cursor"""
+
+        assert DCH_X == "\x1b[" "{}" "P"
+        self.write("\x1b[P")
+
+        # Emacs ⌃D  # Vim X
+
+    def do_char_delete_here_start_inserting(self) -> None:
+        """Delete the Character beneath the Cursor, and Start Inserting"""
+
+        self.do_char_delete_here()  # Emacs ⌃D  # Vim X
+        self.do_inserting_start()  # Vim I
+
+        # Vim S = Vim X I
+
+    def do_char_delete_left(self) -> None:
+        """Delete the Character at left of the Cursor"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        assert BS == "\b"
+        assert DCH_X == "\x1b[" "{}" "P"
+
+        x = bt.read_column_x()
+        self.column_x = x
+
+        if x > 1:
+            self.write("\b")
+            self.write("\x1b[P")
+
+        # Emacs Delete  # Vim ⇧X
+
+        # todo2: Show .do_char_delete_left bouncing off the Left Edge
+
+    def do_column_leap_leftmost(self) -> None:
+        """Leap to the Leftmost Column"""
+
+        assert CR == "\r"
+        self.write("\r")
+
+        # Emacs ⌃A  # Vim 0
+
+    def do_column_leap_rightmost(self) -> None:
+        """Leap to the Rightmost Column"""
+
+        assert CUF_X == "\x1b[" "{}" "C"
+        assert _PN_MAX_32100_ == 32100
+        self.write("\x1b[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
+
+        # todo3: Leap to Rightmost Shadow, if Row Shadowed
+
+        # Emacs ⌃E  # Vim ⇧$
+
+    def do_column_leap_rightmost_inserting_start(self) -> None:
+        """Leap to the Rightmost Column, and Start Inserting"""
+
+        self.do_column_leap_rightmost()  # Emacs ⌃E  # Vim ⇧$
+        self.do_inserting_start()  # Vim I
+
+        # Vim ⇧A = Vim ⇧$ I
+
+    def do_inserting_start(self) -> None:
+        """Start Inserting Characters at the Cursor"""
+
+        assert SM_IRM == "\x1b[" "4h"
+        self.write("\x1b[4h")
+
+        # Vim I
+
+        # todo2: Show Inserting while Inserting
+
+    def do_replacing_start(self) -> None:
+        """Start Replacing Characters at the Cursor"""
+
+        assert RM_IRM == "\x1b[" "4l"
+        self.write("\x1b[4l")
+
+        # Vim ⇧R
+
+        # todo2: Show Replacing while Replacing
+
+    def do_row_delete_start_inserting(self) -> None:
+        """Empty the Row beneath the Cursor, and Start Inserting"""
+
+        self.do_column_leap_leftmost()  # Emacs ⌃A  # Vim 0
+        self.do_row_tail_erase()  # Vim ⇧D
+        self.do_inserting_start()  # Vim I
+
+        # could be coded as ⎋[2K like a .do_row_tail_erase but without moving the Cursor
+
+        # Vim ⇧S = Vim 0 D I
+
+    def do_row_down(self) -> None:
+        """Go down by 1 Row, but stop in last Row"""
+
+        assert CUD_Y == "\x1b[" "{}" "B"
+        self.write("\x1b[B")
+
+        # Emacs ⌃N
+
+    def do_row_down_insert_inserting_start(self) -> None:
+        """Insert 1 Row below the Cursor"""
+
+        self.do_row_down()  # Vim J
+        self.do_row_insert_inserting_start()  # Vim ⇧O
+
+        # Vim O = J ⇧O  # despite ⎋O collides with SS3
+
+    def do_row_insert_inserting_start(self) -> None:
+
+        self.do_row_insert()  # Emacs ⌃O when leftmost
+        self.do_column_leap_leftmost()  # Emacs ⌃A  # Vim 0
+        self.do_inserting_start()  # Vim I
+
+        # Vim ⇧O = Emacs ⌃A ⌃O + Vim I
+
+    def do_row_insert(self) -> None:
+        """Insert 1 Row above the Cursor"""
+
+        assert IL_Y == "\x1b[" "{}" "L"
+        self.write("\x1b[L")
+
+        # Emacs ⌃O when leftmost
+
+    def do_row_leap_first_column_leftmost(self) -> None:
+        """Leap to the Leftmost Column of the First Row"""
+
+        depth = self.klog_to_kcount()
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        x_width = bt.read_x_width()
+        mid_width = (x_width // 2) + (x_width % 2)
+
+        assert CUP_Y1_X1 == "\x1b[" "H"
+
+        if (depth % 3) == 1:
+            self.write("\x1b[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        elif (depth % 3) == 2:
+            x = mid_width
+            self.write(f"\x1b[1;{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        else:
+            self.write("\x1b[1;31200H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+
+        if (depth % 3) == 1:
+            (y, x) = (Y1, X1)  # todo: send "H" in place of "1;1H"
+        elif (depth % 3) == 2:
+            (y, x) = (Y1, mid_width)
+        else:
+            (y, x) = (Y1, 31200)
+
+        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        # Vim ⇧H
+
+        # todo3: Leap to First Shadow Row, if Column Shadowed
+
+    def do_row_leap_last_column_leftmost(self) -> None:
+        """Leap to the Leftmost Column of the Last Row"""
+
+        depth = self.klog_to_kcount()
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        x_width = bt.read_x_width()
+        mid_width = (x_width // 2) + (x_width % 2)
+
+        assert _PN_MAX_32100_ == 32100
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+
+        if (depth % 3) == 1:
+            (y, x) = (32100, X1)  # todo: send "H" in place of ";1H"
+        elif (depth % 3) == 2:
+            (y, x) = (32100, mid_width)
+        else:
+            (y, x) = (32100, 31200)
+
+        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
+
+        # todo3: Leap to Last Shadow Row, if Column Shadowed
+
+        # Vim ⇧L
+
+    def do_row_leap_middle_column_leftmost(self) -> None:
+        """Leap to the Leftmost Column of the Middle Row"""
+
+        depth = self.klog_to_kcount()
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        y_height, x_width = bt.read_y_height_x_width()
+        mid_height = (y_height // 2) + (y_height % 2)
+        mid_width = (x_width // 2) + (x_width % 2)
+
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+        assert _PN_MAX_32100_ == 32100
+
+        if (depth % 3) == 1:
+            (y, x) = (mid_height, X1)  # todo: send "H" in place of ";1H"
+        elif (depth % 3) == 2:
+            (y, x) = (mid_height, mid_width)
+        else:
+            (y, x) = (mid_height, 31200)
+
+        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
+
+        # Vim ⇧M
+
+    def do_row_tail_erase(self) -> None:
+        """Erase from the Cursor to the Tail of the Row"""
+
+        assert EL_PS == "\x1b[" "{}" "K"
+        self.write("\x1b[K")
+
+        # Vim ⇧D  # Emacs ⌃K when not rightmost
+
+    def do_row_tail_erase_inserting_start(self) -> None:
+        """Erase from the Cursor to the Tail of the Row, and Start Inserting"""
+
+        self.do_row_tail_erase()  # Vim ⇧D  # Emacs ⌃K when not rightmost
+        self.do_inserting_start()  # Vim I
+
+        # Vim ⇧C = # Vim ⇧D I
+
+    def do_row_up(self) -> None:
+        """Go up by 1 Row, but stop in Top Row"""
+
+        assert CUU_Y == "\x1b[" "{}" "A"
+        self.write("\x1b[A")
+
+        # Emacs ⌃P
+
+    #
+    # Reply to F1 F2 F9 ...
+    #
+
+    def do_kdata_fn_f1(self) -> None:
+        """Print Lines of main top Help for F1"""
+
+        f1_text = """
+            Shall we play a game?
+
+            F1 - List Games
+            F2 - Conway's Game-of-Life
+            F7 - Puckman
+            F8 - Color Picker
+            F9 - Screen Editor
+
+            ⌃D - Quit
+        """
+
+        f1_text = textwrap.dedent(f1_text).strip()
+
+        self.print()
+        self.print()
+
+        for line in f1_text.splitlines():
+            self.print(line)
+
+        self.print()
+        self.print()
+
+    def do_kdata_fn_f2(self) -> None:
+        """Play Conway's Game-of-Life for F2"""
+
+        tp = self.terminal_proxy
+        with_func_by_str = self.func_by_str
+
+        # Default to Replacing, not Inserting
+
+        assert SM_IRM == "\x1b[" "4h"
+        assert RM_IRM == "\x1b[" "4l"
+
+        irm_stext = tp.read_toggle_shadows("\x1b[4h", stext1="\x1b[4l")
+        restore_inserting_replacing = irm_stext  # maybe empty
+
+        self.do_replacing_start()  # for F2
+
+        # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
+
+        cl = ConwayLife(se=self)
+
+        func_by_str = dict(with_func_by_str)
+        conway_func_by_str = cl.form_conway_func_by_str()
+        func_by_str.update(conway_func_by_str)
+
+        self.func_by_str = func_by_str
+
+        try:
+            cl.play_conway_life()
+        finally:
+            self.func_by_str = with_func_by_str  # replaces
+            self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
+
+    def do_kdata_fn_f7(self) -> None:
+        """Play Puckman"""
+
+        path = pathlib.Path(sys.argv[0])
+        cwd = path.parent
+        xshverb = cwd / "xshverb.py"
+        assert xshverb.exists(), (xshverb,)
+
+        argv = [str(xshverb), "turtling"]
+
+        self.__exit__(*sys.exc_info())
+        subprocess.run(argv)
+        self.__enter__()
+
+        self.print("Goodbye from Puckman")
+
+    def do_kdata_fn_f8(self) -> None:
+        """Print a #555 Color Picker"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        # Split a Landscape Terminal vertically
+
+        (y_height, x_width) = bt.read_y_height_x_width()
+
+        y_frame = 2
+        x_frame = 4
+
+        board_height = y_height - 2 * y_frame
+        board_height -= 1 - (board_height % 2)
+
+        board_width = (x_width - 4 * x_frame) // 2
+        board_width -= 1 - (board_width % 2)
+
+        color_picker_pns.clear()
+
+        # Plot the Left Panel
+
+        ya = Y1 + y_frame
+        yb = ya + board_height - 1
+
+        xa = X1 + x_frame
+        xb = xa + board_width - 1
+
+        left_panel = True
+        if left_panel:
+            color_picker_plot(se=self, ya=ya, xa=xa, yb=yb, xb=xb, dc=1)
+
+        # Plot the Right Panel
+
+        (yc, yd) = (ya, yb)
+
+        xd = x_width - x_frame
+        xc = xd - board_width + 1
+
+        right_panel = True
+        if right_panel:
+            color_picker_plot(se=self, ya=yc, xa=xc, yb=yd, xb=xd, dc=-1)
+
+        #
+
+        self.write("\x1b[m")
+
+        print_gaps = True
+        if print_gaps:
+
+            self.write("\x1b[32100H")
+            self.write("\x1b[A")
+            self.print("(((", end=" ")
+
+            for pn in range(32, 231 + 1):
+                if pn not in color_picker_pns:
+                    self.print(pn, end=" ")
+
+            self.print(")))", end=" ")
+
+    def do_kdata_fn_f9(self) -> None:
+        """Print the many Lines of Screen Writer Help for F9"""
+
+        help_ = textwrap.dedent(SCREEN_WRITER_HELP).strip()
+
+        self.print()
+        self.print()
+
+        for line in help_.splitlines():
+            self.print(line)
+
+        if env_cloud_shell:
+            self.print()
+            self.print("gCloud Shell ignores ⌃M (you must press Return)")
+            self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
+            self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
+            self.print()
+
+            # gCloud Shell has distinct ← ↑ → ↓ and ⌥ ← ↑ → ↓ and ⌃⌥ ← ↑ → ↓
+            # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as slow Esc Esc
+
+            # todo2: gCloud AltIsMeta has ...
+
+        if sys_platform_darwin:
+            self.print()
+
+            # self.print("macOS Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
+
+            self.print("macOS Shell ⌘K clears Screen & Scrollback (but not Top Row)")
+            self.print()  # each ⌘L at Shell erases the last Input & Output
+
+            # macOS Shell has distinct ← ↑ → ↓ and ⌥ ← → and ⇧ ← → and ⇧ Fn ← ↑ → ↓
+            # macOS Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
+
+        self.print()
+
+        # XShVerb F1
+
+        # todo6: ⌃L goes wrong after _f9 scrolls up my default 101x42 MacBook Terminal
+
+        # todo2: Adopt "Keyboard Shortcuts" over "Bindings"
+
+        # todo2: toggle emulations on/off
+        # todo2: toggle tracing input on/off
+        # todo2: show loss of \e7 memory because of emulations
+
+        # todo2: accept lots of quits and movements as per Vim ⌃O & Emacs
+
+    #
+    # Take ⌥ Mouse Release as a call for Read-Eval-Print
+    #
+
+    def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
+        """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
+
+        tp = self.terminal_proxy
+
+        # List the Widgets of the Row
+
+        y_text = tp.read_shadowed_row_y_text(y, default=" ")
+        widget_by_i = self.split_widgets(text=y_text)
+
+        # Find a Widget beneath the Mouse Release
+
+        x_widget = ""
+        wx = -1
+
+        for i, widget in widget_by_i.items():
+            if x in range(1 + i, 1 + i + len(widget) + 1):
+                x_widget = widget
+                wx = X1 + i
+                break
+
+        if not x_widget:
+            self.write("\a")  # for .take_widget_at_yxf_mouse_release
+            return
+
+        # todo8: Vanish the Command Verb typed out and then pushed
+
+        verb = x_widget
+        if x_widget.startswith("<") and x_widget.endswith(">") and (len(x_widget) > len("<>")):
+            verb = x_widget[1:-1]
+
+        vanisher = False  # todo8: do vanish each verb run almost at left of cursor
+        if vanisher:
+            self.vanish_widget_at_yxf(x_widget, y=y, x=wx)
+
+        # Run the Widget at the Mouse Release
+
+        self.take_mouse_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
+
+    def split_widgets(self, text: str) -> dict[int, str]:
+
+        widget_by_i = dict()
+
+        wi = -1
+        text_plus = text + "  "
+        for i, ich in enumerate(text):
+
+            if wi == -1:
+                if ich != " ":
+                    wi = i
+                    widget_by_i[wi] = ich
+
+            elif widget_by_i[wi][0] == "<":
+                widget_by_i[wi] += ich
+                if ich == ">":
+                    wi = -1
+
+            elif text_plus[i] == "<":
+                wi = i
+                widget_by_i[wi] = ich
+
+            else:
+                if text_plus[i:].startswith("  "):
+                    wi = -1
+                else:
+                    widget_by_i[wi] += ich
+
+        return widget_by_i
+
+    def vanish_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
+        """Vanish the Widget at the Mouse"""
+
+        tp = self.terminal_proxy
+
+        assert y >= 1, (y, x, widget)
+        assert x >= 1, (y, x, widget)
+
+        assert BEL == "\a"  # todo7: more complete doc/ comment of Screen Encodings
+        assert BS == "\b"
+        assert DECSC == "\x1b" "7"
+        assert DECRC == "\x1b" "8"
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        assert DCH_X == "\x1b[" "{}" "P"
+        assert RM_IRM == "\x1b[" "4l"
+        assert SM_IRM == "\x1b[" "4h"
+
+        self.write("\x1b7")
+
+        self.write(f"\x1b[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
+        assert self.row_y == y, (self.row_y, y)
+        assert self.column_x == x, (self.column_x, x)
+
+        # Vanish if the Widget is no more than the Verb, unmarked
+
+        irm_stext = tp.read_toggle_shadows("\x1b[4h", stext1="\x1b[4l")
+        if irm_stext == "\x1b[4h":
+
+            self.write(f"\x1b[{len(widget)}P")  # deletes a Verb, while inserting texts
+
+        else:
+            assert (not irm_stext) or (irm_stext == "\x1b[4l"), (irm_stext,)
+
+            self.write(len(widget) * " ")  # erases a Verb, while replacing texts
+            # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
+            self.write(f"\x1b[{y};{x}H")
+
+        self.write("\x1b8")
+
+    def take_mouse_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
+        """Run the Verb at the Mouse Release"""
+
+        # Eval some Keycaps
+
+        if self.mouse_verb_to_write_sdata(verb):
+            return
+
+        # Sample Jabberwocky
+
+        casefold = verb.casefold()
+
+        if casefold == "jabberwocky":
+            splits = Jabberwocky.split()
+            split = random.choice(splits)
+            self.write(split + " ")
+            return
+
+        # Shout out no Verb found
+
+        self.write(repr(verb))
+        self.write("\a")  # for .take_widget_at_yxf
+
+        # todo4: find an Italic that works at ⎋[3M or somewhere
+
+    def mouse_verb_to_write_sdata(self, verb: str) -> bool:
+        """Eval some Keycaps"""
+
+        if self.mouse_verb_to_push_kdata(verb):
+            return True
+
+        if self.mouse_verb_to_write_color_sdata(verb):
+            return True
+
+        if self.mouse_verb_to_write_keycaps_sdata(verb):
+            return True
+
+        return False
+
+    def mouse_verb_to_push_kdata(self, verb: str) -> bool:
+        """Eval a Keycap as 1 Packet of KData"""
+
+        tp = self.terminal_proxy
+        bt = tp.bytes_terminal
+
+        kcap_list = list(_[0] for _ in KCAP_BY_KCHARS.items() if _[-1] == verb)
+        if len(kcap_list) == 1:
+            kdata = kcap_list[0].encode()
+            tbp = TerminalBytePacket(kdata)
+            bt.prefetches.append(tbp)
+            return True
+
+        return False
+
+    def mouse_verb_to_write_keycaps_sdata(self, verb: str) -> bool:
+        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
+
+        splits = verb.split()
+        keycaps = splits[0]
+
+        if not keycaps.startswith("⎋"):
+            return False
+
+        sdata = b""
+        shifting = False
+
+        for ch in keycaps:
+
+            if ch == "⎋":
+                sdata += b"\x1b"
+            elif ch == "␣":  # Spacebar as a single-wide Glyph
+                sdata += b" "
+            elif ch == "⇧":
+                shifting = True
+                continue
+            elif shifting:
+                sdata += ch.encode()
+            else:
+                sdata += ch.lower().encode()
+
+            shifting = False
+
+        # Succeed
+
+        stext = sdata.decode()  # may raise UnicodeDecodeError
+        self.write(stext)
+
+        return True
+
+    def mouse_verb_to_write_color_sdata(self, verb: str) -> bool:
+        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
+
+        splits = verb.split()
+
+        if splits[2:]:
+            if splits[1].casefold() == "on":
+                fverb = splits[0]
+                bverb = splits[2]
+
+                fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
+                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
+                if fg and bg:
+                    self.write(bg.decode())
+                    self.write(fg.decode())
+                    return True
+
+        elif splits[1:]:
+            if splits[0].casefold() == "on":
+                bverb = splits[1]
+
+                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
+                if bg:
+                    self.write(bg.decode())
+                    return True
+
+        else:
+            fverb = splits[0]
+            fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
+            if fg:
+                self.write(fg.decode())
+                return True
+
+        return False
+
+    def verb_to_color_sdata_if(self, verb: str, kind: str) -> bytes:
+        """Eval a Keycap as a Foreground or a Background Color"""
+
+        splits = verb.split()
+        assert kind in ("Foreground", "Background"), (kind,)
+
+        keycaps = splits[0]
+
+        # Eval a 6**3 Color
+
+        if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
+            pn = self.six_cubed_color_verb_to_pn(keycaps)
+            if kind == "Foreground":
+                sdata = f"\x1b[38;5;{pn}m".encode()
+                return sdata
+            else:
+                sdata = f"\x1b[48;5;{pn}m".encode()
+                return sdata
+
+        # Eval a 24-Bit Color
+
+        if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
+            (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
+
+            if not sys_platform_darwin:
+                if kind == "Foreground":
+                    sdata = f"\x1b[38;2;{r};{b};{b}m".encode()
+                    return sdata
+                else:
+                    sdata = f"\x1b[48;2;{r};{g};{b}m".encode()
+                    return sdata
+
+            # Else emulate the 24-Bit Color with a 6**3 Color
+
+            r6 = int((r / 0xFF) * 5)
+            g6 = int((g / 0xFF) * 5)
+            b6 = int((b / 0xFF) * 5)
+
+            pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+
+            if kind == "Foreground":
+                sdata = f"\x1b[38;5;{pn}m".encode()
+                return sdata
+            else:
+                sdata = f"\x1b[48;5;{pn}m".encode()
+                return sdata
+
+        # Else don't succeed
+
+        return b""
+
+    def six_cubed_color_verb_to_pn(self, verb: str) -> int:
+        """Eval a #RGB color"""
+
+        assert verb[0] == "#", (verb,)
+
+        r6 = int(verb[1])
+        g6 = int(verb[2])
+        b6 = int(verb[3])
+
+        assert len(verb) == 4, (verb,)
+
+        assert 0 <= r6 <= 5, (r6, verb)
+        assert 0 <= g6 <= 5, (g6, verb)
+        assert 0 <= b6 <= 5, (b6, verb)
+
+        pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+
+        return pn
+
+    def twenty_four_bit_color_verb_to_r_g_b(self, verb: str) -> tuple[int, int, int]:
+        """Eval a #RRGGBB color"""
+
+        assert verb[0] == "#", (verb,)
+
+        r = int(verb[1:][:2], base=0x10)
+        g = int(verb[3:][:2], base=0x10)
+        b = int(verb[5:][:2], base=0x10)
+
+        assert len(verb) == 7, (verb,)
+
+        return (r, g, b)
+
+
+class TerminalProxy:
+    """Take in Writes to guess what the Screen looks like"""
+
+    bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
+    keyboard_bytes_log: typing.BinaryIO  # .klog  # logs Keyboard Delays & Bytes
+    screen_bytes_log: typing.BinaryIO  # .slog  # logs Screen Delays & Bytes
+
+    row_y: int  # Y places encoded as Southbound across 1 .. Height
+    column_x: int  # X places encoded as Eastbound across 1 .. Width
+    list_str_by_y_x: dict[int, dict[int, list[str]]] = dict()  # shadows the last Write at each Place
+
+    toggles: list[str]  # Replacing/ Inserting/ etc
+    styles: list[str]  # Foreground on Background Colors, etc
+
+    def __init__(self) -> None:
+
+        # Form some things
+
+        bt = BytesTerminal()
 
         klog_path = pathlib.Path("__pycache__/k.keyboard")
         slog_path = pathlib.Path("__pycache__/s.screen")
@@ -315,26 +2272,18 @@ class ScreenEditor:
 
         # Init per se
 
-        self.bytes_terminal = BytesTerminal()
-        self.packets = list()
-        self.arrows = 0
-
+        self.bytes_terminal = bt
         self.keyboard_bytes_log = klog
         self.screen_bytes_log = slog
 
-        self.toggles = list()
-        self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
         self.row_y = -1
         self.column_x = -1
         self.list_str_by_y_x = dict()
 
-        func_by_str = self.form_func_by_str()
-        self.func_by_str = func_by_str
+        self.toggles = list()
+        self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
 
-        loopable_kdata_tuple = self.form_loopable_kdata_tuple()
-        self.loopable_kdata_tuple = loopable_kdata_tuple
-
-    def __enter__(self) -> ScreenEditor:  # -> typing.Self:
+    def __enter__(self) -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
 
         bt = self.bytes_terminal
@@ -399,40 +2348,6 @@ class ScreenEditor:
 
         return tuple(yx_list)
 
-    def print_y_x_text(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
-
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
-
-        self.write(f"\x1b[{y};{x}H")
-        self.write(text)
-
-    def print(self, *args: object, end: str = "\r\n") -> None:
-        """Join the Args by Space, add the End, and write the Encoded Chars"""
-
-        schars = " ".join(str(_) for _ in args)
-        self.write(schars)
-        self.write(end)
-
-    def write(self, text: str) -> None:
-        """Write the Bytes, log them as written, and shadow them"""
-
-        self.write_out(text)
-        self.write_shadows(text)
-
-    def write_out(self, text: str) -> None:
-        """Write the Bytes, and log them as written"""
-
-        schars = text
-        sdata = schars.encode()  # may raise UnicodeEncodeError
-
-        bt = self.bytes_terminal
-        fileno = bt.fileno
-        slog = self.screen_bytes_log
-
-        os.write(fileno, sdata)
-        slog.write(sdata)
-
     #
     # Read from the Shadows
     #
@@ -441,6 +2356,7 @@ class ScreenEditor:
         """Redraw the Screen as shadowed, be that wrong or correct"""
 
         bt = self.bytes_terminal
+
         column_x = self.column_x
         list_str_by_y_x = self.list_str_by_y_x
         row_y = self.row_y
@@ -553,13 +2469,27 @@ class ScreenEditor:
         return ""
 
     #
-    # Write into the Shadows
+    #  Write into the Shadows
     #
+
+    def write_out(self, text: str) -> None:
+        """Write the Bytes, and log them as written"""
+
+        schars = text
+        sdata = schars.encode()  # may raise UnicodeEncodeError
+
+        bt = self.bytes_terminal
+        fileno = bt.fileno
+        slog = self.screen_bytes_log
+
+        os.write(fileno, sdata)
+        slog.write(sdata)
 
     def write_shadows(self, text: str) -> None:
         """Shadow the Screen Panel"""
 
-        (y_height, x_width) = self.bytes_terminal.read_y_height_x_width()
+        bt = self.bytes_terminal
+        (y_height, x_width) = bt.read_y_height_x_width()
 
         # Test Preconditions
 
@@ -661,6 +2591,7 @@ class ScreenEditor:
         """Shadow the Text"""
 
         bt = self.bytes_terminal
+
         list_str_by_y_x = self.list_str_by_y_x
         styles = self.styles
 
@@ -1147,1543 +3078,25 @@ class ScreenEditor:
 
         return "Colorless"
 
-    #
-    # Bind Keyboard Chords to Funcs
-    #
-
-    def form_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
-        """Bind Keycaps to Funcs"""
-
-        func_by_str: dict[str, abc.Callable[[], None]] = {
-            #
-            # 1-Byte 7-Bit C0 Controls
-            #
-            "⌃A": self.do_column_leap_leftmost,  # ⌃A for Emacs
-            "⌃B": self.do_column_left,  # ⌃B for Emacs
-            # "\x03",  # ⌃C
-            "⌃D": self.do_char_delete_here,  # ⌃D for Emacs
-            "⌃E": self.do_column_leap_rightmost,  # ⌃E for Emacs
-            "⌃F": self.do_column_right,  # ⌃F for Emacs
-            # b"\x07",  # ⌃G \a bell-ring
-            # b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
-            # b"\x09",  # ⌃I \t Tab
-            # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
-            "⌃K": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
-            "⌃L": self.do_screen_redraw,  # ⌃L for Vim  # not ⌃L for Emacs a la Vim ⇧H ⇧M ⇧L
-            # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
-            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
-            "⌃N": self.do_row_down,  # ⌃N
-            "⌃O": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
-            "⌃P": self.do_row_up,  # ⌃P
-            "⌃Q": self.do_quote_one_kdata,  # ⌃Q for Emacs
-            # # b"\x12",  # ⌃R
-            # # b"\x13",  # ⌃S
-            # # b"\x14",  # ⌃T
-            # # b"\x15",  # ⌃U
-            "⌃V": self.do_quote_one_kdata,  # ⌃V for Vim
-            # # b"\x17",  # ⌃W
-            # # b"\x18",  # ⌃X
-            # # b"\x19",  # ⌃Y
-            # # b"\x1a",  # ⌃Z
-            # todo2: ⌃X⌃C ⌃X⌃S for Emacs
-            #
-            # Esc and Esc Byte Pairs
-            #
-            # # b"\x1b": self.print_kcaps_plus,  # ⎋
-            #
-            "⎋$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim  # todo4: ⎋⇧$ vs ⎋$
-            "⎋0": self.do_column_leap_leftmost,  # ⎋0 for Vim
-            # # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
-            # # b"\x1b" b"8",  # ⎋8 cursor-revert
-            # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
-            #
-            "⎋⇧A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
-            "⎋⇧C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
-            # # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
-            "⎋⇧D": self.do_row_tail_erase,  # Vim ⇧D
-            # # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
-            # "\x1b" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
-            "⎋⇧H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
-            "⎋⇧L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
-            # # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
-            "⎋⇧M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
-            "⎋⇧O": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
-            "⎋⇧Q": self.do_assert_false,  # ⎋⇧Q for Vim
-            "⎋⇧R": self.do_replacing_start,  # ⎋⇧R for Vim
-            "⎋⇧S": self.do_row_delete_start_inserting,  # ⎋S for Vim
-            "⎋⇧X": self.do_char_delete_left,  # ⎋⇧X for Vim
-            # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
-            #
-            "⎋A": self.do_column_right_inserting_start,  # ⎋A for Vim
-            # # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
-            "⎋H": self.do_column_left,  # ⎋H for Vim
-            "⎋I": self.do_inserting_start,  # ⎋I for Vim
-            "⎋J": self.do_row_down,  # ⎋J for Vim
-            "⎋K": self.do_row_up,  # ⎋K for Vim
-            # # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
-            "⎋L": self.do_column_right,  # ⎋L for Vim
-            "⎋O": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
-            "⎋R": self.do_replacing_one_kdata,  # ⎋R for Vim
-            "⎋S": self.do_char_delete_here_start_inserting,  # ⎋S for Vim
-            "⎋X": self.do_char_delete_here,  # ⎋X for Vim
-            #
-            # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
-            #
-            # # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
-            #
-            # b"\x1b[" b"A",  # ⎋[⇧A ↑
-            # b"\x1b[" b"B",  # ⎋[⇧B ↓
-            # b"\x1b[" b"C",  # ⎋[⇧C →
-            # b"\x1b[" b"D",  # ⎋[⇧D ←
-            # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
-            # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
-            #
-            "F7": self.do_kdata_fn_f7,  # FnF7
-            "F8": self.do_kdata_fn_f8,  # FnF8
-            "F9": self.do_kdata_fn_f9,  # FnF9
-            #
-            # Ss3 Esc Byte Sequences
-            #
-            # # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
-            #
-            "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
-            "F2": self.do_kdata_fn_f2,  # FnF2
-            #
-            # Printable but named Characters
-            #
-            "Spacebar": self.do_write_spacebar,  # Spacebar
-            #
-            # The Last 1-Byte 7-Bit Control, which looks lots like a C0 Control
-            #
-            "Delete": self.do_char_delete_left,  # ⌃? Delete  # todo2: Delete Row if at 1st Column
-        }
-
-        return func_by_str
-
-        # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
-        #
-        # items = list(func_by_str.items())
-        #
-        # for (kstr, func) in items:
-        #     if len(kstr) == 2:
-        #         if kstr.startswith("\x1b"):
-        #             alt_kstr = b"\x15" + kdata[1:]  # ⌃O
-        #
-        #             assert alt_kstr not in func_by_str.keys()
-        #             func_by_str[alt_kstr] = func  # todo4: need Chord Sequences to do Vim I ⌃O
-
-    def form_loopable_kdata_tuple(self) -> tuple[bytes, ...]:
-        """List Keyboard Encodings that run well when looped back to Screen"""
-
-        d = (
-            b"\x07",  # ⌃G \a bell-ring
-            b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
-            b"\x09",  # ⌃I \t Tab
-            b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
-            # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
-            #
-            # b"\x1b": self.print_kcaps_plus,  # ⎋
-            #
-            # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
-            # b"\x1b" b"8",  # ⎋8 cursor-revert
-            # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
-            # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
-            # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
-            # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
-            # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
-            #
-            # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
-            #
-            # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
-            b"\x1b[" b"A",  # ⎋[⇧A ↑
-            b"\x1b[" b"B",  # ⎋[⇧B ↓
-            b"\x1b[" b"C",  # ⎋[⇧C →
-            b"\x1b[" b"D",  # ⎋[⇧D ←
-            # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
-            b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
-        )
-
-        loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please PyLance
-
-        return loopable_kdata_tuple
-
-        # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
-
-        # todo2: bind Keyboard Chord Sequences, no longer just Keyboard Chords
-        # todo2: bind ⌃C ⇧O for Emacs overwrite-mode, or something
-        # todo2: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
-        # todo2: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
-
-    #
-    # Loop Keyboard back to Screen, but as whole Packets, & with some emulations
-    #
-
-    def play_screen_editor(self) -> None:
-        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
-
-        bt = self.bytes_terminal
-
-        # Tell our Shadow where our next Write will land
-
-        (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for .play_screen_editor
-        self.column_x = column_x  # for .play_screen_editor
-
-        # Prompt at Launch
-
-        assert EL_PS == "\x1b[" "{}" "K"
-
-        self.write("\x1b[K")
-        self.print("On #345")  # todo9: next experiment
-        self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
-        self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
-        self.print()
-
-        # Walk one step after another
-
-        while True:
-            try:
-                self.read_eval_print_once()
-            except SystemExit:
-                break
-
-    def read_eval_print_once(self) -> None:
-        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
-
-        packets = self.packets
-
-        # Reply to each Keyboard Chord Input, till quit
-
-        # todo2: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
-        # todo2: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
-
-        t0 = time.time()
-        (tbp, n) = self.read_some_byte_packets()
-        t1 = time.time()
-        t1t0 = t1 - t0
-
-        packets.append(tbp)
-
-        arrows = self.arrows
-        tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once")
-        assert tbp, (tbp, n)  # because .timeout=None
-
-        kdata = tbp.to_bytes()
-        assert kdata, (kdata,)  # because .timeout=None
-
-        self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
-
-        if kdata == b"\x04":  # ⌃D
-            raise SystemExit()
-
-        # todo2: Read Str not Bytes from Keyboard, and then List[Str]
-        # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
-
-    def klog_to_kcount(self) -> int:
-        """Count how many times the same Keyboard Chord struck"""
-
-        packets = self.packets
-
-        depth = 0
-        kdata = packets[-1].to_bytes()
-        for tbp in reversed(packets):
-            if tbp.to_bytes() != kdata:  # todo: equality between TerminalBytePacket's
-                break
-            depth += 1
-
-        return depth  # fed by 'packets.append(tbp)' inside .read_eval_print_once
-
-    def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
-        """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
-
-        func_by_str = self.func_by_str
-        loopable_kdata_tuple = self.loopable_kdata_tuple
-        klog = self.keyboard_bytes_log
-
-        # Append to our __pycache__/k.keyboard Keylogger Keylogging File
-
-        kdata = tbp.to_bytes()
-        assert kdata, (kdata,)  # because .timeout=None
-
-        klog.write(kdata)
-
-        # Call 1 Func Def by Keycaps
-
-        kcaps = kdata_to_kcaps(kdata)
-
-        if kcaps in func_by_str.keys():
-            func = func_by_str[kcaps]
-            tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
-
-            func()  # may raise SystemExit
-
-            return
-
-        if kdata in loopable_kdata_tuple:
-            tprint(f"{kdata=} # do_write_kdata_as_sdata reply_to_kdata")  # not .__qualname__
-
-            self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
-
-            return
-
-        # Write the KData, but as Keycaps, when it is a Keycap but not a Func Def
-
-        kchars = kdata.decode()  # may raise UnicodeDecodeError
-        if kchars in KCAP_BY_KCHARS.keys():  # already handled above
-            tprint(f"Keycap {kchars=} {str(tbp)=}   # reply_to_kdata")
-
-            if (n == 1) or (tbp.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
-
-                self.print_kcaps_plus(tbp)
-
-                return
-
-        # Pass through 1 Unicode Character
-
-        if tbp.text:
-            tprint(f"tbp.text {kdata=}  # reply_to_kdata")
-
-            self.write(tbp.text)
-
-            return
-
-            # todo2: stop wrongly passing through multibyte Control Characters
-
-        # Pass-Through, or emulate, the famous Control Byte Sequences
-
-        if self.take_tbp_n_kdata_if(tbp, n=n, kdata=kdata):
-
-            return
-
-        # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
-
-        tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
-        self.print_kcaps_plus(tbp)
-
-    def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
-        """Emulate the KData Control Sequence and return it, else return False"""
-
-        # Emulate famous Esc Byte Pairs
-
-        if self._take_csi_row_1_column_1_leap_if_(kdata):  # ⎋L
-            return True
-
-        # Emulate famous Csi Control Byte Sequences,
-        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
-        # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-
-        csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
-        csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
-
-        csi_famous = csi and tbp.tail and (tbp.tail in csi_timeless_tails)
-        if (n > 1) and csi and tbp.tail and (tbp.tail in csi_slow_tails):
-            csi_famous = True
-
-        # Shrug off a Mouse Press if quick
-        # Reply to a Mouse Release, no matter if slow or quick
-        # And kick back on anything else that's not Csi Famous
-
-        if not csi_famous:
-            if self._take_csi_mouse_press_if_(tbp, n=n):
-                return True
-            if self._take_csi_mouse_release_if_(tbp):
-                return True
-
-            return False
-
-        # Emulate the Csi Famous that don't work so well when passed through
-
-        if self._take_csi_tab_right_leap_if_(tbp):  # ⎋[{}⇧I
-            return True
-
-        if self._take_csi_rows_up_if_(tbp):  # ⎋[{}⇧S
-            return True
-
-        if self._take_csi_rows_down_if_(tbp):  # ⎋[{}⇧T
-            return True
-
-        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
-            return True
-
-        if tbp.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
-            self._take_csi_cols_insert_if_(tbp)
-            return True
-
-        if tbp.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
-            self._take_csi_cols_delete_if_(tbp)
-            return True
-
-        # Pass-through the .csi_slow_tails when slow.
-        # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
-
-        tprint(f"Pass-through {kdata=} {str(tbp)=}   # take_tbp_n_kdata_if")
-        self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
-
-        return True
-
-    #
-    # Define some emulations
-    #
-
-    def print_kcaps_plus(self, tbp: TerminalBytePacket) -> None:
-        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
-
-        kdata = tbp.to_bytes()
-        assert kdata, (kdata,)
-
-        kcaps = kdata_to_kcaps(kdata)
-        self.print(kcaps, end=" ")
-
-    def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧~ cols-delete"""
-
-        bt = self.bytes_terminal
-
-        assert DCH_X == "\x1b[" "{}" "P"
-        assert VPA_Y == "\x1b[" "{}" "d"
-        assert DECDC_X == "\x1b[" "{}" "'~"
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and ((tbp.back + tbp.tail) == b"'~")):
-            return False
-
-        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
-
-        pn = int(tbp.neck) if tbp.neck else PN1
-        y_height = bt.read_y_height()
-
-        (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for ._take_csi_cols_delete_if_
-        self.column_x = column_x  # for ._take_csi_cols_delete_if_
-
-        for y in range(1, y_height + 1):
-            self.write(f"\x1b[{y}d")  # for .columns_delete_n
-            self.write(f"\x1b[{pn}P")  # for .columns_delete_n
-        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
-
-        return True
-
-        # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
-
-    def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧} cols-insert"""
-
-        bt = self.bytes_terminal
-
-        assert ICH_X == "\x1b[" "{}" "@"
-        assert VPA_Y == "\x1b[" "{}" "d"
-        assert DECDC_X == "\x1b[" "{}" "'~"
-        assert DECIC_X == "\x1b[" "{}" "'}}"
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and ((tbp.back + tbp.tail) == b"'}")):
-            return False
-
-        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
-
-        pn = int(tbp.neck) if tbp.neck else PN1
-        y_height = bt.read_y_height()
-
-        (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for ._take_csi_cols_insert_if_
-        self.column_x = column_x  # for ._take_csi_cols_insert_if_
-
-        for y in range(1, y_height + 1):
-            self.write(f"\x1b[{y}d")  # for .columns_delete_n
-            self.write(f"\x1b[{pn}@")  # for .columns_delete_n
-        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
-
-        return True
-
-        # macOS Terminal & gCloud Shell lack ⎋['⇧} cols-insert
-
-    def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
-        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
-
-        assert CUP_Y1_X1 == "\x1b[" "H"
-
-        if kdata != b"\x1b" b"l":
-            return False
-
-        tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
-
-        self.write("\x1b[H")  # for ⎋L
-
-        return True
-
-        # gCloud Shell lacks macOS ⎋L
-
-    def _take_csi_mouse_press_if_(self, tbp: TerminalBytePacket, n: int) -> bool:
-        """Shrug off a Mouse Press if quick"""
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if (n == 1) and csi and tbp.tail and (tbp.tail == b"M"):
-            tprint("# _take_csi_mouse_press_if_")
-            return True  # drops first 1/2 or 2/3 of Sgr Mouse
-
-        return False
-
-    def _take_csi_mouse_release_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Reply to a Mouse Release, no matter if slow or quick"""
-
-        # Eval the Sgr Mouse Report
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and tbp.tail and (tbp.tail == b"m")):
-            return False
-
-        splits = tbp.neck.removeprefix(b"<").split(b";")
-        assert len(splits) == 3, (splits, tbp.neck, tbp)
-        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
-
-        tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
-
-        # Decode f = 0b⌃⌥⇧00
-
-        Basic_0 = 0b00000
-
-        Shift_4 = 0b00100
-        Option_8 = 0b01000
-        Control_16 = 0b10000
-
-        assert (f & ~(Shift_4 | Option_8 | Control_16)) == 0, (hex(f),)
-
-        # Dispatch ⌥ Mouse Release
-
-        if f in (Basic_0, Option_8):
-
-            self.take_widget_at_yxf_mouse_release(y, x=x, f=f)
-
-            return True
-
-        # Reply to Shifting or no Shifting at Mouse Release
-
-        if f == 0:
-            self.write("*")  # unreached when f == 0 because Code far above
-
-        if f & Control_16:
-            self.write("⌃")
-        if f & Option_8:
-            self.write("⌥")  # unreached when f == 8 because Code far above
-        if f & Shift_4:
-            self.write("⇧")
-
-        return True
-
-        # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
-
-    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
-        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
-
-        assert VPA_Y == "\x1b[" "{}" "d"
-
-        if kdata != b"\x1b[d":
-            return False
-
-        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
-
-        self.write("\x1b[1d")  # carefully not empty Parameters via "\x1b[d"
-
-        return True
-
-        # gCloud Shell needs ⎋[1D for ⎋[D
-
-    def _take_csi_rows_down_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate Scroll Down [Insert North Lines]"""
-
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
-
-        assert CUU_Y == "\x1b[" "{}" "A"
-        assert IL_Y == "\x1b[" "{}" "L"
-        assert SD_Y == "\x1b[" "{}" "T"
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"T")):
-            return False
-
-        pn = int(tbp.neck) if tbp.neck else PN1
-
-        self.write("\x1b7")
-        self.write("\x1b[32100A")
-        self.write(f"\x1b[{pn}L")
-        self.write("\x1b8")
-
-        return True
-
-        # gCloud Shell lacks macOS ⎋[{}⇧T
-
-    def _take_csi_rows_up_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate Scroll Up [Insert South Lines]"""
-
-        assert LF == "\n"
-
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
-
-        assert CUD_Y == "\x1b[" "{}" "B"
-        assert SU_Y == "\x1b[" "{}" "S"
-        assert _PN_MAX_32100_ == 32100
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"S")):
-            return False
-
-        pn = int(tbp.neck) if tbp.neck else PN1
-
-        self.write("\x1b7")
-        self.write("\x1b[32100B")
-        self.write(pn * "\n")
-        self.write("\x1b8")
-
-        return True
-
-        # gCloud Shell lacks macOS ⎋[{}⇧S
-
-    def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
-        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
-
-        bt = self.bytes_terminal
-        column_x = self.column_x
-
-        x_width = bt.read_x_width()
-
-        assert HT == "\t"
-        assert CHA_X == "\x1b[" "{}" "G"
-        assert CHT_X == "\x1b[" "{}" "I"
-
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"I")):
-            return False
-
-        tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
-
-        pn = int(tbp.neck) if tbp.neck else PN1
-        assert pn >= 1, (pn,)
-
-        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
-        x = min(x_width, tab_stop_n)
-        self.write(f"\x1b[{x}G")  # does Not fill with Background Color
-
-        return True
-
-        # gCloud Shell lacks ⎋[ {}I
-
-    def do_write_cr_lf(self) -> None:
-        """Write CR LF"""
-
-        assert CR == "\r"
-        assert LF == "\n"
-
-        self.write("\r\n")
-
-        # todo3: Emacs ⌃M and ⌃K need the Rows shadowed, as does Vim I ⌃M
-        # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
-
-    #
-    #
-    #
-
-    def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
-        """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
-
-        arrows = self.arrows
-        bt = self.bytes_terminal
-
-        # Count out a rapid burst of >= 2 Arrows
-
-        arrows_timeout = 0.010
-
-        n = 1
-
-        t0 = time.time()
-
-        if not arrows:
-            tbp = bt.read_byte_packet(timeout=None)
-        else:
-            tbp = bt.read_byte_packet(timeout=arrows_timeout)
-            if not tbp:
-                self.arrows = 0  # written only by Init & this Def
-
-                tbp = self.read_arrows_as_byte_packet()
-                assert tbp, (tbp,)
-
-                return (tbp, n)
-
-        t1 = time.time()
-
-        kdata = tbp.to_bytes()
-        t1t0 = t1 - t0
-
-        if kdata not in (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D"):
-            self.arrows = 0  # written only by Init & this Def
-        elif t1t0 >= arrows_timeout:
-            self.arrows = 0  # written only by Init & this Def
-        else:
-            self.arrows += 1
-
-        while (not tbp.text) and (not tbp.closed) and (not bt.extras):
-
-            kdata = tbp.to_bytes()
-            # if kdata in (b"\x1b", b"\x1bO", b"\x1b[", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b["):
-            if kdata == b"\x1bO":  # ⎋⇧O for Vim
-                break
-
-            n += 1
-            bt.close_byte_packet_if(tbp, timeout=None)
-
-        # Succeed
-
-        return (tbp, n)
-
-        # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
-
-    def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
-        """Take Slow-after-Arrow-Burst as a ⌥ Mouse Release, with never a Press"""
-
-        bt = self.bytes_terminal
-
-        (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for .read_arrows_as_byte_packet
-        self.column_x = column_x  # for .read_arrows_as_byte_packet
-
-        option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
-        ktext = f"\x1b[<{option_f};{column_x};{row_y}m"
-        kdata = ktext.encode()
-
-        tbp = TerminalBytePacket(kdata)
-
-        return tbp
-
-        # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
-        # todo6: Debug why Arrow Burst buttons after the first frequently don't work, if still so?
-
-    def do_write_spacebar(self) -> None:
-        """Write 1 Space"""
-
-        self.write(" ")
-
-    def do_write_kdata_as_sdata(self, kdata: bytes) -> None:
-        """Write the Keyboard Bytes looped back to the Screen"""
-
-        sdata = kdata
-        stext = sdata.decode()  # may raise UnicodeDecodeError
-
-        self.write(stext)
-
-    def do_replacing_one_kdata(self) -> None:
-        """Start replacing, quote 1 Keyboard Chord, then start inserting"""
-
-        self.do_replacing_start()  # Vim ⇧R
-        self.do_quote_one_kdata()  # Emacs ⌃Q  # Vim ⌃V
-        self.do_inserting_start()  # Vim I
-
-        # Vim R
-
-    def do_quote_one_kdata(self) -> None:
-        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
-
-        (tbp, n) = self.read_some_byte_packets()
-
-        kdata = tbp.to_bytes()
-        self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
-
-        # Emacs ⌃Q  # Vim ⌃V
-
-    def do_assert_false(self) -> None:
-        """Assert False"""
-
-        assert False
-
-        # Vim ⇧Q  # (traditionally swaps Ex Key Bindings in place of Vim Key Bindings)
-
-    def do_raise_system_exit(self) -> None:
-        """Raise SystemExit"""
-
-        raise SystemExit()
-
-        # Emacs ⎋ X revert-buffer Return ⌃X ⌃C
-        # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
-        # Vim ⇧Z⇧Q
-
-    #
-    # Reply to Emacs & Vim Keyboard Chords
-    #
-
-    def do_column_left(self) -> None:
-        """Go left by 1 Column"""
-
-        assert BS == "\b"
-        self.write("\b")
-
-        # Emacs Delete
-
-    def do_column_right(self) -> None:
-        """Go right by 1 Column"""
-
-        assert CUF_X == "\x1b[" "{}" "C"
-        self.write("\x1b[C")
-
-        # Emacs ⌃F
-
-    def do_column_right_inserting_start(self) -> None:
-        """Insert 1 Space at the Cursor, then go right by 1 Column"""
-
-        self.do_column_right()  # Vim L
-        self.do_inserting_start()  # Vim I
-
-        # Vim A = Vim L I
-
-        # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
-
-    def do_char_delete_here(self) -> None:
-        """Delete the Character beneath the Cursor"""
-
-        assert DCH_X == "\x1b[" "{}" "P"
-        self.write("\x1b[P")
-
-        # Emacs ⌃D  # Vim X
-
-    def do_char_delete_here_start_inserting(self) -> None:
-        """Delete the Character beneath the Cursor, and Start Inserting"""
-
-        self.do_char_delete_here()  # Emacs ⌃D  # Vim X
-        self.do_inserting_start()  # Vim I
-
-        # Vim S = Vim X I
-
-    def do_char_delete_left(self) -> None:
-        """Delete the Character at left of the Cursor"""
-
-        assert BS == "\b"
-        assert DCH_X == "\x1b[" "{}" "P"
-
-        x = self.bytes_terminal.read_column_x()
-        self.column_x = x
-
-        if x > 1:
-            self.write("\b")
-            self.write("\x1b[P")
-
-        # Emacs Delete  # Vim ⇧X
-
-        # todo2: Show .do_char_delete_left bouncing off the Left Edge
-
-    def do_column_leap_leftmost(self) -> None:
-        """Leap to the Leftmost Column"""
-
-        assert CR == "\r"
-        self.write("\r")
-
-        # Emacs ⌃A  # Vim 0
-
-    def do_column_leap_rightmost(self) -> None:
-        """Leap to the Rightmost Column"""
-
-        assert CUF_X == "\x1b[" "{}" "C"
-        assert _PN_MAX_32100_ == 32100
-        self.write("\x1b[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
-
-        # todo3: Leap to Rightmost Shadow, if Row Shadowed
-
-        # Emacs ⌃E  # Vim ⇧$
-
-    def do_column_leap_rightmost_inserting_start(self) -> None:
-        """Leap to the Rightmost Column, and Start Inserting"""
-
-        self.do_column_leap_rightmost()  # Emacs ⌃E  # Vim ⇧$
-        self.do_inserting_start()  # Vim I
-
-        # Vim ⇧A = Vim ⇧$ I
-
-    def do_inserting_start(self) -> None:
-        """Start Inserting Characters at the Cursor"""
-
-        assert SM_IRM == "\x1b[" "4h"
-        self.write("\x1b[4h")
-
-        # Vim I
-
-        # todo2: Show Inserting while Inserting
-
-    def do_replacing_start(self) -> None:
-        """Start Replacing Characters at the Cursor"""
-
-        assert RM_IRM == "\x1b[" "4l"
-        self.write("\x1b[4l")
-
-        # Vim ⇧R
-
-        # todo2: Show Replacing while Replacing
-
-    def do_row_delete_start_inserting(self) -> None:
-        """Empty the Row beneath the Cursor, and Start Inserting"""
-
-        self.do_column_leap_leftmost()  # Emacs ⌃A  # Vim 0
-        self.do_row_tail_erase()  # Vim ⇧D
-        self.do_inserting_start()  # Vim I
-
-        # could be coded as ⎋[2K like a .do_row_tail_erase but without moving the Cursor
-
-        # Vim ⇧S = Vim 0 D I
-
-    def do_row_down(self) -> None:
-        """Go down by 1 Row, but stop in last Row"""
-
-        assert CUD_Y == "\x1b[" "{}" "B"
-        self.write("\x1b[B")
-
-        # Emacs ⌃N
-
-    def do_row_down_insert_inserting_start(self) -> None:
-        """Insert 1 Row below the Cursor"""
-
-        self.do_row_down()  # Vim J
-        self.do_row_insert_inserting_start()  # Vim ⇧O
-
-        # Vim O = J ⇧O  # despite ⎋O collides with SS3
-
-    def do_row_insert_inserting_start(self) -> None:
-
-        self.do_row_insert()  # Emacs ⌃O when leftmost
-        self.do_column_leap_leftmost()  # Emacs ⌃A  # Vim 0
-        self.do_inserting_start()  # Vim I
-
-        # Vim ⇧O = Emacs ⌃A ⌃O + Vim I
-
-    def do_row_insert(self) -> None:
-        """Insert 1 Row above the Cursor"""
-
-        assert IL_Y == "\x1b[" "{}" "L"
-        self.write("\x1b[L")
-
-        # Emacs ⌃O when leftmost
-
-    def do_row_leap_first_column_leftmost(self) -> None:
-        """Leap to the Leftmost Column of the First Row"""
-
-        depth = self.klog_to_kcount()
-
-        bt = self.bytes_terminal
-
-        x_width = bt.read_x_width()
-        mid_width = (x_width // 2) + (x_width % 2)
-
-        assert CUP_Y1_X1 == "\x1b[" "H"
-
-        if (depth % 3) == 1:
-            self.write("\x1b[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-        elif (depth % 3) == 2:
-            x = mid_width
-            self.write(f"\x1b[1;{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-        else:
-            self.write("\x1b[1;31200H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-
-        if (depth % 3) == 1:
-            (y, x) = (Y1, X1)  # todo: send "H" in place of "1;1H"
-        elif (depth % 3) == 2:
-            (y, x) = (Y1, mid_width)
-        else:
-            (y, x) = (Y1, 31200)
-
-        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-        # Vim ⇧H
-
-        # todo3: Leap to First Shadow Row, if Column Shadowed
-
-    def do_row_leap_last_column_leftmost(self) -> None:
-        """Leap to the Leftmost Column of the Last Row"""
-
-        depth = self.klog_to_kcount()
-
-        bt = self.bytes_terminal
-
-        x_width = bt.read_x_width()
-        mid_width = (x_width // 2) + (x_width % 2)
-
-        assert _PN_MAX_32100_ == 32100
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
-
-        if (depth % 3) == 1:
-            (y, x) = (32100, X1)  # todo: send "H" in place of ";1H"
-        elif (depth % 3) == 2:
-            (y, x) = (32100, mid_width)
-        else:
-            (y, x) = (32100, 31200)
-
-        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
-
-        # todo3: Leap to Last Shadow Row, if Column Shadowed
-
-        # Vim ⇧L
-
-    def do_row_leap_middle_column_leftmost(self) -> None:
-        """Leap to the Leftmost Column of the Middle Row"""
-
-        depth = self.klog_to_kcount()
-
-        bt = self.bytes_terminal
-
-        y_height, x_width = bt.read_y_height_x_width()
-        mid_height = (y_height // 2) + (y_height % 2)
-        mid_width = (x_width // 2) + (x_width % 2)
-
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
-        assert _PN_MAX_32100_ == 32100
-
-        if (depth % 3) == 1:
-            (y, x) = (mid_height, X1)  # todo: send "H" in place of ";1H"
-        elif (depth % 3) == 2:
-            (y, x) = (mid_height, mid_width)
-        else:
-            (y, x) = (mid_height, 31200)
-
-        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
-
-        # Vim ⇧M
-
-    def do_row_tail_erase(self) -> None:
-        """Erase from the Cursor to the Tail of the Row"""
-
-        assert EL_PS == "\x1b[" "{}" "K"
-        self.write("\x1b[K")
-
-        # Vim ⇧D  # Emacs ⌃K when not rightmost
-
-    def do_row_tail_erase_inserting_start(self) -> None:
-        """Erase from the Cursor to the Tail of the Row, and Start Inserting"""
-
-        self.do_row_tail_erase()  # Vim ⇧D  # Emacs ⌃K when not rightmost
-        self.do_inserting_start()  # Vim I
-
-        # Vim ⇧C = # Vim ⇧D I
-
-    def do_row_up(self) -> None:
-        """Go up by 1 Row, but stop in Top Row"""
-
-        assert CUU_Y == "\x1b[" "{}" "A"
-        self.write("\x1b[A")
-
-        # Emacs ⌃P
-
-    #
-    # Reply to F1 F2 F9 ...
-    #
-
-    def do_kdata_fn_f1(self) -> None:
-        """Print Lines of main top Help for F1"""
-
-        f1_text = """
-            Shall we play a game?
-
-            F1 - List Games
-            F2 - Conway's Game-of-Life
-            F7 - Puckman
-            F8 - Color Picker
-            F9 - Screen Editor
-
-            ⌃D - Quit
-        """
-
-        f1_text = textwrap.dedent(f1_text).strip()
-
-        self.print()
-        self.print()
-
-        for line in f1_text.splitlines():
-            self.print(line)
-
-        self.print()
-        self.print()
-
-    def do_kdata_fn_f2(self) -> None:
-        """Play Conway's Game-of-Life for F2"""
-
-        with_func_by_str = self.func_by_str
-
-        # Default to Replacing, not Inserting
-
-        assert SM_IRM == "\x1b[" "4h"
-        assert RM_IRM == "\x1b[" "4l"
-
-        irm_stext = self.read_toggle_shadows("\x1b[4h", stext1="\x1b[4l")
-        restore_inserting_replacing = irm_stext  # maybe empty
-
-        self.do_replacing_start()  # for F2
-
-        # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
-
-        cl = ConwayLife(se=self)
-
-        func_by_str = dict(with_func_by_str)
-        conway_func_by_str = cl.form_conway_func_by_str()
-        func_by_str.update(conway_func_by_str)
-
-        self.func_by_str = func_by_str
-
-        try:
-            cl.play_conway_life()
-        finally:
-            self.func_by_str = with_func_by_str  # replaces
-            self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
-
-    def do_kdata_fn_f7(self) -> None:
-        """Play Puckman"""
-
-        path = pathlib.Path(sys.argv[0])
-        cwd = path.parent
-        xshverb = cwd / "xshverb.py"
-        assert xshverb.exists(), (xshverb,)
-
-        argv = [str(xshverb), "turtling"]
-
-        self.__exit__(*sys.exc_info())
-        subprocess.run(argv)
-        self.__enter__()
-
-    def do_kdata_fn_f8(self) -> None:
-        """Print a #555 Color Picker"""
-
-        se = self
-        bt = self.bytes_terminal
-
-        # Split a Landscape Terminal vertically
-
-        (y_height, x_width) = bt.read_y_height_x_width()
-
-        y_frame = 2
-        x_frame = 4
-
-        board_height = y_height - 2 * y_frame
-        board_height -= 1 - (board_height % 2)
-
-        board_width = (x_width - 4 * x_frame) // 2
-        board_width -= 1 - (board_width % 2)
-
-        color_picker_pns.clear()
-
-        # Plot the Left Panel
-
-        ya = Y1 + y_frame
-        yb = ya + board_height - 1
-
-        xa = X1 + x_frame
-        xb = xa + board_width - 1
-
-        left_panel = True
-        if left_panel:
-            color_picker_plot(se, ya=ya, xa=xa, yb=yb, xb=xb, dc=1)
-
-        # Plot the Right Panel
-
-        (yc, yd) = (ya, yb)
-
-        xd = x_width - x_frame
-        xc = xd - board_width + 1
-
-        right_panel = True
-        if right_panel:
-            color_picker_plot(se, ya=yc, xa=xc, yb=yd, xb=xd, dc=-1)
-
-        #
-
-        self.write("\x1b[m")
-
-        print_gaps = True
-        if print_gaps:
-
-            self.write("\x1b[32100H")
-            self.write("\x1b[A")
-            self.print("(((", end=" ")
-
-            for pn in range(32, 231 + 1):
-                if pn not in color_picker_pns:
-                    self.print(pn, end=" ")
-
-            self.print(")))", end=" ")
-
-    def do_kdata_fn_f9(self) -> None:
-        """Print the many Lines of Screen Writer Help for F9"""
-
-        help_ = textwrap.dedent(SCREEN_WRITER_HELP).strip()
-
-        self.print()
-        self.print()
-
-        for line in help_.splitlines():
-            self.print(line)
-
-        if env_cloud_shell:
-            self.print()
-            self.print("gCloud Shell ignores ⌃M (you must press Return)")
-            self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
-            self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
-            self.print()
-
-            # gCloud Shell has distinct ← ↑ → ↓ and ⌥ ← ↑ → ↓ and ⌃⌥ ← ↑ → ↓
-            # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as slow Esc Esc
-
-            # todo2: gCloud AltIsMeta has ...
-
-        if sys_platform_darwin:
-            self.print()
-
-            # self.print("macOS Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
-
-            self.print("macOS Shell ⌘K clears Screen & Scrollback (but not Top Row)")
-            self.print()  # each ⌘L at Shell erases the last Input & Output
-
-            # macOS Shell has distinct ← ↑ → ↓ and ⌥ ← → and ⇧ ← → and ⇧ Fn ← ↑ → ↓
-            # macOS Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
-
-        self.print()
-
-        # XShVerb F1
-
-        # todo6: ⌃L goes wrong after _f9 scrolls up my default 101x42 MacBook Terminal
-
-        # todo2: Adopt "Keyboard Shortcuts" over "Bindings"
-
-        # todo2: toggle emulations on/off
-        # todo2: toggle tracing input on/off
-        # todo2: show loss of \e7 memory because of emulations
-
-        # todo2: accept lots of quits and movements as per Vim ⌃O & Emacs
-
-    #
-    # Take ⌥ Mouse Release as a call for Read-Eval-Print
-    #
-
-    def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
-        """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
-
-        # List the Widgets of the Row
-
-        y_text = self.read_shadowed_row_y_text(y, default=" ")
-        widget_by_i = self.split_widgets(text=y_text)
-
-        # Find a Widget beneath the Mouse Release
-
-        x_widget = ""
-        wx = -1
-
-        for i, widget in widget_by_i.items():
-            if x in range(1 + i, 1 + i + len(widget) + 1):
-                x_widget = widget
-                wx = X1 + i
-                break
-
-        if not x_widget:
-            self.write("\a")  # for .take_widget_at_yxf_mouse_release
-            return
-
-        # todo8: Vanish the Command Verb typed out and then pushed
-
-        verb = x_widget
-        if x_widget.startswith("<") and x_widget.endswith(">") and (len(x_widget) > len("<>")):
-            verb = x_widget[1:-1]
-
-        vanisher = False  # todo8: do vanish each verb run almost at left of cursor
-        if vanisher:
-            self.vanish_widget_at_yxf(x_widget, y=y, x=wx)
-
-        # Run the Widget at the Mouse Release
-
-        self.take_mouse_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
-
-    def split_widgets(self, text: str) -> dict[int, str]:
-
-        widget_by_i = dict()
-
-        wi = -1
-        text_plus = text + "  "
-        for i, ich in enumerate(text):
-
-            if wi == -1:
-                if ich != " ":
-                    wi = i
-                    widget_by_i[wi] = ich
-
-            elif widget_by_i[wi][0] == "<":
-                widget_by_i[wi] += ich
-                if ich == ">":
-                    wi = -1
-
-            elif text_plus[i] == "<":
-                wi = i
-                widget_by_i[wi] = ich
-
-            else:
-                if text_plus[i:].startswith("  "):
-                    wi = -1
-                else:
-                    widget_by_i[wi] += ich
-
-        return widget_by_i
-
-    def vanish_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
-        """Vanish the Widget at the Mouse"""
-
-        assert y >= 1, (y, x, widget)
-        assert x >= 1, (y, x, widget)
-
-        assert BEL == "\a"  # todo7: more complete doc/ comment of Screen Encodings
-        assert BS == "\b"
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        assert DCH_X == "\x1b[" "{}" "P"
-        assert RM_IRM == "\x1b[" "4l"
-        assert SM_IRM == "\x1b[" "4h"
-
-        self.write("\x1b7")
-
-        self.write(f"\x1b[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
-        assert self.row_y == y, (self.row_y, y)
-        assert self.column_x == x, (self.column_x, x)
-
-        # Vanish if the Widget is no more than the Verb, unmarked
-
-        irm_stext = self.read_toggle_shadows("\x1b[4h", stext1="\x1b[4l")
-        if irm_stext == "\x1b[4h":
-
-            self.write(f"\x1b[{len(widget)}P")  # deletes a Verb, while inserting texts
-
-        else:
-            assert (not irm_stext) or (irm_stext == "\x1b[4l"), (irm_stext,)
-
-            self.write(len(widget) * " ")  # erases a Verb, while replacing texts
-            # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
-            self.write(f"\x1b[{y};{x}H")
-
-        self.write("\x1b8")
-
-    def take_mouse_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
-        """Run the Verb at the Mouse Release"""
-
-        # Eval some Keycaps
-
-        if self.mouse_verb_to_write_sdata(verb):
-            return
-
-        # Sample Jabberwocky
-
-        casefold = verb.casefold()
-
-        if casefold == "jabberwocky":
-            splits = Jabberwocky.split()
-            split = random.choice(splits)
-            self.write(split + " ")
-            return
-
-        # Shout out no Verb found
-
-        self.write(repr(verb))
-        self.write("\a")  # for .take_widget_at_yxf
-
-        # todo4: find an Italic that works at ⎋[3M or somewhere
-
-    def mouse_verb_to_write_sdata(self, verb: str) -> bool:
-        """Eval some Keycaps"""
-
-        if self.mouse_verb_to_push_kdata(verb):
-            return True
-
-        if self.mouse_verb_to_write_color_sdata(verb):
-            return True
-
-        if self.mouse_verb_to_write_keycaps_sdata(verb):
-            return True
-
-        return False
-
-    def mouse_verb_to_push_kdata(self, verb: str) -> bool:
-        """Eval a Keycap as 1 Packet of KData"""
-
-        bt = self.bytes_terminal
-
-        kcap_list = list(_[0] for _ in KCAP_BY_KCHARS.items() if _[-1] == verb)
-        if len(kcap_list) == 1:
-            kdata = kcap_list[0].encode()
-            tbp = TerminalBytePacket(kdata)
-            bt.prefetches.append(tbp)
-            return True
-
-        return False
-
-    def mouse_verb_to_write_keycaps_sdata(self, verb: str) -> bool:
-        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
-
-        splits = verb.split()
-        keycaps = splits[0]
-
-        if not keycaps.startswith("⎋"):
-            return False
-
-        sdata = b""
-        shifting = False
-
-        for ch in keycaps:
-
-            if ch == "⎋":
-                sdata += b"\x1b"
-            elif ch == "␣":  # Spacebar as a single-wide Glyph
-                sdata += b" "
-            elif ch == "⇧":
-                shifting = True
-                continue
-            elif shifting:
-                sdata += ch.encode()
-            else:
-                sdata += ch.lower().encode()
-
-            shifting = False
-
-        # Succeed
-
-        stext = sdata.decode()  # may raise UnicodeDecodeError
-        self.write(stext)
-
-        return True
-
-    def mouse_verb_to_write_color_sdata(self, verb: str) -> bool:
-        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
-
-        splits = verb.split()
-
-        if splits[2:]:
-            if splits[1].casefold() == "on":
-                fverb = splits[0]
-                bverb = splits[2]
-
-                fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
-                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
-                if fg and bg:
-                    self.write(bg.decode())
-                    self.write(fg.decode())
-                    return True
-
-        elif splits[1:]:
-            if splits[0].casefold() == "on":
-                bverb = splits[1]
-
-                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
-                if bg:
-                    self.write(bg.decode())
-                    return True
-
-        else:
-            fverb = splits[0]
-            fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
-            if fg:
-                self.write(fg.decode())
-                return True
-
-        return False
-
-    def verb_to_color_sdata_if(self, verb: str, kind: str) -> bytes:
-        """Eval a Keycap as a Foreground or a Background Color"""
-
-        splits = verb.split()
-        assert kind in ("Foreground", "Background"), (kind,)
-
-        keycaps = splits[0]
-
-        # Eval a 6**3 Color
-
-        if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
-            pn = self.six_cubed_color_verb_to_pn(keycaps)
-            if kind == "Foreground":
-                sdata = f"\x1b[38;5;{pn}m".encode()
-                return sdata
-            else:
-                sdata = f"\x1b[48;5;{pn}m".encode()
-                return sdata
-
-        # Eval a 24-Bit Color
-
-        if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
-            (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
-
-            if not sys_platform_darwin:
-                if kind == "Foreground":
-                    sdata = f"\x1b[38;2;{r};{b};{b}m".encode()
-                    return sdata
-                else:
-                    sdata = f"\x1b[48;2;{r};{g};{b}m".encode()
-                    return sdata
-
-            # Else emulate the 24-Bit Color with a 6**3 Color
-
-            r6 = int((r / 0xFF) * 5)
-            g6 = int((g / 0xFF) * 5)
-            b6 = int((b / 0xFF) * 5)
-
-            pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
-
-            if kind == "Foreground":
-                sdata = f"\x1b[38;5;{pn}m".encode()
-                return sdata
-            else:
-                sdata = f"\x1b[48;5;{pn}m".encode()
-                return sdata
-
-        # Else don't succeed
-
-        return b""
-
-    def six_cubed_color_verb_to_pn(self, verb: str) -> int:
-        """Eval a #RGB color"""
-
-        assert verb[0] == "#", (verb,)
-
-        r6 = int(verb[1])
-        g6 = int(verb[2])
-        b6 = int(verb[3])
-
-        assert len(verb) == 4, (verb,)
-
-        assert 0 <= r6 <= 5, (r6, verb)
-        assert 0 <= g6 <= 5, (g6, verb)
-        assert 0 <= b6 <= 5, (b6, verb)
-
-        pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
-
-        return pn
-
-    def twenty_four_bit_color_verb_to_r_g_b(self, verb: str) -> tuple[int, int, int]:
-        """Eval a #RRGGBB color"""
-
-        assert verb[0] == "#", (verb,)
-
-        r = int(verb[1:][:2], base=0x10)
-        g = int(verb[3:][:2], base=0x10)
-        b = int(verb[5:][:2], base=0x10)
-
-        assert len(verb) == 7, (verb,)
-
-        return (r, g, b)
-
 
 #
 
 # todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
 
-# todo9: bin/xshverb.py conway
-# todo9: bin/xshverb.py puckman
-# todo9: bin/xshverb.py snake
-# todo9: bin/xshverb.py tetris
-
-# todo9: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
 # todo9: Play Snake as well as Emacs  ⎋ X  S N A K E Return
 
-# todo9: open up |d |e |f |l |m |p |q |v |y |z- gateways do gateway only at left
-# todo9: keep |a |c |g |h |i |j |k |n |o |r |s |t |u |w |x
-# todo9: |g pattern pattern - we're saying patterns can't be single letters
+# todo9: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
 
 #
+
+# todo8: open up |d |e |f |l |m |p |q |v |y |z- gateways do gateway only at left
+# todo8: keep |a |c |g |h |i |j |k |n |o |r |s |t |u |w |x
+# todo8: |g pattern pattern - we're saying patterns can't be single letters
+
+# todo8: bin/xshverb.py conway
+# todo8: bin/xshverb.py puckman
+# todo8: bin/xshverb.py snake
+# todo8: bin/xshverb.py tetris
 
 # todo8: do we now want fill with Color or not, and do we get it natively, and squelch insert mode
 # todo8: fix up all the fills, including \n
@@ -2833,345 +3246,6 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
                 se.write(glyph)
 
 
-#
-# Play Conway's Game-of-Life
-#
-
-
-class ConwayLife:
-    """Play Conway's Game-of-Life"""
-
-    screen_editor: ScreenEditor
-
-    conway_half_steps: int  # counts steps, after -1
-    conway_yx_list: list[tuple[int, int]]  # where Cells written lately
-
-    def __init__(self, se: ScreenEditor) -> None:
-
-        self.screen_editor = se
-
-        self.conway_half_steps = -1
-        self.conway_yx_list = list()
-
-    def play_conway_life(self) -> None:
-        """Play Conway's Game-of-Life"""
-
-        se = self.screen_editor
-
-        # Say Hello
-
-        se.print()
-        se.print("Hello from Conway's Game-of-Life")
-        se.print()
-        se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
-        # se.print("+ - to make a Cell older or younger")  # todo4:
-        se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
-        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
-        se.print()
-        se.print()
-        se.print()
-
-        self.restart_conway_life()
-
-        # Walk one step after another
-
-        while True:
-            try:
-                se.read_eval_print_once()
-            except SystemExit:
-                break
-
-        # Say Goodbye
-
-        se.print()
-        se.print("Goodbye from Conway's Game-of-Life")
-
-        # todo6: ⌃L goes wrong after Conway Goodbye in one row of White Dots
-
-    def restart_conway_life(self) -> None:
-        """Start again, with the most famous Conway Life Glider"""
-
-        conway_yx_list = self.conway_yx_list
-        se = self.screen_editor
-
-        bt = se.bytes_terminal
-        list_str_by_y_x = se.list_str_by_y_x
-
-        (ya, xa) = bt.read_row_y_column_x()
-        x_width = bt.read_x_width()
-
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
-
-        conway_yx_list.clear()
-
-        choice = 1
-
-        if choice == 1:
-
-            x_mid = x_width // 3
-            se.write(f"\x1b[{ya};{x_mid}H")
-
-            self.conway_print("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print("⚪🔴⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print("⚪🔴🔴🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print("⚪⚪⚪⚪⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
-            self.conway_print("🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪⚪🔴🔴⚪")
-            self.conway_print("🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
-
-            # Southwest Glider & Southeast Glider
-
-        if choice == 3:
-
-            self.conway_print("🔴⚪⚪⚪🔴")
-            self.conway_print("🔴🔴⚪🔴🔴")
-            self.conway_print("🔴⚪🔴⚪🔴")
-            self.conway_print("⚪🔴⚪🔴⚪")
-            self.conway_print("⚪⚪🔴⚪⚪")
-
-            # https://imgur.com/a/interesting-face-pattern-conways-game-of-life-epMFxEb
-
-            # todo6: compare/contrast web life at Wolf Face
-
-        # Add the Next Spots as a Perimeter around the Spots, if need be
-
-        yx_tuple = se.by_yx_tuple()
-        for y, x in yx_tuple:
-            list_str = list_str_by_y_x[y][x]
-            if list_str and list_str[-1] == "🔴":
-                self.y_x_count_around(y, x)  # adds its Next Spots
-
-        # Choose the first place of the Cursor
-
-        y_list = list(_[0] for _ in conway_yx_list)
-        x_list = list(_[-1] for _ in conway_yx_list)
-
-        y_min = min(y_list)
-        y_max = max(y_list)
-        x_min = min(x_list)
-        x_max = max(x_list)
-
-        y_mid = (y_min + y_max) // 2
-        x_mid = (x_min + x_max) // 2
-
-        se.write(f"\x1b[{y_mid};{x_mid}H")
-
-    def conway_print(self, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
-
-        se = self.screen_editor
-
-        (ya, xb) = (se.row_y, se.column_x)
-
-        (y, x) = (ya, xb)
-        for t in text:
-            if t == "🔵":
-                se.write("\x1b[2C")  # todo: Conway Spots always 2 Columns wide?
-            else:
-                self.conway_write_y_x_text(y, x=x, text=t)
-
-            x += 2
-
-        y += 1
-
-        se.write(f"\x1b[{y};{xb}H")  # for .conway_print
-
-    def conway_write_y_x_text(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
-
-        se = self.screen_editor
-        conway_yx_list = self.conway_yx_list
-
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
-
-        se.write(f"\x1b[{y};{x}H")
-        se.write(text)
-
-        x_width = se._str_guess_x_width(text)
-        for x in range(x, x + x_width):
-            yx = (y, x)
-            conway_yx_list.append(yx)
-
-    def do_conway_8x_redo(self) -> None:
-        """Step the Game of Life forward at 8X Speed"""
-
-        for _ in range(8):
-            self.do_conway_half_step()  # once
-            self.do_conway_half_step()  # twice
-
-        # Tab
-
-    def do_conway_full_step(self) -> None:
-        """Step the Game of Life forward by 1 Full Step"""
-
-        conway_half_steps = self.conway_half_steps
-
-        if (conway_half_steps % 2) == 0:  # if halfway
-            self.do_conway_half_step()  # out-of-phase
-
-        self.do_conway_half_step()  # once
-        self.do_conway_half_step()  # twice
-
-        # ⌃Spacebar
-
-    def do_conway_half_step(self) -> None:
-        """Step the Game of Life forward by 1/2 Step"""
-
-        se = self.screen_editor
-
-        assert DECSC == "\x1b" "7"  # DECSC 7 Cursor Save
-        assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
-
-        se.write("\x1b7")
-        self._do_conway_half_step_()
-        se.write("\x1b8")
-
-        # Spacebar
-
-    def _do_conway_half_step_(self) -> None:
-        """Step the Game of Life forward by 1/2 Step"""
-
-        se = self.screen_editor
-        list_str_by_y_x = se.list_str_by_y_x
-
-        self.conway_half_steps += 1
-        conway_half_steps = self.conway_half_steps
-
-        yx_list = list()
-        for y in list_str_by_y_x.keys():
-            for x in list_str_by_y_x[y].keys():
-                yx = (y, x)
-                yx_list.append(yx)
-
-        for y, x in yx_list:
-            list_str = list_str_by_y_x[y][x]
-            text = list_str[-1] if list_str else ""
-
-            if text not in ("⚪", "⚫", "🔴", "🟥"):
-                continue
-
-            if conway_half_steps % 2 == 0:
-                assert text in ("⚪", "🔴"), (text,)
-                n = self.y_x_count_around(y, x)
-
-                if (n < 2) and (text == "🔴"):
-                    self.conway_write_y_x_text(y, x=x, text="🟥")
-                elif (n == 3) and (text == "⚪"):
-                    self.conway_write_y_x_text(y, x=x, text="⚫")
-                    self.y_x_count_around(y, x)  # adds its Next Spots
-                elif (n > 3) and (text == "🔴"):
-                    self.conway_write_y_x_text(y, x=x, text="🟥")
-
-            else:
-                assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
-
-                if text == "⚫":
-                    self.conway_write_y_x_text(y, x=x, text="🔴")
-                elif text == "🟥":
-                    self.conway_write_y_x_text(y, x=x, text="⚪")
-
-    def y_x_count_around(self, y: int, x: int) -> int:
-        """Count the Neighbors of a Cell"""
-
-        se = self.screen_editor
-        list_str_by_y_x = se.list_str_by_y_x
-
-        yx_writes = list_str_by_y_x[y][x]
-        syx = yx_writes[-1] if yx_writes else ""
-
-        dydx_list = list()
-        for dy in range(-1, 1 + 1):
-            for dx in range(-2, 2 + 1, 2):
-                if dy == 0 and dx == 0:
-                    continue
-
-                dydx = (dy, dx)
-                dydx_list.append(dydx)
-
-        count = 0
-        for dy, dx in dydx_list:
-            yb = y + dy
-            xb = x + dx
-
-            if syx == "⚪":
-                if yb not in list_str_by_y_x.keys():
-                    continue
-                if xb not in list_str_by_y_x[yb].keys():
-                    continue
-
-            yaxa_write = ""
-            if not ((yb in list_str_by_y_x.keys()) and (xb in list_str_by_y_x[yb].keys())):
-                yaxa_write = "⚪"
-                se.print_y_x_text(yb, x=xb, text=yaxa_write)
-
-            yaxa_writes = list_str_by_y_x[yb][xb]
-            shadow_syaxa = yaxa_writes[-1] if yaxa_writes else ""
-            if yaxa_write:
-                assert yaxa_write == shadow_syaxa, (yaxa_write, shadow_syaxa, yb, xb)
-
-            if shadow_syaxa in ("🔴", "🟥"):
-                count += 1
-
-        return count
-
-    def form_conway_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
-        "Bind Keycaps to Funcs"
-
-        se = self.screen_editor
-
-        func_by_str: dict[str, abc.Callable[[], None]] = {
-            "⌃D": se.do_raise_system_exit,
-            "Tab": self.do_conway_8x_redo,
-            # "⇧Tab": self.do_conway_8x_undo,
-            "Spacebar": self.do_conway_full_step,
-            "⌃Spacebar": self.do_conway_half_step,
-            # "⌥Spacebar": self.do_conway_undo,
-            # "+": self.do_conway_older,  # todo4:
-            # "-": self.do_conway_younger,  # todo4:
-            # "MousePress": self.do_conway_pass,  # todo4:
-            # "MouseRelease": self.do_conway_leap_here,  # todo4:
-            "F2": self.restart_conway_life,
-        }
-
-        return func_by_str
-
-        # why does MyPy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
-
-
-_ = """  # The 8 Half-Steps of a 5-Pixel Glider
-
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
-    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
-    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
-    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
-    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
-    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-"""
-
-
 # todo2: F1 F2 F3 F4 for the different pages and pages of Help
 
 # todo2: elapsed time logs into k.keyboard and s.screen for record/replay
@@ -3301,7 +3375,7 @@ class BytesTerminal:
         self.y_height = -1
         self.x_width = -1
 
-    def __enter__(self) -> BytesTerminal:  # -> typing.Self:
+    def __enter__(self) -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
 
         fileno = self.fileno

@@ -3281,7 +3281,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         stdio.flush()  # before os.read of .puck_try_pick
 
         byte0 = os.read(fileno, 1)
-        if byte0 == b"\r":  # Return
+        if byte0 in (b"\x04", b"\r"):  # ⌃D  # Return
             sys.exit()
 
         if byte0 == b"\t":  # Tab
@@ -4433,7 +4433,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         stdio.flush()  # before os.read of .puck_try_play
 
         byte0 = os.read(fileno, 1)
-        if byte0 == b"\r":  # Return
+        if byte0 in (b"\x04", b"\r"):  # ⌃D  # Return
             sys.exit()
 
         if byte0 == b"\x00":  # ⌃Spacebar
