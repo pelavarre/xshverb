@@ -2176,6 +2176,7 @@ class ScreenEditor:
         f1_text = """
             Shall we play a game?
 
+            F1 - List Games
             F2 - Conway's Game-of-Life
             F9 - Screen Editor
 
@@ -2363,6 +2364,8 @@ class ScreenEditor:
         # todo8: Vanish the Command Verb typed out and then pushed
 
         verb = x_widget
+        if x_widget.startswith("<") and x_widget.endswith(">") and (len(x_widget) > len("<>")):
+            verb = x_widget[1:-1]
 
         vanisher = False  # todo8: do vanish each verb run almost at left of cursor
         if vanisher:
