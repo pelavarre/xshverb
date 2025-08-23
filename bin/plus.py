@@ -26,6 +26,7 @@ import random  # todo6: choose Seeds for Repeatability
 import re
 import select
 import signal
+import subprocess
 import sys
 import termios
 import textwrap
@@ -124,8 +125,6 @@ def try_main_else_repl() -> None:
 
     # Launch the Py Repl at Process Exit, as if:  python3 -i -c ''
 
-    os.environ["PYTHONINSPECT"] = str(True)
-
     # print("To get started, press Return after typing:  tryme()", file=sys.stderr)
     # print(">>> ", file=sys.stderr)
     # print(">>> tryme()", file=sys.stderr)
@@ -135,6 +134,8 @@ def try_main_else_repl() -> None:
     # print(">>> ", file=sys.stderr)
 
     sys.excepthook = with_excepthook
+
+    os.environ["PYTHONINSPECT"] = str(True)
 
 
 #
@@ -377,8 +378,8 @@ class ScreenEditor:
 
         # Exit each, in reverse order of Enter's
 
-        slog.__exit__(exc_type, exc_val, exc_tb)
-        klog.__exit__(exc_type, exc_val, exc_tb)
+        slog.flush()
+        klog.flush()
         bt.__exit__(exc_type, exc_val, exc_tb)
 
         # Succeed
@@ -1237,6 +1238,7 @@ class ScreenEditor:
             # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
             # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
+            "F7": self.do_kdata_fn_f7,  # FnF7
             "F8": self.do_kdata_fn_f8,  # FnF8
             "F9": self.do_kdata_fn_f9,  # FnF9
             #
@@ -2178,6 +2180,8 @@ class ScreenEditor:
 
             F1 - List Games
             F2 - Conway's Game-of-Life
+            F7 - Puckman
+            F8 - Color Picker
             F9 - Screen Editor
 
             ⌃D - Quit
@@ -2224,6 +2228,20 @@ class ScreenEditor:
         finally:
             self.func_by_str = with_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
+
+    def do_kdata_fn_f7(self) -> None:
+        """Play Puckman"""
+
+        path = pathlib.Path(sys.argv[0])
+        cwd = path.parent
+        xshverb = cwd / "xshverb.py"
+        assert xshverb.exists(), (xshverb,)
+
+        argv = [str(xshverb), "turtling"]
+
+        self.__exit__(*sys.exc_info())
+        subprocess.run(argv)
+        self.__enter__()
 
     def do_kdata_fn_f8(self) -> None:
         """Print a #555 Color Picker"""
@@ -2848,7 +2866,7 @@ class ConwayLife:
         se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
         # se.print("+ - to make a Cell older or younger")  # todo4:
         se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
-        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
+        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
         se.print()
         se.print()
         se.print()

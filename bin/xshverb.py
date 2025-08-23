@@ -3141,9 +3141,13 @@ def do_turtling(argv: list[str]) -> None:
 
     # Launch the Py Repl at Process Exit, as if:  python3 -i -c ''
 
-    os.environ["PYTHONINSPECT"] = str(True)
+    choice = 0
 
-    choice = 1
+    if choice == 0:
+
+        ts.puck_play()
+
+        return
 
     if choice == 1:
 
