@@ -385,6 +385,27 @@ class ScreenEditor:
 
         return None
 
+    def by_yx_tuple(self) -> tuple[tuple[int, int], ...]:
+        """List the Y X Pairs written"""
+
+        list_str_by_y_x = self.list_str_by_y_x
+
+        yx_list = list()
+        for y in list_str_by_y_x.keys():
+            for x in list_str_by_y_x[y].keys():
+                yx = (y, x)
+                yx_list.append(yx)
+
+        return tuple(yx_list)
+
+    def print_y_x_text(self, y: int, x: int, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
+
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+
+        self.write(f"\x1b[{y};{x}H")
+        self.write(text)
+
     def print(self, *args: object, end: str = "\r\n") -> None:
         """Join the Args by Space, add the End, and write the Encoded Chars"""
 
@@ -1314,6 +1335,7 @@ class ScreenEditor:
         self.print("On #345")  # todo9: next experiment
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
+        self.print()
 
         # Walk one step after another
 
@@ -2338,27 +2360,11 @@ class ScreenEditor:
             self.write("\a")  # for .take_widget_at_yxf_mouse_release
             return
 
-        # Vanish the Command Verb when pushed, if not inside a Button that endures
+        # todo8: Vanish the Command Verb typed out and then pushed
 
         verb = x_widget
-        vanisher = True
-
-        if x_widget[0] in ("⎋", "#"):
-            vanisher = False
-
-        elif x_widget.split()[0].casefold() == "on":
-            vanisher = False
-
-        elif (x_widget[0] == "<") and (x_widget[-1] == ">"):
-            verb = x_widget[1:-1]
-            vanisher = False
-
-            if not verb:
-                self.write("\a")  # for .take_widget_at_yxf
-                return
 
         vanisher = False  # todo8: do vanish each verb run almost at left of cursor
-
         if vanisher:
             self.vanish_widget_at_yxf(x_widget, y=y, x=wx)
 
@@ -2644,10 +2650,17 @@ class ScreenEditor:
 
 # todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
 
-# todo9: less perfect symmetry in the Conway Life
+# todo9: bin/xshverb.py conway
+# todo9: bin/xshverb.py puckman
+# todo9: bin/xshverb.py snake
+# todo9: bin/xshverb.py tetris
 
-# todo9: open up |d |e |f |l |m |p |q |v |y |z
+# todo9: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
+# todo9: Play Snake as well as Emacs  ⎋ X  S N A K E Return
+
+# todo9: open up |d |e |f |l |m |p |q |v |y |z- gateways do gateway only at left
 # todo9: keep |a |c |g |h |i |j |k |n |o |r |s |t |u |w |x
+# todo9: |g pattern pattern - we're saying patterns can't be single letters
 
 #
 
@@ -2809,17 +2822,15 @@ class ConwayLife:
 
     screen_editor: ScreenEditor
 
-    yx_board: tuple[int, int]  # places the Gameboard on the Screen Panel
-    yx_puck: tuple[int, int]  # places the Puck on the Screen Panel
-    steps: int  # counts steps, after -1
+    conway_half_steps: int  # counts steps, after -1
+    conway_yx_list: list[tuple[int, int]]  # where Cells written lately
 
     def __init__(self, se: ScreenEditor) -> None:
 
         self.screen_editor = se
 
-        self.yx_board = (-1, -1)
-        self.yx_puck = (-1, -1)
-        self.steps = -1
+        self.conway_half_steps = -1
+        self.conway_yx_list = list()
 
     def play_conway_life(self) -> None:
         """Play Conway's Game-of-Life"""
@@ -2832,9 +2843,11 @@ class ConwayLife:
         se.print("Hello from Conway's Game-of-Life")
         se.print()
         se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
-        se.print("+ - to make a Cell older or younger")
+        # se.print("+ - to make a Cell older or younger")  # todo4:
         se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
         se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster")
+        se.print()
+        se.print()
         se.print()
 
         self.restart_conway_life()
@@ -2857,140 +2870,142 @@ class ConwayLife:
     def restart_conway_life(self) -> None:
         """Start again, with the most famous Conway Life Glider"""
 
+        conway_yx_list = self.conway_yx_list
         se = self.screen_editor
+
+        bt = se.bytes_terminal
         list_str_by_y_x = se.list_str_by_y_x
 
-        choice = 3
+        (ya, xa) = bt.read_row_y_column_x()
+        x_width = bt.read_x_width()
+
+        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+
+        conway_yx_list.clear()
+
+        choice = 1
 
         if choice == 1:
-            (ya, xa) = self.yx_board_place(dy=-1, dx=-4)  # todo5: derive dy dx
-            self.yx_board = (ya, xa)
-            self.yx_puck = (ya, xa)
-            self.conway_print_some("⚪🔴⚪🔴⚪")  # todo5: Conway Gameboard at Cursor
-            self.conway_print_some("⚪⚪🔴🔴⚪")
-            self.conway_print_some("🔵⚪🔴⚪⚪")
 
-            # Southeast Glider
+            x_mid = x_width // 3
+            se.write(f"\x1b[{ya};{x_mid}H")
 
-        if choice == 2:
-            (ya, xa) = self.yx_board_place(dy=-2, dx=-4)  # todo5: derive dy dx
-            self.yx_board = (ya, xa)
-            self.yx_puck = (ya, xa)
-            self.conway_print_some("🔴⚪⚪⚪🔴")
-            self.conway_print_some("🔴🔴⚪🔴🔴")
-            self.conway_print_some("🔴⚪🔴⚪🔴")
-            self.conway_print_some("⚪🔴⚪🔴⚪")
-            self.conway_print_some("⚪⚪🔴⚪⚪")
+            self.conway_print("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪🔴⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪🔴🔴🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
+            self.conway_print("⚪⚪⚪⚪⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
+            self.conway_print("🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪⚪🔴🔴⚪")
+            self.conway_print("🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
+
+            # Southwest Glider & Southeast Glider
+
+        if choice == 3:
+
+            self.conway_print("🔴⚪⚪⚪🔴")
+            self.conway_print("🔴🔴⚪🔴🔴")
+            self.conway_print("🔴⚪🔴⚪🔴")
+            self.conway_print("⚪🔴⚪🔴⚪")
+            self.conway_print("⚪⚪🔴⚪⚪")
 
             # https://imgur.com/a/interesting-face-pattern-conways-game-of-life-epMFxEb
 
             # todo6: compare/contrast web life at Wolf Face
 
-        if choice == 3:
-            (ya, xa) = self.yx_board_place(dy=-2, dx=-4)
-            self.yx_board = (ya, xa)
-            self.yx_puck = (ya, xa)
-            self.conway_print_some("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print_some("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print_some("⚪🔴⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print_some("⚪🔴🔴🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
-            self.conway_print_some("⚪⚪⚪⚪⚪🔵🔵🔵🔵⚪🔴⚪🔴⚪")
-            self.conway_print_some("🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪⚪🔴🔴⚪")
-            self.conway_print_some("🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵⚪🔴⚪⚪")
+        # Add the Next Spots as a Perimeter around the Spots, if need be
 
-            # Southwest Glider & Southeast Glider
-
-        yx_list = list()
-        for y in list_str_by_y_x.keys():
-            for x in list_str_by_y_x[y].keys():
-                yx = (y, x)
-                yx_list.append(yx)
-
-        for y, x in yx_list:
+        yx_tuple = se.by_yx_tuple()
+        for y, x in yx_tuple:
             list_str = list_str_by_y_x[y][x]
             if list_str and list_str[-1] == "🔴":
                 self.y_x_count_around(y, x)  # adds its Next Spots
 
-        self._leap_conway_between_half_steps_()
+        # Choose the first place of the Cursor
 
-    def yx_board_place(self, dy: int, dx: int) -> tuple[int, int]:
-        """Leap to our main Center of our Screen Panel"""
+        y_list = list(_[0] for _ in conway_yx_list)
+        x_list = list(_[-1] for _ in conway_yx_list)
 
-        se = self.screen_editor
-        bt = se.bytes_terminal
+        y_min = min(y_list)
+        y_max = max(y_list)
+        x_min = min(x_list)
+        x_max = max(x_list)
 
-        y_height = bt.read_y_height()
-        x_width = bt.read_x_width()
+        y_mid = (y_min + y_max) // 2
+        x_mid = (x_min + x_max) // 2
 
-        mid_height = (y_height // 2) + (y_height % 2)
-        mid_width = (x_width // 2) + (x_width % 2)
+        se.write(f"\x1b[{y_mid};{x_mid}H")
 
-        yx_board = (mid_height + dy, mid_width + dx)
-
-        return yx_board
-
-    def conway_print_some(self, s: str) -> None:
-        """Print each Character"""
+    def conway_print(self, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
 
         se = self.screen_editor
 
-        (ya, xa) = self.yx_puck
+        (ya, xb) = (se.row_y, se.column_x)
 
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        se.write(f"\x1b[{ya};{xa}H")  # for .conway_print_some
+        (y, x) = (ya, xb)
+        for t in text:
+            if t == "🔵":
+                se.write("\x1b[2C")  # todo: Conway Spots always 2 Columns wide?
+            else:
+                self.conway_write_y_x_text(y, x=x, text=t)
 
-        (y, x) = (ya, xa)
-        for syx in s:
-            self.conway_print_y_x_syx(y, x=x, syx=syx)
-            x += 2  # todo3: because unicodedata.east_asian_width(syx) == 2
+            x += 2
 
-        yb = ya + 1
-        xb = xa
-        self.yx_puck = (yb, xb)
+        y += 1
+
+        se.write(f"\x1b[{y};{xb}H")  # for .conway_print
+
+    def conway_write_y_x_text(self, y: int, x: int, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
+
+        se = self.screen_editor
+        conway_yx_list = self.conway_yx_list
+
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+
+        se.write(f"\x1b[{y};{x}H")
+        se.write(text)
+
+        x_width = se._str_guess_x_width(text)
+        for x in range(x, x + x_width):
+            yx = (y, x)
+            conway_yx_list.append(yx)
 
     def do_conway_8x_redo(self) -> None:
         """Step the Game of Life forward at 8X Speed"""
 
         for _ in range(8):
-            self._do_conway_half_step_()  # once
-            self._do_conway_half_step_()  # twice
-
-        self._leap_conway_between_half_steps_()
+            self.do_conway_half_step()  # once
+            self.do_conway_half_step()  # twice
 
         # Tab
 
     def do_conway_full_step(self) -> None:
         """Step the Game of Life forward by 1 Full Step"""
 
-        steps = self.steps
+        conway_half_steps = self.conway_half_steps
 
-        if (steps % 2) == 0:  # if halfway
-            self._do_conway_half_step_()  # out-of-phase
+        if (conway_half_steps % 2) == 0:  # if halfway
+            self.do_conway_half_step()  # out-of-phase
 
-        self._do_conway_half_step_()  # once
-        self._do_conway_half_step_()  # twice
-
-        self._leap_conway_between_half_steps_()
+        self.do_conway_half_step()  # once
+        self.do_conway_half_step()  # twice
 
         # ⌃Spacebar
 
     def do_conway_half_step(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
 
-        self._do_conway_half_step_()
-        self._leap_conway_between_half_steps_()
-
-        # Spacebar
-
-    def _leap_conway_between_half_steps_(self) -> None:
-        """Place the Puck between Half-Step's"""
-
         se = self.screen_editor
 
-        (ya, xa) = self.yx_board_place(dy=0, dx=0)
+        assert DECSC == "\x1b" "7"  # DECSC 7 Cursor Save
+        assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
 
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        se.write(f"\x1b[{ya};{xa}H")  # for ._leap_conway_between_half_steps_
+        se.write("\x1b7")
+        self._do_conway_half_step_()
+        se.write("\x1b8")
+
+        # Spacebar
 
     def _do_conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
@@ -2998,10 +3013,8 @@ class ConwayLife:
         se = self.screen_editor
         list_str_by_y_x = se.list_str_by_y_x
 
-        steps = self.steps
-
-        steps += 1
-        self.steps = steps
+        self.conway_half_steps += 1
+        conway_half_steps = self.conway_half_steps
 
         yx_list = list()
         for y in list_str_by_y_x.keys():
@@ -3011,30 +3024,30 @@ class ConwayLife:
 
         for y, x in yx_list:
             list_str = list_str_by_y_x[y][x]
-            syx = list_str[-1] if list_str else ""
+            text = list_str[-1] if list_str else ""
 
-            if syx not in ("⚪", "⚫", "🔴", "🟥"):
+            if text not in ("⚪", "⚫", "🔴", "🟥"):
                 continue
 
-            if steps % 2 == 0:
-                assert syx in ("⚪", "🔴"), (syx,)
+            if conway_half_steps % 2 == 0:
+                assert text in ("⚪", "🔴"), (text,)
                 n = self.y_x_count_around(y, x)
 
-                if (n < 2) and (syx == "🔴"):
-                    self.conway_print_y_x_syx(y, x=x, syx="🟥")
-                elif (n == 3) and (syx == "⚪"):
-                    self.conway_print_y_x_syx(y, x=x, syx="⚫")
+                if (n < 2) and (text == "🔴"):
+                    self.conway_write_y_x_text(y, x=x, text="🟥")
+                elif (n == 3) and (text == "⚪"):
+                    self.conway_write_y_x_text(y, x=x, text="⚫")
                     self.y_x_count_around(y, x)  # adds its Next Spots
-                elif (n > 3) and (syx == "🔴"):
-                    self.conway_print_y_x_syx(y, x=x, syx="🟥")
+                elif (n > 3) and (text == "🔴"):
+                    self.conway_write_y_x_text(y, x=x, text="🟥")
 
             else:
-                assert syx in ("⚪", "⚫", "🔴", "🟥"), (syx,)
+                assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
 
-                if syx == "⚫":
-                    self.conway_print_y_x_syx(y, x=x, syx="🔴")
-                elif syx == "🟥":
-                    self.conway_print_y_x_syx(y, x=x, syx="⚪")
+                if text == "⚫":
+                    self.conway_write_y_x_text(y, x=x, text="🔴")
+                elif text == "🟥":
+                    self.conway_write_y_x_text(y, x=x, text="⚪")
 
     def y_x_count_around(self, y: int, x: int) -> int:
         """Count the Neighbors of a Cell"""
@@ -3068,7 +3081,7 @@ class ConwayLife:
             yaxa_write = ""
             if not ((yb in list_str_by_y_x.keys()) and (xb in list_str_by_y_x[yb].keys())):
                 yaxa_write = "⚪"
-                self.conway_print_y_x_syx(yb, x=xb, syx=yaxa_write)
+                se.print_y_x_text(yb, x=xb, text=yaxa_write)
 
             yaxa_writes = list_str_by_y_x[yb][xb]
             shadow_syaxa = yaxa_writes[-1] if yaxa_writes else ""
@@ -3079,28 +3092,6 @@ class ConwayLife:
                 count += 1
 
         return count
-
-    def conway_print_y_x_syx(self, y: int, x: int, syx: str) -> None:
-        """Print each Character"""
-
-        se = self.screen_editor
-        list_str_by_y_x = se.list_str_by_y_x
-
-        assert CUF_X == "\x1b[" "{}" "C"
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-
-        se.write(f"\x1b[{y};{x}H")  # for .conway_print_y_x_syx
-
-        if syx != "🔵":
-            se.write(syx)
-
-            yx_writes = list_str_by_y_x[y][x]
-            yx_shadow_text = yx_writes[-1] if yx_writes else ""
-            assert syx == yx_shadow_text, (syx, yx_shadow_text, y, x)
-
-        x += 2
-
-        self.yx_puck = (y, x)
 
     def form_conway_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"

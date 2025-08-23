@@ -3147,6 +3147,8 @@ def do_turtling(argv: list[str]) -> None:
 
     if choice == 1:
 
+        ts.puck_play()
+
         globals().update(d)
         os.environ["PYTHONINSPECT"] = str(True)
 
