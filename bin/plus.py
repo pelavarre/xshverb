@@ -280,14 +280,14 @@ _PN_MAX_32100_ = 32100  # a Numeric [Int] beyond the Counts of Rows & Columns at
 class ConwayLife:
     """Play Conway's Game-of-Life"""
 
-    screen_editor: ScreenEditor
+    screen_editor: ScreenEditor  # writes Screen and reads Keyboard
 
     conway_half_steps: int  # counts steps, after -1
     conway_yx_list: list[tuple[int, int]]  # where Cells written lately
 
-    def __init__(self, se: ScreenEditor) -> None:
+    def __init__(self, screen_editor: ScreenEditor) -> None:
 
-        self.screen_editor = se
+        self.screen_editor = screen_editor
 
         self.conway_half_steps = -1
         self.conway_yx_list = list()
@@ -304,7 +304,7 @@ class ConwayLife:
         se.print()
         se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
         # se.print("+ - to make a Cell older or younger")  # todo4:
-        se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
+        se.print("Spacebar to step, ⌃Spacebar to make a half step")  # todo9: , ⌥← to undo
         se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
         se.print()
         se.print()
@@ -557,7 +557,7 @@ class ConwayLife:
             ybxb_write = ""
             if not ((yb in writes_by_y_x.keys()) and (xb in writes_by_y_x[yb].keys())):
                 ybxb_write = "⚪"
-                se.print_y_x_text(yb, x=xb, text=ybxb_write)
+                se.y_x_text_print(yb, x=xb, text=ybxb_write)
 
             # Fetch the Cell next door
 
@@ -690,26 +690,23 @@ class ScreenEditor:
 
         return None
 
-    def print_y_x_text(self, y: int, x: int, text: str) -> None:
+    def y_x_text_print(self, y: int, x: int, text: str) -> None:
         """Write Some Text Characters at one Y X Place"""
 
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
-
-        self.write(f"\x1b[{y};{x}H")
-        self.write(text)
+        pt = self.proxy_terminal
+        pt.proxy_y_x_text_print(y=y, x=x, text=text)
 
     def print(self, *args: object, end: str = "\r\n") -> None:
         """Join the Args by Space, add the End, and write the Encoded Chars"""
 
-        schars = " ".join(str(_) for _ in args)
-        self.write(schars)
-        self.write(end)
+        pt = self.proxy_terminal
+        pt.proxy_print(*args, end=end)
 
     def write(self, text: str) -> None:
         """Write the Bytes, log them as written, and mirror them"""
 
         pt = self.proxy_terminal
-        pt.write_out_and_mirrors(text)
+        pt.proxy_write(text)
 
     #
     # Bind Keyboard Chords to Funcs
@@ -814,6 +811,7 @@ class ScreenEditor:
             #
             "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
             "F2": self.do_kdata_fn_f2,  # FnF2
+            "F3": self.do_kdata_fn_f3,  # FnF3  # todo9: should this be "FnF3" ?
             #
             # Printable but named Characters
             #
@@ -1123,7 +1121,7 @@ class ScreenEditor:
         if not (csi and ((tbp.back + tbp.tail) == b"'~")):
             return False
 
-        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
+        tprint(f"⎋['⇧~ cols-delete {tbp=}   # _take_csi_cols_delete_if_")
 
         pn = int(tbp.neck) if tbp.neck else PN1
         y_height = bt.read_y_height()
@@ -1156,7 +1154,7 @@ class ScreenEditor:
         if not (csi and ((tbp.back + tbp.tail) == b"'}")):
             return False
 
-        tprint("⎋['⇧~ cols-delete" f" {tbp=}   # _take_csi_cols_delete_if_")
+        tprint(f"⎋['⇧}} cols-insert {tbp=}   # _take_csi_cols_insert_if_")
 
         pn = int(tbp.neck) if tbp.neck else PN1
         y_height = bt.read_y_height()
@@ -1765,6 +1763,7 @@ class ScreenEditor:
 
             F1 - List Games
             F2 - Conway's Game-of-Life
+            F3 - Snuck
             F5 - Puckman
             F8 - Color Picker
             F9 - Screen Editor
@@ -1772,7 +1771,6 @@ class ScreenEditor:
             ⌃D - Quit
         """
 
-        # todo: F3 - Snuck
         # todo: F7 - Color Swatches
 
         f1_text = textwrap.dedent(f1_text).strip()
@@ -1804,7 +1802,7 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        cl = ConwayLife(se=self)
+        cl = ConwayLife(screen_editor=self)
 
         func_by_str = dict(with_func_by_str)
         conway_func_by_str = cl.form_conway_func_by_str()
@@ -1817,6 +1815,42 @@ class ScreenEditor:
         finally:
             self.func_by_str = with_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
+
+        # todo: refactor the callback out of  ScreenEditor forms ConwayLife to call back?
+
+    def do_kdata_fn_f3(self) -> None:
+        """Play Snuck for F3"""
+
+        pt = self.proxy_terminal
+        with_func_by_str = self.func_by_str
+
+        # Default to Replacing, not Inserting
+
+        assert SM_IRM == "\x1b[" "4h"
+        assert RM_IRM == "\x1b[" "4l"
+
+        irm_stext = pt.read_toggle_mirrors("\x1b[4h", stext1="\x1b[4l")
+        restore_inserting_replacing = irm_stext  # maybe empty
+
+        self.do_replacing_start()  # for F2
+
+        # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
+
+        sl = SnuckLife(screen_editor=self, dy=-1, dx=0)
+
+        func_by_str = dict(with_func_by_str)
+        snuck_func_by_str = sl.form_snuck_func_by_str()
+        func_by_str.update(snuck_func_by_str)
+
+        self.func_by_str = func_by_str
+
+        try:
+            sl.play_snuck_life()
+        finally:
+            self.func_by_str = with_func_by_str  # replaces
+            self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
+
+        # todo: refactor the callback out of  ScreenEditor forms ConwayLife to call back?
 
     def do_kdata_fn_f5(self) -> None:
         """Play Puckman"""
@@ -2263,51 +2297,204 @@ class ScreenEditor:
         return (r, g, b)
 
 
+class SnuckLife:
+    """Lead with one Sprite, and link more to follow in a chain"""
+
+    screen_editor: ScreenEditor
+
+    dy: int
+    dx: int
+    sprites: list[TerminalSprite]
+
+    def __init__(self, screen_editor: ScreenEditor, dy: int, dx: int) -> None:
+
+        self.screen_editor = screen_editor
+
+        se = self.screen_editor
+        pt = se.proxy_terminal
+        bt = pt.bytes_terminal
+
+        sprite0 = TerminalSprite(self, z_writes=("🟦",))
+        sprite1 = TerminalSprite(self, z_writes=("⬜",))
+        sprite2 = TerminalSprite(self, z_writes=("⬜",))
+        sprites = [sprite0, sprite1, sprite2]
+
+        self.dy = dy
+        self.dx = dx
+        self.sprites = sprites
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+
+        sprite0.yx_leap_to(y=row_y, x=column_x)
+        self.do_snuck_step_ahead()
+        self.do_snuck_step_ahead()
+
+    def play_snuck_life(self) -> None:
+        """Play Conway's Game-of-Life"""
+
+        se = self.screen_editor
+
+        # Say Hello
+
+        se.print()
+        se.print("Hello from Snuck")
+        se.print()
+        se.print("← ↑ → Arrows to move ahead or turn")
+        se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
+        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
+        se.print()
+        se.print()
+        se.print()
+
+        # Walk one step after another
+
+        while True:
+            try:
+                se.read_eval_print_once()
+            except SystemExit:
+                break
+
+        # Say Goodbye
+
+        se.print()
+        se.print("Goodbye from Snuck")
+
+    def do_snuck_turn_left(self) -> None:
+        """Turn Left"""
+
+        dy = self.dy
+        dx = self.dx
+
+        self.dy = -dx // 2
+        self.dx = 2 * dy
+
+    def do_snuck_turn_right(self) -> None:
+        """Turn Right"""
+
+        dy = self.dy
+        dx = self.dx
+
+        self.dy = dx // 2
+        self.dx = -2 * dy
+
+    def do_snuck_8x_step_ahead(self) -> None:
+        """Step ahead 8X"""
+
+        for _ in range(8):
+            self.do_snuck_step_ahead()
+
+    def do_snuck_step_ahead(self) -> None:
+        """Move the Head Sprite ahead, and have the rest follow"""
+
+        dy = self.dy
+        dx = self.dx
+        sprites = self.sprites
+
+        # Take in the next Move
+
+        yx_list = list((_.row_y, _.column_x) for _ in sprites)
+
+        (y, x) = yx_list[0]
+        yx = (y + dy, x + dx)
+
+        yx_list = [yx] + yx_list[:-1]
+
+        # Move the Sprites
+
+        for sprite, yx in zip(sprites, yx_list):
+            (y, x) = yx
+            if (y, x) != (-1, -1):
+                sprite.yx_leap_to(y, x=x)
+
+            # todo: When should we not-rewrite the Z Layer below?
+
+    def form_snuck_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
+        "Bind Keycaps to Funcs"
+
+        se = self.screen_editor
+        func_by_str: dict[str, abc.Callable[[], None]] = {
+            "⌃D": se.do_raise_system_exit,
+            # "Tab": self.do_snuck_8x_step_ahead,
+            "Spacebar": self.do_snuck_step_ahead,
+            "←": self.do_snuck_turn_left,
+            "↑": self.do_snuck_step_ahead,
+            "→": self.do_snuck_turn_right,
+        }
+
+        return func_by_str
+
+    # riffing off the tradition of Emacs ⎋ X  S N A K E Return
+
+    #
+    # Halt at collision or edges - You lose if you give up, if you're cornered
+    # Eat a Circle to grow a Square of the same Color
+    # Mouse Click to copy and paste, Return Key to copy else paste
+    # Start with three Squares
+    #
+    # Take over the Keyboard while Cursor on Head Sprite
+    # From when Return is first pressed there, till it is pressed there again
+    # Don't let go when other Keyboard Chords come here
+    #
+
+
 class TerminalSprite:
     """Move across the Screen in its own Z Layer"""
 
     proxy_terminal: ProxyTerminal
+    z_writes: tuple[str]
 
     writes: tuple[str, ...] = tuple()
     row_y: int = -1
     column_x: int = -1
 
-    old_writes: tuple[str, ...] = tuple()
-    old_row_y: int = -1
-    old_column_x: int = -1
+    def __init__(self, snuck_life: SnuckLife, z_writes: tuple[str]) -> None:
 
-    def __init__(self, proxy_terminal: ProxyTerminal, writes: tuple[str]) -> None:
+        sl = snuck_life
+        se = sl.screen_editor
+        pt = se.proxy_terminal
 
-        pt = proxy_terminal
         self.proxy_terminal = pt
+        self.z_writes = z_writes
 
-        self.writes = writes
-
-    def draw_new(self) -> None:
+    def yx_leap_to(self, y: int, x: int) -> None:
         """Draw the Sprite at its new Y X Place"""
+
+        pt = self.proxy_terminal
+
+        z_writes = self.z_writes
 
         ya = self.row_y
         xa = self.column_x
+        writes = self.writes
 
-        pt = self.proxy_terminal
-        bt = pt.bytes_terminal
+        # Skip if already here
 
-        (yb, xb) = bt.read_row_y_column_x()
-        if (yb, xb) == (ya, xa):
+        if (ya, xa) == (y, x):
             return
 
+        # Read there
+
         default = (" ",)
-        old_writes = pt.read_yx_writes(yb, x=xb, default=default)
-        self.old_writes = old_writes  # replace
+        yx_writes = pt.read_yx_writes(y, x=x, default=default)
 
-        for text in self.writes:
-            pt.write_out_and_mirrors(text)
+        # Write there
 
-        self.row_y = yb
-        self.column_x = xb
+        pt.proxy_write(f"\x1b[{y};{x}H")
+        for write in z_writes:
+            pt.proxy_write(write)
 
-    def erase_old(self) -> None:
-        """Erase the Sprite from its old Y X Place"""
+        # Erase here
+
+        if (ya, xa) != (-1, -1):
+            pt.proxy_write(f"\x1b[{ya};{xa}H")
+            for write in writes:
+                pt.proxy_write(write)
+
+        # Remember new
+
+        self.writes = yx_writes  # replace
+        self.row_y = y
+        self.column_x = x
 
 
 class ProxyTerminal:
@@ -2558,7 +2745,22 @@ class ProxyTerminal:
     #  Write into the Mirrors
     #
 
-    def write_out_and_mirrors(self, text: str) -> None:
+    def proxy_y_x_text_print(self, y: int, x: int, text: str) -> None:
+        """Write Some Text Characters at one Y X Place"""
+
+        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+
+        self.proxy_write(f"\x1b[{y};{x}H")
+        self.proxy_write(text)
+
+    def proxy_print(self, *args: object, end: str = "\r\n") -> None:
+        """Join the Args by Space, add the End, and write the Encoded Chars"""
+
+        schars = " ".join(str(_) for _ in args)
+        self.proxy_write(schars)
+        self.proxy_write(end)
+
+    def proxy_write(self, text: str) -> None:
         """Write the Bytes, log them as written, and mirror them"""
 
         self.write_out(text)
@@ -3173,23 +3375,6 @@ class ProxyTerminal:
 
 #
 
-# todo9: Play Snuck as well as Emacs  ⎋ X  S N A K E Return
-
-#
-# Class SnuckSprite contains a Sprite
-#
-# Each Sprite runs as its own Z Layer
-# Snake Sprites follow the Sprite ahead, only the Head Sprite makes choices
-# Spacebar takes two steps, paint the new place, unpaint the old place
-# Halt at collision or edges - You lose if you give up, if you're cornered
-# Eat a Circle to grow a Square of the same Color
-# Mouse Click to copy and paste, Return Key to copy else paste
-# Start with three Squares
-#
-# Take over the Keyboard while Cursor on Head Sprite
-# From when Return is first pressed there, till it is pressed there again
-#
-
 # todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
 # todo9: Press Return inside a Button to click it
 # todo9: Press Return just after a Button to vanish and run it
@@ -3715,7 +3900,7 @@ class TerminalBytePacket:
 
         extras = self.take_some_if(data)
         if extras:
-            raise ValueError(extras)  # for example, raises the b'\x80' of b'\xc0\x80'
+            raise ValueError(extras, data)  # for example, raises the b'\x80' of b'\xc0\x80'
 
         self._require_simple_()
 
