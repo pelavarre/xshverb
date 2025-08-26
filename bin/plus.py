@@ -644,7 +644,10 @@ class ScreenEditor:
 
     proxy_terminal: ProxyTerminal
     packets: list[TerminalBytePacket]
+
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
+    arrow_row_y: int  # the Y of Y X after the first Keyboard Arrow Chord
+    arrow_column_x: int  # the X of Y X after the first Keyboard Arrow Chord
 
     func_by_str: dict[str, abc.Callable[[], None]] = dict()
     loopable_kdata_tuple: tuple[bytes, ...] = tuple()
@@ -661,7 +664,10 @@ class ScreenEditor:
 
         self.proxy_terminal = pt
         self.packets = list()
+
         self.arrows = 0
+        self.arrow_row_y = -1
+        self.arrow_column_x = -1
 
         func_by_str = self.form_func_by_str()
         self.func_by_str = func_by_str
@@ -1127,7 +1133,7 @@ class ScreenEditor:
         y_height = bt.read_y_height()
 
         (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for ._take_csi_cols_delete_if_
+        pt.row_y = row_y  # for ._take_csi_cols_delete_if_
         self.column_x = column_x  # for ._take_csi_cols_delete_if_
 
         for y in range(1, y_height + 1):
@@ -1160,7 +1166,7 @@ class ScreenEditor:
         y_height = bt.read_y_height()
 
         (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for ._take_csi_cols_insert_if_
+        pt.row_y = row_y  # for ._take_csi_cols_insert_if_
         self.column_x = column_x  # for ._take_csi_cols_insert_if_
 
         for y in range(1, y_height + 1):
@@ -1363,9 +1369,13 @@ class ScreenEditor:
     def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
 
+        packets = self.packets
         arrows = self.arrows
 
         pt = self.proxy_terminal
+        row_y = pt.row_y
+        column_x = pt.column_x
+
         bt = pt.bytes_terminal
 
         # Count out a rapid burst of >= 2 Arrows
@@ -1393,12 +1403,35 @@ class ScreenEditor:
         kdata = tbp.to_bytes()
         t1t0 = t1 - t0
 
-        if kdata not in (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D"):
+        arrows_kdata_tuple = (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D")
+
+        if kdata not in arrows_kdata_tuple:
             self.arrows = 0  # written only by Init & this Def
         elif t1t0 >= arrows_timeout:
             self.arrows = 0  # written only by Init & this Def
-        else:
+        elif arrows > 0:
             self.arrows += 1
+        else:
+            assert arrows == 0, (arrows,)
+
+            self.arrows += 1
+
+            packet = packets[-1]
+            packet_kdata = packet.to_bytes()
+            assert packet_kdata in arrows_kdata_tuple, (packet_kdata,)
+
+            (y, x) = (row_y, column_x)
+            if packet_kdata == b"\x1b[A":
+                y += 1  # goes up, not down
+            elif packet_kdata == b"\x1b[B":
+                y -= 1  # goes up, not down
+            elif packet_kdata == b"\x1b[C":
+                x -= 1  # goes left, not right
+            elif packet_kdata == b"\x1b[D":
+                x += 1  # goes right, not left
+
+            self.arrow_row_y = y
+            self.arrow_column_x = x
 
         while (not tbp.text) and (not tbp.closed) and (not bt.extras):
 
@@ -1419,12 +1452,24 @@ class ScreenEditor:
     def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
         """Take Slow-after-Arrow-Burst as a ⌥ Mouse Release, with never a Press"""
 
+        arrow_row_y = self.arrow_row_y
+        arrow_column_x = self.arrow_column_x
+        arrow_yx = (arrow_row_y, arrow_column_x)
+
         pt = self.proxy_terminal
         bt = pt.bytes_terminal
 
-        (row_y, column_x) = bt.read_row_y_column_x()
-        self.row_y = row_y  # for .read_arrows_as_byte_packet
-        self.column_x = column_x  # for .read_arrows_as_byte_packet
+        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+
+        yx = (row_y, column_x) = bt.read_row_y_column_x()
+        # pt.row_y = row_y  # for .read_arrows_as_byte_packet
+        # pt.column_x = column_x  # for .read_arrows_as_byte_packet
+
+        cup = f"\x1b[{arrow_row_y};{arrow_column_x}H"
+        self.write(f"\x1b[{arrow_row_y};{arrow_column_x}H")
+        after_write_yx = (pt.row_y, pt.column_x)
+
+        assert after_write_yx == arrow_yx, (after_write_yx, arrow_yx, yx, cup)
 
         option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
         ktext = f"\x1b[<{option_f};{column_x};{row_y}m"
@@ -2070,8 +2115,8 @@ class ScreenEditor:
         self.write("\x1b7")
 
         self.write(f"\x1b[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
-        assert self.row_y == y, (self.row_y, y)
-        assert self.column_x == x, (self.column_x, x)
+        assert pt.row_y == y, (pt.row_y, y)
+        assert pt.column_x == x, (pt.column_x, x)
 
         # Vanish if the Widget is no more than the Verb, unmarked
 
@@ -3154,6 +3199,8 @@ class ProxyTerminal:
 
                     self.row_y = row_y  # for .write_leap_mirrors
                     self.column_x = column_x  # for .write_leap_mirrors
+
+                    # tprint(f"{row_y=} {column_x=}  # write_leap_csi_cup_y_x_mirrors")
 
                     return True
 
