@@ -2398,7 +2398,7 @@ class SnuckLife:
 
         # Take in the next Move
 
-        yx_list = list((_.row_y, _.column_x) for _ in sprites)
+        yx_list = list((_.row_ya, _.column_xa) for _ in sprites)
 
         (y, x) = yx_list[0]
         yx = (y + dy, x + dx)
@@ -2420,7 +2420,7 @@ class SnuckLife:
         se = self.screen_editor
         func_by_str: dict[str, abc.Callable[[], None]] = {
             "⌃D": se.do_raise_system_exit,
-            # "Tab": self.do_snuck_8x_step_ahead,
+            "Tab": self.do_snuck_8x_step_ahead,
             "Spacebar": self.do_snuck_step_ahead,
             "←": self.do_snuck_step_left,
             "↑": self.do_snuck_step_ahead,
@@ -2449,9 +2449,13 @@ class TerminalSprite:
     proxy_terminal: ProxyTerminal
     z_writes: tuple[str]
 
-    writes: tuple[str, ...] = tuple()
-    row_y: int = -1
-    column_x: int = -1
+    a_writes: tuple[str, ...] = tuple()
+    row_ya: int = -1
+    column_xa: int = -1
+
+    b_writes: tuple[str, ...] = tuple()
+    row_yb: int = -1
+    column_xb: int = -1
 
     def __init__(self, snuck_life: SnuckLife, z_writes: tuple[str]) -> None:
 
@@ -2469,23 +2473,31 @@ class TerminalSprite:
 
         z_writes = self.z_writes
 
-        ya = self.row_y
-        xa = self.column_x
-        writes = self.writes
+        ya = self.row_ya
+        xa = self.column_xa
+        a_writes = self.a_writes
+
+        yb = self.row_yb
+        xb = self.column_xb
+        b_writes = self.b_writes
 
         # Skip if already here
 
         if (ya, xa) == (y, x):
             return
 
+        (yc, xc) = (y, x)
+        (yd, xd) = (y, x + 1)
+
         # Read there
 
-        default = (" ",)
-        yx_writes = pt.read_yx_writes(y, x=x, default=default)
+        default = (" ",)  # Single Wide Space
+        ycxc_writes = pt.read_yx_writes(yc, x=xc, default=default)
+        ydxd_writes = pt.read_yx_writes(yd, x=xd, default=default)
 
         # Write there
 
-        pt.proxy_write(f"\x1b[{y};{x}H")
+        pt.proxy_write(f"\x1b[{yc};{xc}H")
         for write in z_writes:
             pt.proxy_write(write)
 
@@ -2493,14 +2505,23 @@ class TerminalSprite:
 
         if (ya, xa) != (-1, -1):
             pt.proxy_write(f"\x1b[{ya};{xa}H")
-            for write in writes:
-                pt.proxy_write(write)
+            for a_write in a_writes:
+                pt.proxy_write(a_write)
+
+        if (yb, xb) != (-1, -1):
+            pt.proxy_write(f"\x1b[{yb};{xb}H")
+            for b_write in b_writes:
+                pt.proxy_write(b_write)
 
         # Remember new
 
-        self.writes = yx_writes  # replace
-        self.row_y = y
-        self.column_x = x
+        self.a_writes = ycxc_writes  # replace
+        self.row_ya = yc
+        self.column_xa = xc
+
+        self.b_writes = ydxd_writes  # replace
+        self.row_yb = yd
+        self.column_xb = xd
 
 
 class ProxyTerminal:
