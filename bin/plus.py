@@ -903,7 +903,7 @@ class ScreenEditor:
         assert EL_PS == "\x1b[" "{}" "K"
 
         self.write("\x1b[K")
-        self.print("On #345")  # todo9: next experiment
+        self.print("On #345  <Jabberwocky>")  # todo9: next experiments
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
         self.print()
@@ -2392,9 +2392,13 @@ class SnuckLife:
     def do_snuck_step_ahead(self) -> None:
         """Move the Head Sprite ahead, and have the rest follow"""
 
+        se = self.screen_editor
         dy = self.dy
         dx = self.dx
         sprites = self.sprites
+
+        assert DECSC == "\x1b" "7"  # DECSC 7 Cursor Save
+        assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
 
         # Take in the next Move
 
@@ -2407,12 +2411,16 @@ class SnuckLife:
 
         # Move the Sprites
 
+        se.write("\x1b7")
+
         for sprite, yx in zip(sprites, yx_list):
             (y, x) = yx
             if (y, x) != (-1, -1):
                 sprite.yx_leap_to(y, x=x)
 
             # todo: When should we not-rewrite the Z Layer below?
+
+        se.write("\x1b8")
 
     def form_snuck_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
