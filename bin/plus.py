@@ -2814,9 +2814,9 @@ class ProxyTerminal:
         # Trace this work
 
         if not tws:
-            tprint(f"Did Not Mirror {text=} and now y={yb} x={xb}")
+            tprint(f"Did Not Mirror {text=}, now at y={yb} x={xb}")
         else:
-            tprint(f"Did Mirror {text=} till now y={yb} x={xb}")
+            tprint(f"Did Mirror {text=}, now at y={yb} x={xb}")
 
     def try_write_mirrors(self, text: str) -> bool:
         """Mirror the Screen Panel"""
@@ -3234,7 +3234,7 @@ class ProxyTerminal:
 
         sdata = tbp.to_bytes()
 
-        styles = self.styles
+        toggles = self.toggles
 
         assert SM_IRM == "\x1b[" "4h"
         assert RM_IRM == "\x1b[" "4l"
@@ -3253,10 +3253,10 @@ class ProxyTerminal:
 
                 # Remove the Old Stale if need be, but add the New Fresh always
 
-                if other in styles:
-                    styles.remove(other)
+                if other in toggles:
+                    toggles.remove(other)
 
-                styles.append(stext)
+                toggles.append(stext)
 
                 # Succeed
 
