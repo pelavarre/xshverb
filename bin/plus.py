@@ -1836,7 +1836,7 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        sl = SnuckLife(screen_editor=self, dy=-1, dx=0)
+        sl = SnuckLife(screen_editor=self, dy=0, dx=2)
 
         func_by_str = dict(with_func_by_str)
         snuck_func_by_str = sl.form_snuck_func_by_str()
@@ -2310,10 +2310,6 @@ class SnuckLife:
 
         self.screen_editor = screen_editor
 
-        se = self.screen_editor
-        pt = se.proxy_terminal
-        bt = pt.bytes_terminal
-
         sprite0 = TerminalSprite(self, z_writes=("🟦",))
         sprite1 = TerminalSprite(self, z_writes=("⬜",))
         sprite2 = TerminalSprite(self, z_writes=("⬜",))
@@ -2323,16 +2319,14 @@ class SnuckLife:
         self.dx = dx
         self.sprites = sprites
 
-        (row_y, column_x) = bt.read_row_y_column_x()
-
-        sprite0.yx_leap_to(y=row_y, x=column_x)
-        self.do_snuck_step_ahead()
-        self.do_snuck_step_ahead()
-
     def play_snuck_life(self) -> None:
         """Play Conway's Game-of-Life"""
 
+        sprites = self.sprites
+
         se = self.screen_editor
+        pt = se.proxy_terminal
+        bt = pt.bytes_terminal
 
         # Say Hello
 
@@ -2345,6 +2339,14 @@ class SnuckLife:
         se.print()
         se.print()
         se.print()
+
+        # Move enough to draw the whole Initial Snake
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+
+        sprites[0].yx_leap_to(y=row_y, x=column_x)
+        self.do_snuck_step_ahead()
+        self.do_snuck_step_ahead()
 
         # Walk one step after another
 
@@ -2359,7 +2361,7 @@ class SnuckLife:
         se.print()
         se.print("Goodbye from Snuck")
 
-    def do_snuck_turn_left(self) -> None:
+    def do_snuck_step_left(self) -> None:
         """Turn Left"""
 
         dy = self.dy
@@ -2368,7 +2370,9 @@ class SnuckLife:
         self.dy = -dx // 2
         self.dx = 2 * dy
 
-    def do_snuck_turn_right(self) -> None:
+        self.do_snuck_step_ahead()
+
+    def do_snuck_step_right(self) -> None:
         """Turn Right"""
 
         dy = self.dy
@@ -2376,6 +2380,8 @@ class SnuckLife:
 
         self.dy = dx // 2
         self.dx = -2 * dy
+
+        self.do_snuck_step_ahead()
 
     def do_snuck_8x_step_ahead(self) -> None:
         """Step ahead 8X"""
@@ -2416,9 +2422,9 @@ class SnuckLife:
             "⌃D": se.do_raise_system_exit,
             # "Tab": self.do_snuck_8x_step_ahead,
             "Spacebar": self.do_snuck_step_ahead,
-            "←": self.do_snuck_turn_left,
+            "←": self.do_snuck_step_left,
             "↑": self.do_snuck_step_ahead,
-            "→": self.do_snuck_turn_right,
+            "→": self.do_snuck_step_right,
         }
 
         return func_by_str
