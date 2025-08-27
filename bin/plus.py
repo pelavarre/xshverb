@@ -263,9 +263,13 @@ CPR_Y_X_REGEX = r"\x1b\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep
 
 DEL = "\x7f"  # 00/7F Delete [Control Character]  # aka ⌃?
 
+
 PS0 = 0  # often the default Int of a Selective [Enum] Parameter of a Csi Esc Sequence, etc
 PN1 = 1  # often the min & default Int of a Numeric [Int] Parameter of a Csi Esc Sequence, etc
 _PN_MAX_32100_ = 32100  # a Numeric [Int] beyond the Counts of Rows & Columns at any Terminal
+
+
+CUP_Y_X_REGEX = r"\x1B\[(-?[0-9]+);(-?[0-9]+)H"  # like CUP_Y_X but accepts Y <= 0 and X <= 0
 
 
 # todo2: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
@@ -430,8 +434,8 @@ class ConwayLife:
         se.write(f"\x1b[{y};{x}H")
         se.write(text)
 
-        x_width = pt._str_guess_x_width(text)
-        for x in range(x, x + x_width):
+        g_width = pt._str_guess_print_width(text)
+        for x in range(x, x + g_width):
             yx = (y, x)
             conway_yx_list.append(yx)
 
@@ -466,12 +470,12 @@ class ConwayLife:
         assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
 
         se.write("\x1b7")
-        self._do_conway_half_step_()
+        self._conway_half_step_()
         se.write("\x1b8")
 
         # Spacebar
 
-    def _do_conway_half_step_(self) -> None:
+    def _conway_half_step_(self) -> None:
         """Step the Game of Life forward by 1/2 Step"""
 
         se = self.screen_editor
@@ -558,6 +562,10 @@ class ConwayLife:
             if not ((yb in writes_by_y_x.keys()) and (xb in writes_by_y_x[yb].keys())):
                 ybxb_write = "⚪"
                 se.y_x_text_print(yb, x=xb, text=ybxb_write)
+
+                y_after = yb in writes_by_y_x.keys()
+                x_after = (xb in writes_by_y_x[yb].keys()) if y_after else False
+                assert y_after and x_after, (yb, xb, y_after, x_after)
 
             # Fetch the Cell next door
 
@@ -893,12 +901,15 @@ class ScreenEditor:
 
         pt = self.proxy_terminal
 
-        # Tell our Mirror where our next Write will land
+        # Tell the Mirror where the first Write will land
 
         assert pt.row_y == -1, (pt.row_y,)  # for .play_screen_editor
         assert pt.column_x == -1, (pt.column_x,)  # for .play_screen_editor
+        assert pt.y_height == -1, (pt.y_height,)  # for .play_screen_editor
+        assert pt.x_width == -1, (pt.x_width,)  # for .play_screen_editor
 
-        (row_y, column_x) = pt.proxy_read_row_y_column_x()
+        pt.proxy_read_row_y_column_x()
+        pt.proxy_read_y_height_x_width()
 
         # Prompt at Launch
 
@@ -936,10 +947,23 @@ class ScreenEditor:
         t1 = time.time()
         t1t0 = t1 - t0
 
-        packets.append(tbp)
-
         arrows = self.arrows
-        tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once")
+
+        packets.append(tbp)
+        kdata = tbp.to_bytes()
+
+        if len(kdata) == 1:
+            tprint(str(kdata)[2:-1], "in")
+        elif (not arrows) and (t1t0 > 0.020):
+            if kdata in self.loopable_kdata_tuple:
+                tprint(str(kdata)[2:-1], "in")
+            elif n > 1:
+                tprint(str(kdata)[2:-1], "in", n)
+            else:
+                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once 1")
+        else:
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once 2")
+
         assert tbp, (tbp, n)  # because .timeout=None
 
         kdata = tbp.to_bytes()
@@ -975,7 +999,7 @@ class ScreenEditor:
         func_by_str = self.func_by_str
         loopable_kdata_tuple = self.loopable_kdata_tuple
 
-        # Append to our __pycache__/k.keyboard Keylogger Keylogging File
+        # Append to the __pycache__/k.keyboard Keylogger Keylogging File
 
         kdata = tbp.to_bytes()
         assert kdata, (kdata,)  # because .timeout=None
@@ -986,14 +1010,13 @@ class ScreenEditor:
 
         if kcaps in func_by_str.keys():
             func = func_by_str[kcaps]
-            tprint(f"{func.__name__=}  # func_by_str reply_to_kdata")  # not .__qualname__
+            tprint(func.__name__)  # not .__qualname__
 
             func()  # may raise SystemExit
 
             return
 
         if kdata in loopable_kdata_tuple:
-            tprint(f"{kdata=} # do_write_kdata_as_sdata reply_to_kdata")  # not .__qualname__
 
             self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
 
@@ -1003,7 +1026,6 @@ class ScreenEditor:
 
         kchars = kdata.decode()  # may raise UnicodeDecodeError
         if kchars in KCAP_BY_KCHARS.keys():  # already handled above
-            tprint(f"Keycap {kchars=} {str(tbp)=}   # reply_to_kdata")
 
             if (n == 1) or (tbp.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
 
@@ -1014,7 +1036,6 @@ class ScreenEditor:
         # Pass through 1 Unicode Character
 
         if tbp.text:
-            tprint(f"tbp.text {kdata=}  # reply_to_kdata")
 
             self.write(tbp.text)
 
@@ -1030,7 +1051,6 @@ class ScreenEditor:
 
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
-        tprint(f"else {kdata=} {str(tbp)=}   # reply_to_kdata")
         self.print_kcaps_plus(tbp)
 
     def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
@@ -1091,7 +1111,6 @@ class ScreenEditor:
         # Pass-through the .csi_slow_tails when slow.
         # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
 
-        tprint(f"Pass-through {kdata=} {str(tbp)=}   # take_tbp_n_kdata_if")
         self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
 
         return True
@@ -1740,9 +1759,9 @@ class ScreenEditor:
         depth = self.klog_to_kcount()
 
         pt = self.proxy_terminal
-        bt = pt.bytes_terminal
+        y_height = pt.y_height
+        x_width = pt.x_width
 
-        y_height, x_width = bt.read_y_height_x_width()
         mid_height = (y_height // 2) + (y_height % 2)
         mid_width = (x_width // 2) + (x_width % 2)
 
@@ -1905,11 +1924,10 @@ class ScreenEditor:
         """Print a #555 Color Picker"""
 
         pt = self.proxy_terminal
-        bt = pt.bytes_terminal
+        y_height = pt.y_height
+        x_width = pt.x_width
 
         # Split a Landscape Terminal vertically
-
-        (y_height, x_width) = bt.read_y_height_x_width()
 
         y_frame = 2
         x_frame = 4
@@ -2578,8 +2596,11 @@ class ProxyTerminal:
     toggles: list[str]  # Replacing/ Inserting/ etc
     styles: list[str]  # Foreground on Background Colors, etc
 
-    height_y: int
-    width_x: int
+    y_height: int
+    x_width: int
+
+    was_y: int
+    was_x: int
 
     def __init__(self) -> None:
 
@@ -2609,8 +2630,11 @@ class ProxyTerminal:
         self.toggles = list()
         self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
 
-        self.height_y = -1
-        self.width_x = -1
+        self.y_height = -1
+        self.x_width = -1
+
+        self.was_y = -1
+        self.was_x = -1
 
     def __enter__(self) -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -2685,13 +2709,13 @@ class ProxyTerminal:
     def do_screen_redraw(self) -> None:
         """Redraw the Screen as mirrored, be that wrong or correct"""
 
-        bt = self.bytes_terminal
-
         column_x = self.column_x
         writes_by_y_x = self.writes_by_y_x
         row_y = self.row_y
         styles = self.styles
         toggles = self.toggles
+        y_height = self.y_height
+        x_width = self.x_width
 
         tprint(f"{row_y=} {column_x=}  # do_screen_redraw")
 
@@ -2699,8 +2723,6 @@ class ProxyTerminal:
         assert EL_PS == "\x1b[" "{}" "K"
         assert SGR == "\x1b[" "{}" "m"
         assert RM_IRM == "\x1b[" "4l"
-
-        (y_height, x_width) = bt.read_y_height_x_width()
 
         # Redraw the Screen per se
 
@@ -2711,12 +2733,16 @@ class ProxyTerminal:
         for y in range(Y1, y_height):
             writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
 
+            last_x = X1
             x_sorted = sorted(writes_by_x.keys())
             if not x_sorted:
-                self.write_out("\x1b[H")
+                self.write_out(f"\x1b[{y}H")
             else:
                 boring = False
                 for x in range(X1, x_sorted[-1] + 1):
+                    if x > x_width:
+                        continue
+
                     x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else default
                     assert x_writes[-1].isprintable(), (y, x, x_writes)  # todo6: check often
 
@@ -2726,18 +2752,19 @@ class ProxyTerminal:
                     if not boring:  # todo7: stop redrawing Clear-Style unnecessarily
                         self.write_out("\x1b[m")
 
-                    for stext in x_writes:
-                        self.write_out(stext)  # todo7: stop redrawing Style unnecessarily
+                    last_x_write = x_writes[-1]
+                    for x_write in x_writes:
+                        self.write_out(x_write)  # todo7: stop redrawing Style unnecessarily
+
+                    g_width = self._str_guess_print_width(last_x_write)
+                    last_x = x + g_width - 1
 
                     if len(x_writes) == 1:
-                        last_stext = x_writes[-1]
-                        if len(last_stext) == 1:
-                            if 0x20 <= ord(last_stext) <= 0x7E:
+                        if len(last_x_write) == 1:
+                            if 0x20 <= ord(last_x_write) <= 0x7E:
                                 boring = True
 
-            x = (x_sorted[-1] + 1) if x_sorted else X1
-            if x < x_width:
-                self.write_out(f"\x1b[{y};{x}H")
+            if last_x < x_width:
                 self.write_out("\x1b[m")  # SGR before EL_X needed at macOS
                 self.write_out("\x1b[K")
 
@@ -2815,7 +2842,7 @@ class ProxyTerminal:
         return ""
 
     #
-    #  Write into the Mirrors
+    #  Read from the Mirrors of the Terminal Cursor Y, X, Height, & Width
     #
 
     def proxy_read_row_y(self) -> int:
@@ -2890,8 +2917,58 @@ class ProxyTerminal:
     def proxy_write(self, text: str) -> None:
         """Write the Bytes, log them as written, and mirror them"""
 
-        self.write_out(text)
-        self.write_mirrors(text)
+        row_y = self.row_y
+        column_x = self.column_x
+        y_height = self.y_height
+        x_width = self.x_width
+
+        # Drop Texts when out of bounds
+
+        if text.isprintable():
+            if (y_height, x_width) != (-1, -1):
+                for ch in text:
+                    self.proxy_small_write(text=ch)
+                return
+
+        # Drop CR LF when out of bounds
+
+        elif text == "\r\n":
+            if row_y < y_height:
+                self.write_out(text)
+            else:
+                self.write_out("\r")
+
+        # Else write the Bytes, and log them as written
+
+        else:
+            self.write_out(text)
+
+        # Always do write the Mirrors
+
+        self.write_mirrors(y=row_y, x=column_x, text=text)
+
+    def proxy_small_write(self, text: str) -> None:
+        """Write & log the Bytes if they fit, but mirror them always"""
+
+        tprint(f"{self.row_y=} {self.column_x=} {text=}  # proxy_small_write")
+
+        row_y = self.row_y
+        column_x = self.column_x
+        y_height = self.y_height
+        x_width = self.x_width
+
+        # Write the Bytes, and log them as written, only if they fit
+
+        g_width = self._str_guess_print_width(text)
+        last_x = column_x + g_width - 1
+
+        if 1 <= row_y <= y_height:
+            if 1 <= last_x <= x_width:
+                self.write_out(text)
+
+        # Write the Mirrors always
+
+        self.write_mirrors(y=row_y, x=column_x, text=text)
 
     def write_out(self, text: str) -> None:
         """Write the Bytes, and log them as written"""
@@ -2899,45 +2976,23 @@ class ProxyTerminal:
         schars = text
         sdata = schars.encode()  # may raise UnicodeEncodeError
 
+        slog = self.screen_bytes_log
+
         bt = self.bytes_terminal
         fileno = bt.fileno
-        slog = self.screen_bytes_log
 
         os.write(fileno, sdata)
         slog.write(sdata)
 
-    def write_mirrors(self, text: str) -> None:
+    def write_mirrors(self, y: int, x: int, text: str) -> None:
         """Mirror the Screen Panel"""
-
-        bt = self.bytes_terminal
-        (y_height, x_width) = bt.read_y_height_x_width()
-
-        # Test Preconditions
-
-        xa = self.column_x
-        ya = self.row_y
-
-        assert 1 <= ya <= y_height, (ya, y_height)
-        assert 1 <= xa <= x_width, (xa, x_width)
-
-        # Write into the Mirrors
 
         tws = self.try_write_mirrors(text)
 
-        # Test Postconditions
-
-        xb = self.column_x
-        yb = self.row_y
-
-        assert 1 <= yb <= y_height, (yb, y_height)
-        assert 1 <= xb <= x_width, (xb, x_width)
-
-        # Trace this work
-
-        if not tws:
-            tprint(f"Did Not Mirror {text=}, now at y={yb} x={xb}")
+        if tws:
+            tprint(f"{y},{x}", repr(text)[1:-1])
         else:
-            tprint(f"Did Mirror {text=}, now at y={yb} x={xb}")
+            tprint(f"{y},{x} No mirror of {text!r}")
 
     def try_write_mirrors(self, text: str) -> bool:
         """Mirror the Screen Panel"""
@@ -2945,11 +3000,11 @@ class ProxyTerminal:
         schars = text
         sdata = schars.encode()  # may raise UnicodeEncodeError
 
-        #
-
         assert HT == "\t"
         assert LF == "\n"
         assert CR == "\r"
+
+        assert CUP_Y_X_REGEX == r"\x1B\[(-?[0-9]+);(-?[0-9]+)H"
 
         # Take HT and CR and LF, but one at a time
 
@@ -2980,9 +3035,14 @@ class ProxyTerminal:
 
             # todo: reconsider CR LF is 2 TerminalBytePacket, not 1
 
-        # Else write 1 whole Packet into the Mirrors
+        # Take ⎋[{y};{x}H as meaningful, even when Y X out
 
         stext = sdata.decode()  # todo: may raise UnicodeDecodeError
+        if self.write_leap_csi_cup_y_x_mirrors(stext):
+            return True
+
+        # Else write one whole Packet into the Mirrors
+
         tbp = TerminalBytePacket(sdata)
 
         if not stext:
@@ -3011,12 +3071,8 @@ class ProxyTerminal:
     def write_text_mirrors(self, stext: str) -> bool:
         """Mirror the Text"""
 
-        bt = self.bytes_terminal
-
         writes_by_y_x = self.writes_by_y_x
         styles = self.styles
-
-        x_width = bt.read_x_width()
 
         if not stext.isprintable():
             return False
@@ -3025,12 +3081,6 @@ class ProxyTerminal:
             y = self.row_y
             x = self.column_x
 
-            if x == x_width:
-                return False
-
-            if (y < 1) or (x < 1):  # todo4: How deep into the SW should .write_text_mirrors run?
-                continue
-
             if y not in writes_by_y_x.keys():
                 writes_by_y_x[y] = dict()
 
@@ -3038,38 +3088,39 @@ class ProxyTerminal:
 
             writes_by_x[x] = list(styles) + [ch]  # replace  # todo6: prefer mutate?
 
-            x_width = self._str_guess_x_width(ch)
-            for x_plus in range(x + 1, x + x_width):  # encodes Wider Chars as "" Empty Str's
+            g_width = self._str_guess_print_width(ch)
+            for x_plus in range(x + 1, x + g_width):  # encodes Wider Chars as "" Empty Str's
                 writes_by_x[x_plus] = list(styles) + [""]  # replace
 
-            self.column_x += x_width
+            self.column_x += g_width
 
         return True
 
         # todo6: detect and mirror wrap effects at and past width of Row correctly
 
-    def _str_guess_x_width(self, text: str) -> int:
+    def _str_guess_print_width(self, text: str) -> int:
         """Guess the Width on Screen of printing a Text"""
 
-        x_width = 0
+        g_width = 0
         for ch in text:
             eaw = unicodedata.east_asian_width(ch)
-            x_width += 1
+            g_width += 1
             if eaw in ("F", "W"):
-                x_width += 1
+                g_width += 1
 
-        return x_width
+        return g_width
 
     def write_leap_byte_mirrors(self, tbp: TerminalBytePacket) -> bool:
         """Mirror the Control Byte Sequences that move the Terminal Cursor"""
 
         sdata = tbp.to_bytes()
 
-        bt = self.bytes_terminal
-        column_x = self.column_x
         row_y = self.row_y
-
-        (y_height, x_width) = bt.read_y_height_x_width()
+        column_x = self.column_x
+        y_height = self.y_height
+        x_width = self.x_width
+        was_y = self.was_y
+        was_x = self.was_x
 
         assert BEL == "\x07"
         assert BS == "\b"
@@ -3078,7 +3129,7 @@ class ProxyTerminal:
         assert CR == "\r"
         assert DEL == "\x7f"
 
-        # Write BEL, HT, LF, & CR into the Mirrors
+        # Write BEL, HT, LF, or CR into the Mirrors
 
         if sdata == b"\x07":
             return True
@@ -3111,6 +3162,18 @@ class ProxyTerminal:
 
             # todo6: scroll the Mirrored Text at "\n" etc
 
+        # Checkpoint and revert the Y X Cursor
+
+        if sdata == b"\x1b7":
+            self.was_y = row_y
+            self.was_x = column_x
+            return True
+
+        if sdata == b"\x1b8":
+            self.row_y = was_y
+            self.column_x = was_x
+            return True
+
         # Else don't succeed here
 
         return False
@@ -3124,10 +3187,9 @@ class ProxyTerminal:
         if self.write_leap_csi_tab_and_forth_mirrors(tbp):
             return True
 
-        if self.write_leap_csi_cup_y_x_mirrors(tbp):
-            return True
-
         return False
+
+        # omits .write_leap_csi_cup_y_x_mirrors
 
     def write_leap_csi_arrow_plus_mirrors(self, tbp: TerminalBytePacket) -> bool:
         """Mirror the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
@@ -3214,42 +3276,32 @@ class ProxyTerminal:
 
         return False
 
-    def write_leap_csi_cup_y_x_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_leap_csi_cup_y_x_mirrors(self, text: str) -> bool:
         """Mirror the ⇧H leaps to Y X into the Mirrors"""
 
-        bt = self.bytes_terminal
-        column_x = self.column_x
-        row_y = self.row_y
-
-        y_height = bt.read_y_height()
-        x_width = bt.read_x_width()
-
-        #
+        y_height = self.y_height
+        x_width = self.x_width
 
         assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+        assert _PN_MAX_32100_ == 32100
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        m = re.fullmatch(r"\x1B\[(-?[0-9]+);(-?[0-9]+)H", string=text)
+        if m:
+            y = int(m.group(1))
+            x = int(m.group(2))
 
-        if csi and tbp.tail == b"H":
-            if not tbp.back:
+            row_y = y
+            if y == 32100:
+                row_y = y_height
 
-                neck_splits = tbp.neck.split(b";")
-                if len(neck_splits) <= 2:
+            column_x = x
+            if x == 32100:
+                column_x = x_width
 
-                    neck_plus_splits = neck_splits + [b"1", b"1"]
+            self.row_y = row_y  # for .write_leap_csi_cup_y_x_mirrors
+            self.column_x = column_x  # for .write_leap_csi_cup_y_x_mirrors
 
-                    row_y_ = int(neck_plus_splits[0]) if neck_plus_splits[0] else Y1
-                    column_x_ = int(neck_plus_splits[1]) if neck_plus_splits[1] else X1
-
-                    row_y = min(y_height, max(Y1, row_y_))
-                    column_x = min(x_width, max(X1, column_x_))
-
-                    self.row_y = row_y  # for .write_leap_mirrors
-                    self.column_x = column_x  # for .write_leap_mirrors
-
-                    # tprint(f"{row_y=} {column_x=}  # write_leap_csi_cup_y_x_mirrors")
-
-                    return True
+            return True
 
         return False
 
@@ -3267,13 +3319,11 @@ class ProxyTerminal:
     def write_erase_csi_mirrors(self, tbp: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that erase Rows and Columns"""
 
-        bt = self.bytes_terminal
         column_x = self.column_x
         row_y = self.row_y
         writes_by_y_x = self.writes_by_y_x
         styles = self.styles
-
-        (y_height, x_width) = bt.read_y_height_x_width()  # todo9: ED_PS ⎋[ ⇧J
+        x_width = self.x_width
 
         assert ED_PS == "\x1b[" "{}" "J"
         assert EL_PS == "\x1b[" "{}" "K"
