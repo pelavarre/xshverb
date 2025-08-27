@@ -337,7 +337,7 @@ class ConwayLife:
         bt = pt.bytes_terminal
         writes_by_y_x = pt.writes_by_y_x
 
-        (ya, xa) = bt.read_row_y_column_x()
+        (ya, xa) = pt.proxy_read_row_y_column_x()
         x_width = bt.read_x_width()
 
         assert CUP_Y_X1 == "\x1b[" "{}" "H"
@@ -892,17 +892,13 @@ class ScreenEditor:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
 
         pt = self.proxy_terminal
-        bt = pt.bytes_terminal
 
         # Tell our Mirror where our next Write will land
 
         assert pt.row_y == -1, (pt.row_y,)  # for .play_screen_editor
         assert pt.column_x == -1, (pt.column_x,)  # for .play_screen_editor
 
-        (row_y, column_x) = bt.read_row_y_column_x()
-
-        pt.row_y = row_y  # for .play_screen_editor
-        pt.column_x = column_x  # for .play_screen_editor
+        (row_y, column_x) = pt.proxy_read_row_y_column_x()
 
         # Prompt at Launch
 
@@ -1132,9 +1128,7 @@ class ScreenEditor:
         pn = int(tbp.neck) if tbp.neck else PN1
         y_height = bt.read_y_height()
 
-        (row_y, column_x) = bt.read_row_y_column_x()
-        pt.row_y = row_y  # for ._take_csi_cols_delete_if_
-        self.column_x = column_x  # for ._take_csi_cols_delete_if_
+        (row_y, column_x) = pt.proxy_read_row_y_column_x()
 
         for y in range(1, y_height + 1):
             self.write(f"\x1b[{y}d")  # for .columns_delete_n
@@ -1165,9 +1159,7 @@ class ScreenEditor:
         pn = int(tbp.neck) if tbp.neck else PN1
         y_height = bt.read_y_height()
 
-        (row_y, column_x) = bt.read_row_y_column_x()
-        pt.row_y = row_y  # for ._take_csi_cols_insert_if_
-        self.column_x = column_x  # for ._take_csi_cols_insert_if_
+        (row_y, column_x) = pt.proxy_read_row_y_column_x()
 
         for y in range(1, y_height + 1):
             self.write(f"\x1b[{y}d")  # for .columns_delete_n
@@ -1324,9 +1316,9 @@ class ScreenEditor:
     def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
-        column_x = self.column_x
-
         pt = self.proxy_terminal
+        column_x = pt.column_x
+
         bt = pt.bytes_terminal
         x_width = bt.read_x_width()
 
@@ -1457,13 +1449,11 @@ class ScreenEditor:
         arrow_yx = (arrow_row_y, arrow_column_x)
 
         pt = self.proxy_terminal
-        bt = pt.bytes_terminal
 
         assert CUP_Y_X == "\x1b[" "{};{}" "H"
 
-        yx = (row_y, column_x) = bt.read_row_y_column_x()
-        # pt.row_y = row_y  # for .read_arrows_as_byte_packet
-        # pt.column_x = column_x  # for .read_arrows_as_byte_packet
+        yx = pt.proxy_read_row_y_column_x()
+        (row_y, column_x) = yx
 
         cup = f"\x1b[{arrow_row_y};{arrow_column_x}H"
         self.write(f"\x1b[{arrow_row_y};{arrow_column_x}H")
@@ -1580,13 +1570,11 @@ class ScreenEditor:
         """Delete the Character at left of the Cursor"""
 
         pt = self.proxy_terminal
-        bt = pt.bytes_terminal
 
         assert BS == "\b"
         assert DCH_X == "\x1b[" "{}" "P"
 
-        x = bt.read_column_x()
-        self.column_x = x
+        x = pt.proxy_read_column_x()
 
         if x > 1:
             self.write("\b")
@@ -2371,7 +2359,6 @@ class SnuckLife:
 
         se = self.screen_editor
         pt = se.proxy_terminal
-        bt = pt.bytes_terminal
 
         # Say Hello
 
@@ -2387,7 +2374,7 @@ class SnuckLife:
 
         # Move enough to draw the whole Initial Snake
 
-        (row_y, column_x) = bt.read_row_y_column_x()
+        (row_y, column_x) = pt.proxy_read_row_y_column_x()
 
         sprites[0].yx_leap_to(y=row_y, x=column_x)
         self.do_snuck_step_ahead()
@@ -2591,6 +2578,9 @@ class ProxyTerminal:
     toggles: list[str]  # Replacing/ Inserting/ etc
     styles: list[str]  # Foreground on Background Colors, etc
 
+    height_y: int
+    width_x: int
+
     def __init__(self) -> None:
 
         # Form some things
@@ -2618,6 +2608,9 @@ class ProxyTerminal:
 
         self.toggles = list()
         self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
+
+        self.height_y = -1
+        self.width_x = -1
 
     def __enter__(self) -> typing.Self:
         r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
@@ -2820,6 +2813,60 @@ class ProxyTerminal:
             return stext1
 
         return ""
+
+    #
+    #  Write into the Mirrors
+    #
+
+    def proxy_read_row_y(self) -> int:
+        """Read the Terminal Cursor Y Row, but through the Mirrors"""
+
+        (row_y, column_x) = self.proxy_read_row_y_column_x()
+
+        return row_y
+
+    def proxy_read_column_x(self) -> int:
+        """Read the Terminal Cursor X Column, but through the Mirrors"""
+
+        (row_y, column_x) = self.proxy_read_row_y_column_x()
+
+        return column_x
+
+    def proxy_read_row_y_column_x(self) -> tuple[int, int]:
+        """Read the Terminal Cursor, but through the Mirrors"""
+
+        bt = self.bytes_terminal
+
+        (row_y, column_x) = bt.read_row_y_column_x()
+        self.row_y = row_y  # for .proxy_read_row_y_column_x
+        self.column_x = column_x  # for .proxy_read_row_y_column_x
+
+        return (row_y, column_x)
+
+    def proxy_read_y_height(self) -> int:
+        """Read the Terminal Cursor Y Row, but through the Mirrors"""
+
+        (y_height, x_width) = self.proxy_read_y_height_x_width()
+
+        return y_height
+
+    def proxy_read_x_width(self) -> int:
+        """Read the Terminal Cursor X Column, but through the Mirrors"""
+
+        (y_height, x_width) = self.proxy_read_y_height_x_width()
+
+        return x_width
+
+    def proxy_read_y_height_x_width(self) -> tuple[int, int]:
+        """Read the Terminal Cursor, but through the Mirrors"""
+
+        bt = self.bytes_terminal
+
+        (y_height, x_width) = bt.read_y_height_x_width()
+        self.y_height = y_height  # for .proxy_read_y_height_x_width
+        self.x_width = x_width  # for .proxy_read_y_height_x_width
+
+        return (y_height, x_width)
 
     #
     #  Write into the Mirrors
