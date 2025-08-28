@@ -3761,8 +3761,8 @@ SCREEN_WRITER_HELP = r"""
         ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
         ⎋[?1049H screen-alt  ⎋[?1049L screen-main  ⎋[?25L cursor-hide  ⎋[?25H cursor-show
 
-        ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse
-        ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[38;5;130M orange
+        ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m max grayscale
+        ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[104M on bright blue  ⎋[38;5;130M orange
         ⎋[M plain  #211 on #344  #333366 on #CCCC99    <Jabberwocky>
 
         ⎋[5N call for reply ⎋[0N
