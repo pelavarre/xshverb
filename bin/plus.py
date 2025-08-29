@@ -3408,10 +3408,28 @@ class ProxyTerminal:
         assert EL_PS == "\x1b[" "{}" "K"
 
         if ps == 0:
+
             (xa, xb) = (column_x, x_width)  # default to PS0 ⎋[⇧K row-tail-erase
+
+            writes_by_x = dict()
+            if row_y in writes_by_y_x.keys():
+                writes_by_x = writes_by_y_x[row_y]
+
+            max_x = -1
+            if writes_by_x:
+                max_x = max(writes_by_x.keys())
+
+            if xa > max_x:
+                if xa not in writes_by_x.keys():
+                    while (xa > 1) and ((xa - 1) not in writes_by_x.keys()):
+                        xa -= 1
+
         elif ps == 1:  # ⎋[1⇧K row-head-erase
+
             (xa, xb) = (X1, column_x)  # includes the Character beneath the Cursor
+
         else:
+
             assert ps == 2, (ps,)  # ⎋[2⇧K row-erase
             (xa, xb) = (1, x_width)
 
