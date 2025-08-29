@@ -3485,6 +3485,8 @@ class ProxyTerminal:
                         strs_by_x[to_x] = strs_by_x[from_x]
                         del strs_by_x[from_x]
 
+                    # todo9: Mark the Row as ended with Background Color
+
                     # Succeed
 
                     return True
