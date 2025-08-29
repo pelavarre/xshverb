@@ -71,6 +71,7 @@ pips requirements.txt:
 	source ~/.pyvenvs/pips/bin/activate && python3 -m pip install --upgrade flake8-import-order
 	source ~/.pyvenvs/pips/bin/activate && python3 -m pip install --upgrade mypy
 	:
+	source ~/.pyvenvs/pips/bin/activate && python3 -m pip freeze >requirements.txt
 	git diff --color-moved requirements.txt
 	:
 
