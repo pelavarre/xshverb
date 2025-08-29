@@ -3324,9 +3324,7 @@ class ProxyTerminal:
 
         column_x = self.column_x
         row_y = self.row_y
-        writes_by_y_x = self.writes_by_y_x
-        styles = self.styles
-        x_width = self.x_width
+        y_height = self.y_height
 
         assert ED_PS == "\x1b[" "{}" "J"
         assert EL_PS == "\x1b[" "{}" "K"
@@ -3335,28 +3333,69 @@ class ProxyTerminal:
 
         csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and tbp.tail == b"K":
+        if csi and ((tbp.tail == b"J") or (tbp.tail == b"K")):
             if not tbp.back:
                 ps = int(tbp.neck) if tbp.neck else 0
                 if ps in (0, 1, 2):
 
-                    (xa, xb) = (column_x, x_width)  # default to PS0 ⎋[⇧K row-tail-erase
-                    if ps == 1:  # ⎋[1⇧K row-head-erase
-                        (xa, xb) = (X1, column_x)  # includes the Character beneath the Cursor
-                    elif ps == 2:  # ⎋[2⇧K row-erase
-                        xa = 1
+                    if tbp.tail == b"K":
 
-                    y = row_y
-                    if y not in writes_by_y_x.keys():
-                        writes_by_y_x[y] = dict()
+                        self._write_row_erase_(ps)
 
-                    strs_by_x = writes_by_y_x[y]
-                    for x in range(xa, xb + 1):
-                        strs_by_x[x] = list(styles) + [" "]
+                    if tbp.tail == b"J":
+
+                        if ps == 0:
+                            self._write_row_erase_(ps)
+                            (ya, yb) = (row_y + 1, y_height)  # default to PS0 ⎋[⇧J after-erase
+                        elif ps == 1:  # ⎋[1⇧J before-erase
+                            self._write_row_erase_(ps)
+                            (ya, yb) = (Y1, row_y - 1)  # includes the Character beneath the Cursor
+                        else:
+                            assert ps == 2, (ps,)  # ⎋[2⇧J screen-erase
+                            # self._write_row_erase_(ps)  # harmless, but unneeded
+                            (ya, yb) = (1, y_height)
+
+                        for y in range(ya, yb + 1):
+                            self.row_y = y
+                            self.column_x = X1
+
+                            self._write_row_erase_(ps=2)  # PS2 ⎋[2⇧K row-erase
+
+                        self.column_x = column_x
+                        self.row_y = row_y
 
                     return True
 
         return False
+
+    def _write_row_erase_(self, ps: int) -> None:
+        """Mirror ⇧K Erases of Head or Tail or Whole Row"""
+
+        assert ps in (0, 1, 2), (ps,)
+
+        column_x = self.column_x
+        row_y = self.row_y
+        writes_by_y_x = self.writes_by_y_x
+        styles = self.styles
+        x_width = self.x_width
+
+        assert EL_PS == "\x1b[" "{}" "K"
+
+        if ps == 0:
+            (xa, xb) = (column_x, x_width)  # default to PS0 ⎋[⇧K row-tail-erase
+        elif ps == 1:  # ⎋[1⇧K row-head-erase
+            (xa, xb) = (X1, column_x)  # includes the Character beneath the Cursor
+        else:
+            assert ps == 2, (ps,)  # ⎋[2⇧K row-erase
+            (xa, xb) = (1, x_width)
+
+        y = row_y
+        if y not in writes_by_y_x.keys():
+            writes_by_y_x[y] = dict()
+
+        strs_by_x = writes_by_y_x[y]
+        for x in range(xa, xb + 1):
+            strs_by_x[x] = list(styles) + [" "]
 
     def write_delete_insert_csi_mirrors(self, tbp: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
