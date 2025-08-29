@@ -2726,10 +2726,11 @@ class ProxyTerminal:
 
         # Redraw the Screen per se
 
+        default = ["\x1b[48;5;255m", " "]
+
         self.write_out("\x1b[4l")
         self.write_out("\x1b[m")
 
-        default = [" "]
         for y in range(Y1, y_height):
             writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
 
@@ -2766,7 +2767,9 @@ class ProxyTerminal:
 
             if last_x < x_width:
                 self.write_out("\x1b[m")  # SGR before EL_X needed at macOS
-                self.write_out("\x1b[K")
+                for x_write in default[:-1]:
+                    self.write_out(x_write)
+                self.write_out("\x1b[K")  # todo9: emulate at gCloud Shell
 
         self.write_out("\x1b[m")
 

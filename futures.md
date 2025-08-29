@@ -1,5 +1,17 @@
 things to do, futures to build
 
+more lately
+
+    dt broke somehow
+
+        % dt echo a b c
+        2025-08-28 17:53:14 -0700  (2025-08-29 00:53:14.345781)  enter
+        + echo a b c
+        + exit 0
+        2025-08-28 17:53:14 -0700  (2025-08-29 00:53:14.358182)  exit
+        12ms401us
+        %
+
 lately
 
     make a kind of dt that just does elapsed and not before/after
