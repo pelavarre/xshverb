@@ -977,10 +977,10 @@ class ScreenEditor:
 
         klog.write(kdata)
 
-        self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
-
         if kdata == b"\x04":  # ⌃D
             raise SystemExit()
+
+        self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
         # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
