@@ -3169,9 +3169,12 @@ class ProxyTerminal:
 
         if sdata == b"\t":
             tab_stop_1 = X1 + ((column_x - X1) // 8 + 1) * 8
-            x = min(x_width, tab_stop_1)
+            tab_stop_1 = min(x_width, tab_stop_1)
 
-            self.column_x = x
+            while self.column_x < tab_stop_1:
+                self.write_text_mirrors(stext=" ")
+
+            assert self.column_x == tab_stop_1, (self.column_x, tab_stop_1)
 
             return True
 
