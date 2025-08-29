@@ -915,10 +915,16 @@ class ScreenEditor:
 
         assert EL_PS == "\x1b[" "{}" "K"
 
-        self.write("\x1b[K")
-        self.print("On #345  <Jabberwocky>")  # todo9: next experiments
+        for _ in range(4):
+            self.write("\x1b[A")
+
+        self.write("\x1b[K")  # todo9: next experiments
+        self.print("On #345  <Jabberwocky>  ⎋[104M on bright blue  ⎋[38;5;231m max grayscale")
+        self.write("\x1b[K")  # todo9: next experiments
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
+        self.write("\x1b[K")  # todo9: next experiments
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
+        self.write("\x1b[K")  # todo9: next experiments
         self.print()
 
         # Walk one step after another
