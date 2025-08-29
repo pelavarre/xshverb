@@ -2149,6 +2149,11 @@ class ScreenEditor:
     def take_mouse_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
         """Run the Verb at the Mouse Release"""
 
+        pt = self.proxy_terminal
+        column_x = pt.column_x
+        row_y = pt.row_y
+        writes_by_y_x = pt.writes_by_y_x
+
         # Eval some Keycaps
 
         if self.mouse_verb_to_write_sdata(verb):
@@ -2161,10 +2166,25 @@ class ScreenEditor:
         if casefold == "jabberwocky":
             splits = Jabberwocky.split()
             split = random.choice(splits)
-            self.write(split + " ")
+
+            if column_x > X1:
+                sep = " "
+                if row_y in writes_by_y_x.keys():
+                    writes_by_x = writes_by_y_x[row_y]
+                    if (column_x - 1) in writes_by_x.keys():
+                        writes = writes_by_x[column_x - 1]
+                        sep = writes[-1]
+
+                if sep != " ":
+                    self.write(" ")
+
+            self.write(split)
+
             return
 
         # Shout out no Verb found
+
+        assert BEL == "\a"
 
         self.write(repr(verb))
         self.write("\a")  # for .take_widget_at_yxf
@@ -3131,7 +3151,7 @@ class ProxyTerminal:
         was_y = self.was_y
         was_x = self.was_x
 
-        assert BEL == "\x07"
+        assert BEL == "\a"
         assert BS == "\b"
         assert HT == "\t"
         assert LF == "\n"
@@ -3140,7 +3160,7 @@ class ProxyTerminal:
 
         # Write BEL, HT, LF, or CR into the Mirrors
 
-        if sdata == b"\x07":
+        if sdata == b"\a":
             return True
 
         if sdata == b"\b":
