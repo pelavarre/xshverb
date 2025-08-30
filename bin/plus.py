@@ -105,7 +105,7 @@ def try_something() -> None:
     tprint()
     tprint()
 
-    func = try_tbp_self_test
+    func = try_pack_self_test
     func = try_read_byte_packet
     func = try_screen_editor
 
@@ -131,22 +131,22 @@ def try_read_byte_packet() -> None:
     with BytesTerminal() as bt:
         stdio = bt.stdio
         while True:
-            tbp = bt.read_byte_packet(timeout=None)
-            data = tbp.to_bytes()
+            pack = bt.read_byte_packet(timeout=None)
+            data = pack.to_bytes()
 
-            print(tbp, end="\r\n", file=stdio)
+            print(pack, end="\r\n", file=stdio)
 
             if data == b"\r":
                 break
 
 
-def try_tbp_self_test() -> None:
+def try_pack_self_test() -> None:
     """Try Tests of Class TerminalBytePacket"""
 
-    tbp = TerminalBytePacket()
+    pack = TerminalBytePacket(b"")
 
     t0 = dt.datetime.now()
-    tbp._try_terminal_byte_packet_()
+    pack._try_terminal_byte_pack_()
     t1 = dt.datetime.now()
 
     print(t0)
@@ -875,34 +875,39 @@ class ScreenEditor:
         assert pt.y_height == -1, (pt.y_height,)  # for .play_screen_editor
         assert pt.x_width == -1, (pt.x_width,)  # for .play_screen_editor
 
-        pt.proxy_read_row_y_column_x()
-        pt.proxy_read_y_height_x_width()
-
         # Prompt at Launch  # todo9: next experiments
 
-        autolaunchers = [11, 22]  # todo4: 'with' Context Handlers to undo Autolaunchers
+        autolaunchers = [11, 21, 32, 99]  # todo4: 'with' Context Handlers to undo Autolaunchers
 
         y_height = -1
 
         if 11 in autolaunchers:
+            pt.proxy_read_row_y_column_x()
+            pt.proxy_read_y_height_x_width()
+
+        if 21 in autolaunchers:
             self.write("\033[8;32100;101t")  # Chosen Width, Max Height
             (y_height, x_width) = pt.proxy_read_y_height_x_width()
 
-        if 21 in autolaunchers:
+        if 31 in autolaunchers:
             for _ in range(4):
                 self.write("\033[A")
 
-        if 22 in autolaunchers:
+        if 32 in autolaunchers:
             self.write(y_height * "\n")  # scrolls the Screen into Scrollback
             self.write("\033[H")
 
             # no destructive wipe of the Rows above via ⎋[2⇧J Screen Erase
 
-        if 33 in autolaunchers:
+        if 44 in autolaunchers:
             self.write("\033[?1000;1006h")
 
-        if 44 in autolaunchers:
+        if 55 in autolaunchers:
             pt.write_screen()
+
+        if 99 in autolaunchers:
+            pt.proxy_read_row_y_column_x()
+            pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
         self.print("<#555 on #005>  <Jabberwocky>")  # todo10: <#24 on #005>
@@ -937,14 +942,14 @@ class ScreenEditor:
         # todo2: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
 
         t0 = time.time()
-        (tbp, n) = self.read_some_byte_packets()
+        (pack, n) = self.read_some_byte_packets()
         t1 = time.time()
         t1t0 = t1 - t0
 
         arrows = self.arrows
 
-        terminal_byte_packets.append(tbp)
-        kdata = tbp.to_bytes()
+        terminal_byte_packets.append(pack)
+        kdata = pack.to_bytes()
 
         if len(kdata) == 1:
             tprint(str(kdata)[2:-1], "in")
@@ -954,13 +959,13 @@ class ScreenEditor:
             elif n > 1:
                 tprint(str(kdata)[2:-1], "in", n)
             else:
-                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once 1")
+                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
         else:
-            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {tbp=}  # read_eval_print_once 2")
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
 
-        assert tbp, (tbp, n)  # because .timeout=None
+        assert pack, (pack, n)  # because .timeout=None
 
-        kdata = tbp.to_bytes()
+        kdata = pack.to_bytes()
         assert kdata, (kdata,)  # because .timeout=None
 
         klog.write(kdata)
@@ -968,7 +973,7 @@ class ScreenEditor:
         if kdata == b"\x04":  # ⌃D
             raise SystemExit()  # todo10: make all the classic Vim/ Emacs/ Sh Quits work
 
-        self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
+        self.reply_to_kdata(pack, n=n)  # may raise SystemExit
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
         # todo2: Stop taking slow b'\033[' b'L' IL_Y as 1 Whole Packet from gCloud
@@ -980,14 +985,14 @@ class ScreenEditor:
 
         depth = 0
         kdata = terminal_byte_packets[-1].to_bytes()
-        for tbp in reversed(terminal_byte_packets):
-            if tbp.to_bytes() != kdata:  # todo: equality between TerminalBytePacket's
+        for pack in reversed(terminal_byte_packets):
+            if pack.to_bytes() != kdata:  # todo: equality between TerminalBytePacket's
                 break
             depth += 1
 
-        return depth  # fed by 'terminal_byte_packets.append(tbp)' inside .read_eval_print_once
+        return depth  # fed by 'terminal_byte_packets.append(pack)' inside .read_eval_print_once
 
-    def reply_to_kdata(self, tbp: TerminalBytePacket, n: int) -> None:
+    def reply_to_kdata(self, pack: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
 
         func_by_str = self.func_by_str
@@ -995,7 +1000,7 @@ class ScreenEditor:
 
         # Append to the __pycache__/k.keyboard Keylogger Keylogging File
 
-        kdata = tbp.to_bytes()
+        kdata = pack.to_bytes()
         assert kdata, (kdata,)  # because .timeout=None
 
         # Call 1 Func Def by Keycaps
@@ -1021,17 +1026,17 @@ class ScreenEditor:
         kchars = kdata.decode()  # may raise UnicodeDecodeError
         if kchars in KCAP_BY_KCHARS.keys():  # already handled above
 
-            if (n == 1) or (tbp.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
+            if (n == 1) or (pack.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
 
-                self.print_kcaps_plus(tbp)
+                self.print_kcaps_plus(pack)
 
                 return
 
         # Pass through 1 Unicode Character
 
-        if tbp.text:
+        if pack.text:
 
-            self.write(tbp.text)
+            self.write(pack.text)
 
             return
 
@@ -1039,15 +1044,15 @@ class ScreenEditor:
 
         # Pass-Through, or emulate, the famous Control Byte Sequences
 
-        if self.take_tbp_n_kdata_if(tbp, n=n, kdata=kdata):
+        if self.take_pack_n_kdata_if(pack, n=n, kdata=kdata):
 
             return
 
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
-        self.print_kcaps_plus(tbp)
+        self.print_kcaps_plus(pack)
 
-    def take_tbp_n_kdata_if(self, tbp: TerminalBytePacket, n: int, kdata: bytes) -> bool:
+    def take_pack_n_kdata_if(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
         """Emulate the KData Control Sequence and return it, else return False"""
 
         # Emulate famous Esc Byte Pairs
@@ -1059,13 +1064,13 @@ class ScreenEditor:
         # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
         # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
         csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
 
-        csi_famous = csi and tbp.tail and (tbp.tail in csi_timeless_tails)
-        if (n > 1) and csi and tbp.tail and (tbp.tail in csi_slow_tails):
+        csi_famous = csi and pack.tail and (pack.tail in csi_timeless_tails)
+        if (n > 1) and csi and pack.tail and (pack.tail in csi_slow_tails):
             csi_famous = True
 
         # Shrug off a Mouse Press if quick
@@ -1073,33 +1078,33 @@ class ScreenEditor:
         # And kick back on anything else that's not Csi Famous
 
         if not csi_famous:
-            if self._take_csi_mouse_press_if_(tbp, n=n):
+            if self._take_csi_mouse_press_if_(pack, n=n):
                 return True
-            if self._take_csi_mouse_release_if_(tbp):
+            if self._take_csi_mouse_release_if_(pack):
                 return True
 
             return False
 
         # Emulate the Csi Famous that don't work so well when passed through
 
-        if self._take_csi_tab_right_leap_if_(tbp):  # ⎋[{}⇧I
+        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I
             return True
 
-        if self._take_csi_rows_up_if_(tbp):  # ⎋[{}⇧S
+        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S
             return True
 
-        if self._take_csi_rows_down_if_(tbp):  # ⎋[{}⇧T
+        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T
             return True
 
         if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
             return True
 
-        if tbp.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
-            self._take_csi_cols_insert_if_(tbp)
+        if pack.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
+            self._take_csi_cols_insert_if_(pack)
             return True
 
-        if tbp.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
-            self._take_csi_cols_delete_if_(tbp)
+        if pack.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
+            self._take_csi_cols_delete_if_(pack)
             return True
 
         # Pass-through the .csi_slow_tails when slow.
@@ -1109,22 +1114,20 @@ class ScreenEditor:
 
         return True
 
-        # todo10: to .pack from .tbp
-
     #
     # Define some emulations
     #
 
-    def print_kcaps_plus(self, tbp: TerminalBytePacket) -> None:
+    def print_kcaps_plus(self, pack: TerminalBytePacket) -> None:
         """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
 
-        kdata = tbp.to_bytes()
+        kdata = pack.to_bytes()
         assert kdata, (kdata,)
 
         kcaps = kdata_to_kcaps(kdata)
         self.print(kcaps, end=" ")
 
-    def _take_csi_cols_delete_if_(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_cols_delete_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧~ cols-delete"""
 
         pt = self.proxy_terminal
@@ -1134,13 +1137,13 @@ class ScreenEditor:
         assert VPA_Y == "\033[" "{}" "d"
         assert DECDC_X == "\033[" "{}" "'~"
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and ((tbp.back + tbp.tail) == b"'~")):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((pack.back + pack.tail) == b"'~")):
             return False
 
-        tprint(f"⎋['⇧~ cols-delete {tbp=}   # _take_csi_cols_delete_if_")
+        tprint(f"⎋['⇧~ cols-delete {pack=}   # _take_csi_cols_delete_if_")
 
-        pn = int(tbp.neck) if tbp.neck else PN1
+        pn = int(pack.neck) if pack.neck else PN1
         y_height = bt.read_y_height()
 
         (row_y, column_x) = pt.proxy_read_row_y_column_x()
@@ -1154,7 +1157,7 @@ class ScreenEditor:
 
         # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
 
-    def _take_csi_cols_insert_if_(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_cols_insert_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧} cols-insert"""
 
         pt = self.proxy_terminal
@@ -1165,13 +1168,13 @@ class ScreenEditor:
         assert DECDC_X == "\033[" "{}" "'~"
         assert DECIC_X == "\033[" "{}" "'}}"
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and ((tbp.back + tbp.tail) == b"'}")):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((pack.back + pack.tail) == b"'}")):
             return False
 
-        tprint(f"⎋['⇧}} cols-insert {tbp=}   # _take_csi_cols_insert_if_")
+        tprint(f"⎋['⇧}} cols-insert {pack=}   # _take_csi_cols_insert_if_")
 
-        pn = int(tbp.neck) if tbp.neck else PN1
+        pn = int(pack.neck) if pack.neck else PN1
         y_height = bt.read_y_height()
 
         (row_y, column_x) = pt.proxy_read_row_y_column_x()
@@ -1201,27 +1204,27 @@ class ScreenEditor:
 
         # gCloud Shell lacks macOS ⎋L
 
-    def _take_csi_mouse_press_if_(self, tbp: TerminalBytePacket, n: int) -> bool:
+    def _take_csi_mouse_press_if_(self, pack: TerminalBytePacket, n: int) -> bool:
         """Shrug off a Mouse Press if quick"""
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if (n == 1) and csi and (tbp.tail == b"M"):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if (n == 1) and csi and (pack.tail == b"M"):
             tprint("# _take_csi_mouse_press_if_")
             return True  # drops first 1/2 or 2/3 of Sgr Mouse
 
         return False
 
-    def _take_csi_mouse_release_if_(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_mouse_release_if_(self, pack: TerminalBytePacket) -> bool:
         """Reply to a Mouse Release, no matter if slow or quick"""
 
         # Eval the Sgr Mouse Report
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"m")):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"m")):
             return False
 
-        splits = tbp.neck.removeprefix(b"<").split(b";")
-        assert len(splits) == 3, (splits, tbp.neck, tbp)
+        splits = pack.neck.removeprefix(b"<").split(b";")
+        assert len(splits) == 3, (splits, pack.neck, pack)
         (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
 
         tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
@@ -1276,7 +1279,7 @@ class ScreenEditor:
 
         # gCloud Shell needs ⎋[1D for ⎋[D
 
-    def _take_csi_rows_down_if_(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_rows_down_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate Scroll Down [Insert North Lines]"""
 
         assert DECSC == "\033" "7"
@@ -1286,11 +1289,11 @@ class ScreenEditor:
         assert IL_Y == "\033[" "{}" "L"
         assert SD_Y == "\033[" "{}" "T"
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"T")):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"T")):
             return False
 
-        pn = int(tbp.neck) if tbp.neck else PN1
+        pn = int(pack.neck) if pack.neck else PN1
 
         self.write("\0337")
         self.write("\033[32100A")
@@ -1301,7 +1304,7 @@ class ScreenEditor:
 
         # gCloud Shell lacks macOS ⎋[{}⇧T
 
-    def _take_csi_rows_up_if_(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_rows_up_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate Scroll Up [Insert South Lines]"""
 
         assert LF == "\n"
@@ -1313,11 +1316,11 @@ class ScreenEditor:
         assert SU_Y == "\033[" "{}" "S"
         assert _PN_MAX_32100_ == 32100
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"S")):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"S")):
             return False
 
-        pn = int(tbp.neck) if tbp.neck else PN1
+        pn = int(pack.neck) if pack.neck else PN1
 
         self.write("\0337")
         self.write("\033[32100B")
@@ -1328,7 +1331,7 @@ class ScreenEditor:
 
         # gCloud Shell lacks macOS ⎋[{}⇧S
 
-    def _take_csi_tab_right_leap_if_(self, tbp: TerminalBytePacket) -> bool:
+    def _take_csi_tab_right_leap_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
 
         pt = self.proxy_terminal
@@ -1341,13 +1344,13 @@ class ScreenEditor:
         assert CHA_X == "\033[" "{}" "G"
         assert CHT_X == "\033[" "{}" "I"
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (tbp.tail == b"I")):
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"I")):
             return False
 
-        tprint(f"⎋[...I {tbp=}  # _take_csi_tab_right_leap_if_")
+        tprint(f"⎋[...I {pack=}  # _take_csi_tab_right_leap_if_")
 
-        pn = int(tbp.neck) if tbp.neck else PN1
+        pn = int(pack.neck) if pack.neck else PN1
         assert pn >= 1, (pn,)
 
         tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
@@ -1394,20 +1397,20 @@ class ScreenEditor:
         t0 = time.time()
 
         if not arrows:
-            tbp = bt.read_byte_packet(timeout=None)
+            pack = bt.read_byte_packet(timeout=None)
         else:
-            tbp = bt.read_byte_packet(timeout=arrows_timeout)
-            if not tbp:
+            pack = bt.read_byte_packet(timeout=arrows_timeout)
+            if not pack:
                 self.arrows = 0  # written only by Init & this Def
 
-                tbp = self.read_arrows_as_byte_packet()
-                assert tbp, (tbp,)
+                pack = self.read_arrows_as_byte_packet()
+                assert pack, (pack,)
 
-                return (tbp, n)
+                return (pack, n)
 
         t1 = time.time()
 
-        kdata = tbp.to_bytes()
+        kdata = pack.to_bytes()
         t1t0 = t1 - t0
 
         arrows_kdata_tuple = (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
@@ -1423,36 +1426,36 @@ class ScreenEditor:
 
             self.arrows += 1
 
-            packet = terminal_byte_packets[-1]
-            packet_kdata = packet.to_bytes()
-            assert packet_kdata in arrows_kdata_tuple, (packet_kdata,)
+            pack = terminal_byte_packets[-1]
+            pack_kdata = pack.to_bytes()
+            assert pack_kdata in arrows_kdata_tuple, (pack_kdata,)
 
             (y, x) = (row_y, column_x)
-            if packet_kdata == b"\033[A":
+            if pack_kdata == b"\033[A":
                 y += 1  # goes up, not down
-            elif packet_kdata == b"\033[B":
+            elif pack_kdata == b"\033[B":
                 y -= 1  # goes up, not down
-            elif packet_kdata == b"\033[C":
+            elif pack_kdata == b"\033[C":
                 x -= 1  # goes left, not right
-            elif packet_kdata == b"\033[D":
+            elif pack_kdata == b"\033[D":
                 x += 1  # goes right, not left
 
             self.arrow_row_y = y
             self.arrow_column_x = x
 
-        while (not tbp.text) and (not tbp.closed) and (not bt.extras):
+        while (not pack.text) and (not pack.closed) and (not bt.extras):
 
-            kdata = tbp.to_bytes()
+            kdata = pack.to_bytes()
             # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
             if kdata == b"\033O":  # ⎋⇧O for Vim
                 break
 
             n += 1
-            bt.close_byte_packet_if(tbp, timeout=None)
+            bt.close_byte_pack_if(pack, timeout=None)
 
         # Succeed
 
-        return (tbp, n)
+        return (pack, n)
 
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
 
@@ -1480,9 +1483,9 @@ class ScreenEditor:
         ktext = f"\033[<{option_f};{column_x};{row_y}m"
         kdata = ktext.encode()
 
-        tbp = TerminalBytePacket(kdata)
+        pack = TerminalBytePacket(kdata)
 
-        return tbp
+        return pack
 
         # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
         # todo6: Debug why Arrow Burst buttons after the first frequently don't work, if still so?
@@ -1512,9 +1515,9 @@ class ScreenEditor:
     def do_quote_one_kdata(self) -> None:
         """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
-        (tbp, n) = self.read_some_byte_packets()
+        (pack, n) = self.read_some_byte_packets()
 
-        kdata = tbp.to_bytes()
+        kdata = pack.to_bytes()
         self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
 
         # Emacs ⌃Q  # Vim ⌃V
@@ -2225,8 +2228,8 @@ class ScreenEditor:
         kcap_list = list(_[0] for _ in KCAP_BY_KCHARS.items() if _[-1] == verb)
         if len(kcap_list) == 1:
             kdata = kcap_list[0].encode()
-            tbp = TerminalBytePacket(kdata)
-            bt.prefetches.append(tbp)
+            pack = TerminalBytePacket(kdata)
+            bt.prefetches.append(pack)
             return True
 
         return False
@@ -3153,21 +3156,21 @@ class ProxyTerminal:
 
         # Write one whole Packet into the Mirrors
 
-        tbp = TerminalBytePacket(sdata)
+        pack = TerminalBytePacket(sdata)
 
-        if self.write_leap_byte_mirrors(tbp):
+        if self.write_leap_byte_mirrors(pack):
             return True
 
-        if self.write_leap_csi_mirrors(tbp):
+        if self.write_leap_csi_mirrors(pack):
             return True
 
-        if self.write_edit_csi_mirrors(tbp):
+        if self.write_edit_csi_mirrors(pack):
             return True
 
-        if self.write_toggle_mirrors(tbp):
+        if self.write_toggle_mirrors(pack):
             return True
 
-        if self.write_style_mirrors(tbp):
+        if self.write_style_mirrors(pack):
             return True
 
         # Else ask our caller to .tprint our confusion
@@ -3209,11 +3212,11 @@ class ProxyTerminal:
         head = sdata[:1]
         if sdata == (pn * head):
             if sdata and (head in (b"\t", b"\n")):
-                sdata_tbp = TerminalBytePacket(head)
+                sdata_pack = TerminalBytePacket(head)
 
                 mirrored = 0
                 for _ in range(pn):
-                    if not self.write_leap_byte_mirrors(sdata_tbp):
+                    if not self.write_leap_byte_mirrors(sdata_pack):
                         mirrored += 1
 
                 if mirrored < pn:
@@ -3228,11 +3231,11 @@ class ProxyTerminal:
 
         if sdata == b"\r\n":
 
-            cr_tbp = TerminalBytePacket(b"\r")
-            if self.write_leap_byte_mirrors(cr_tbp):
+            cr_pack = TerminalBytePacket(b"\r")
+            if self.write_leap_byte_mirrors(cr_pack):
 
-                lf_tbp = TerminalBytePacket(b"\n")
-                mirrored = self.write_leap_byte_mirrors(lf_tbp)
+                lf_pack = TerminalBytePacket(b"\n")
+                mirrored = self.write_leap_byte_mirrors(lf_pack)
                 if not mirrored:
                     tprint("Only mirrored the CR, not the LF, of CR LF")
 
@@ -3254,7 +3257,7 @@ class ProxyTerminal:
         assert _PN_MAX_32100_ == 32100
 
         m = re.fullmatch(r"\033\[((-?[0-9]+)(;(-?[0-9]+))?)?H", string=text)
-        if m:  # as if searching for:  csi and tbp.tail == b"H"
+        if m:  # as if searching for:  csi and pack.tail == b"H"
             y = int(m.group(2)) if m.group(2) else Y1
             x = int(m.group(4)) if m.group(4) else X1
 
@@ -3273,10 +3276,10 @@ class ProxyTerminal:
 
         return False
 
-    def write_leap_byte_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_leap_byte_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Control Byte Sequences that move the Terminal Cursor"""
 
-        sdata = tbp.to_bytes()
+        sdata = pack.to_bytes()
 
         row_y = self.row_y
         column_x = self.column_x
@@ -3343,20 +3346,20 @@ class ProxyTerminal:
 
         return False
 
-    def write_leap_csi_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_leap_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that move the Terminal Cursor"""
 
-        if self.write_leap_csi_arrow_plus_mirrors(tbp):
+        if self.write_leap_csi_arrow_plus_mirrors(pack):
             return True
 
-        if self.write_leap_csi_tab_and_forth_mirrors(tbp):
+        if self.write_leap_csi_tab_and_forth_mirrors(pack):
             return True
 
         return False
 
         # omits .write_leap_csi_cup_y_x_mirrors
 
-    def write_leap_csi_arrow_plus_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_leap_csi_arrow_plus_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
 
         bt = self.bytes_terminal
@@ -3378,38 +3381,38 @@ class ProxyTerminal:
 
         #
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and tbp.tail and (tbp.tail in b"ABCDGd"):  # "ABCD" Arrows per se, and also "Gd"
-            if not tbp.back:
-                pn = int(tbp.neck) if tbp.neck else PN1
+        if csi and pack.tail and (pack.tail in b"ABCDGd"):  # "ABCD" Arrows per se, and also "Gd"
+            if not pack.back:
+                pn = int(pack.neck) if pack.neck else PN1
                 if pn:
 
-                    if tbp.tail == b"A":
+                    if pack.tail == b"A":
                         self.row_y = max(Y1, row_y - pn)
                         return True
-                    if tbp.tail == b"B":
+                    if pack.tail == b"B":
                         self.row_y = min(y_height, row_y + pn)
                         return True
-                    if tbp.tail == b"C":
+                    if pack.tail == b"C":
                         self.column_x = min(x_width, column_x + pn)
                         return True
-                    if tbp.tail == b"D":
+                    if pack.tail == b"D":
                         self.column_x = max(X1, column_x - pn)
                         return True
 
                     # And the leaps relative to Y1 X1 too
 
-                    if tbp.tail == b"G":
+                    if pack.tail == b"G":
                         self.column_x = min(x_width, pn)
                         return True
-                    if tbp.tail == b"d":
+                    if pack.tail == b"d":
                         self.row_y = min(y_height, pn)
                         return True
 
         return False
 
-    def write_leap_csi_tab_and_forth_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_leap_csi_tab_and_forth_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
 
         bt = self.bytes_terminal
@@ -3422,37 +3425,37 @@ class ProxyTerminal:
         assert CHT_X == "\033[" "{}" "I"  # Cursor Forward [Horizontal] Tabulation
         assert CBT_X == "\033[" "{}" "Z"  # Cursor Backward [Horizontal] Tabulation
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and tbp.tail and (tbp.tail in b"IZ"):
-            if not tbp.back:
-                pn = int(tbp.neck) if tbp.neck else PN1
+        if csi and pack.tail and (pack.tail in b"IZ"):
+            if not pack.back:
+                pn = int(pack.neck) if pack.neck else PN1
                 if pn:
 
-                    if tbp.tail == b"I":
+                    if pack.tail == b"I":
                         tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
                         self.column_x = min(x_width, tab_stop_n)
                         return True
 
-                    if tbp.tail == b"Z":
+                    if pack.tail == b"Z":
                         tab_stop_n = X1 + ((column_x + (8 - 1) - X1) // 8 - pn) * 8
                         self.column_x = max(X1, tab_stop_n)
                         return True
 
         return False
 
-    def write_edit_csi_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_edit_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that edit the Rows and Columns"""
 
-        if self.write_erase_csi_mirrors(tbp):
+        if self.write_erase_csi_mirrors(pack):
             return True
 
-        if self.write_delete_insert_csi_mirrors(tbp):
+        if self.write_delete_insert_csi_mirrors(pack):
             return True
 
         return False
 
-    def write_erase_csi_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_erase_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that erase Rows and Columns"""
 
         column_x = self.column_x
@@ -3464,18 +3467,18 @@ class ProxyTerminal:
 
         # Mirror ⇧K Erases of Head or Tail or Whole Row
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and ((tbp.tail == b"J") or (tbp.tail == b"K")):
-            if not tbp.back:
-                ps = int(tbp.neck) if tbp.neck else 0
+        if csi and ((pack.tail == b"J") or (pack.tail == b"K")):
+            if not pack.back:
+                ps = int(pack.neck) if pack.neck else 0
                 if ps in (0, 1, 2):
 
-                    if tbp.tail == b"K":
+                    if pack.tail == b"K":
 
                         self._write_row_erase_(ps)
 
-                    if tbp.tail == b"J":
+                    if pack.tail == b"J":
 
                         if ps == 0:
                             self._write_row_erase_(ps)
@@ -3548,7 +3551,7 @@ class ProxyTerminal:
         for x in range(xa, xb + 1):
             writes_by_x[x] = list(styles) + [" "]
 
-    def write_delete_insert_csi_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_delete_insert_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
 
         column_x = self.column_x
@@ -3560,11 +3563,11 @@ class ProxyTerminal:
 
         # Mirror ⇧P Deletes of Pn Characters in the Row
 
-        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and (tbp.tail == b"P"):
-            if not tbp.back:
-                pn = max(PN1, int(tbp.neck) if tbp.neck else PN1)
+        if csi and (pack.tail == b"P"):
+            if not pack.back:
+                pn = max(PN1, int(pack.neck) if pack.neck else PN1)
                 if pn:
 
                     y = row_y
@@ -3600,10 +3603,10 @@ class ProxyTerminal:
 
         return False
 
-    def write_toggle_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_toggle_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Replacing/ Inserting choice for before writing each Character"""
 
-        sdata = tbp.to_bytes()
+        sdata = pack.to_bytes()
 
         toggles = self.toggles
 
@@ -3637,78 +3640,80 @@ class ProxyTerminal:
 
         return False
 
-    def write_style_mirrors(self, tbp: TerminalBytePacket) -> bool:
+    def write_style_mirrors(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Foreground-on-Background Colors of the next Text"""
 
-        sdata0 = tbp.to_bytes()
-        stext0 = sdata0.decode()  # may raise UnicodeDecodeError
+        sdata = pack.to_bytes()
+        stext = sdata.decode()  # may raise UnicodeDecodeError
 
         styles = self.styles
 
         # Write only Sgr Styles into the Mirrors
 
-        kind0 = self.tbp_to_sgr_kind(tbp)
-        if not kind0:
+        kind = self.pack_to_sgr_kind(pack)
+        if not kind:
             return False
 
-        assert kind0 in ("Foreground", "Background", "Colorless"), (kind0,)
+        assert kind in ("Foreground", "Background", "Colorless"), (kind,)
 
         # Take the cancellation of all Sgr Styles
 
-        if kind0 == "Colorless":
+        if kind == "Colorless":
 
-            if sdata0 == b"\033[m":
+            if sdata == b"\033[m":
                 styles.clear()
                 return True
 
             # Take the Text Effects apart from Colors
 
-            if stext0 in styles:
+            if stext in styles:
                 return True
 
-            styles.append(stext0)
+            styles.append(stext)
             styles.sort()
 
             return False
 
         # Remove the Old Stale Color if need be
 
-        assert kind0 in ("Foreground", "Background"), (kind0,)
+        assert kind in ("Foreground", "Background"), (kind,)
 
-        removables = list(styles)
-        for removable in removables:
-            tbp1 = TerminalBytePacket()
-            kind1 = self.tbp_to_sgr_kind(tbp1)
-            if kind1 == kind0:
-                styles.remove(removable)
+        removable_styles = list(styles)
+        for rstyle in removable_styles:
+            rdata = rstyle.encode()
+            rpack = TerminalBytePacket(rdata)
+
+            rkind = self.pack_to_sgr_kind(rpack)
+            if rkind == kind:
+                styles.remove(rstyle)
 
         # Add the New Fresh Color always
 
-        styles.append(stext0)
+        styles.append(stext)
         styles.sort()
 
         return True
 
-    def tbp_to_sgr_kind(self, tbp: TerminalBytePacket) -> str:
+    def pack_to_sgr_kind(self, pack: TerminalBytePacket) -> str:
         """Say 'Foreground' or 'Background' or 'Colorless' or '' Empty Str"""
 
         assert SGR_PS == "\033[" "{}" "m"
 
-        if tbp.head != b"\033[":
+        if pack.head != b"\033[":
             return ""
-        if tbp.back:
+        if pack.back:
             return ""
-        if tbp.tail != b"m":
+        if pack.tail != b"m":
             return ""
 
-        neck_splits = tbp.neck.split(b";")
-        assert neck_splits, (neck_splits, tbp.neck, tbp)  # because Split With Arg
+        neck_splits = pack.neck.split(b";")
+        assert neck_splits, (neck_splits, pack.neck, pack)  # because Split With Arg
 
         if neck_splits == [b""]:
             return "Colorless"
 
         if len(neck_splits) == 1:
-            pn = int(tbp.neck)
+            pn = int(pack.neck)
 
             if (30 <= pn <= 37) or (90 <= pn <= 97):
                 return "Foreground"
@@ -3724,7 +3729,7 @@ class ProxyTerminal:
                 ground = "Foreground" if (neck_splits[0] == b"38") else "Background"
                 if neck_splits[1] == b"5":
                     pn = int(neck_splits[2])
-                    assert 0 <= pn <= 0xFF, (pn, tbp)
+                    assert 0 <= pn <= 0xFF, (pn, pack)
                     return ground
 
             return "Colorless"
@@ -3739,9 +3744,9 @@ class ProxyTerminal:
                     g = int(neck_splits[3])
                     b = int(neck_splits[4])
 
-                    assert 0 <= r <= 0xFF, (r, tbp)
-                    assert 0 <= g <= 0xFF, (g, tbp)
-                    assert 0 <= b <= 0xFF, (b, tbp)
+                    assert 0 <= r <= 0xFF, (r, pack)
+                    assert 0 <= g <= 0xFF, (g, pack)
+                    assert 0 <= b <= 0xFF, (b, pack)
 
                     return ground
 
@@ -4123,15 +4128,15 @@ class BytesTerminal:
 
         prefetches = self.prefetches
         if prefetches:
-            tbp = prefetches.pop(0)
-            return tbp
+            pack = prefetches.pop(0)
+            return pack
 
-        tbp = TerminalBytePacket()
-        self.close_byte_packet_if(tbp, timeout=timeout)
+        pack = TerminalBytePacket(b"")
+        self.close_byte_pack_if(pack, timeout=timeout)
 
-        return tbp  # maybe empty
+        return pack  # maybe empty
 
-    def close_byte_packet_if(self, tbp: TerminalBytePacket, timeout: float | None) -> None:
+    def close_byte_pack_if(self, pack: TerminalBytePacket, timeout: float | None) -> None:
         """Read 0 or more Bytes into the Packet, and close it, or not"""
 
         stdio = self.stdio
@@ -4147,9 +4152,9 @@ class BytesTerminal:
         t = 0.000_001  # defines "immediately"  # 0.000 works as "instantaneously" at macOS
 
         # if not extras:
-        #     kdata = tbp.to_bytes()
+        #     kdata = pack.to_bytes()
         #     if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
-        #         tbp.close()
+        #         pack.close()
         #         return None
 
         if extras or self.kbhit(timeout=timeout):
@@ -4161,15 +4166,15 @@ class BytesTerminal:
                     pop = extras.pop(0)
                     byte = bytes([pop])
 
-                more = tbp.take_one_if(byte)
+                more = pack.take_one_if(byte)
                 if more:
                     extras.extend(more)
                     break
 
-                if tbp.closed:
+                if pack.closed:
                     break
 
-                kdata = tbp.to_bytes()
+                kdata = pack.to_bytes()
                 if not extras:
                     if kdata == b"\033O":  # ⎋⇧O for Vim
                         if not self.kbhit(timeout=0.333):
@@ -4222,11 +4227,11 @@ class BytesTerminal:
         assert not kbhit  # todo: cope when Mouse or Paste or Keyboard work disrupts replies to Csi
 
         stdio.write("\033[6n")  # bypass Screen Logs & Screen Mirrors above
-        tbp = self.read_byte_packet(timeout=None)
-        kdata = tbp.to_bytes()
+        pack = self.read_byte_packet(timeout=None)
+        kdata = pack.to_bytes()
 
         m = re.fullmatch(rb"\033\[([0-9]+);([0-9]+)R", string=kdata)
-        assert m, (m, kdata, tbp)
+        assert m, (m, kdata, pack)
 
         y_bytes = m.group(1)
         x_bytes = m.group(2)
@@ -4234,11 +4239,11 @@ class BytesTerminal:
         y = int(y_bytes)
         x = int(x_bytes)
 
-        assert 1 <= y <= _PN_MAX_32100_, (y, x, kdata, tbp)
-        assert 1 <= x <= _PN_MAX_32100_, (y, x, kdata, tbp)
+        assert 1 <= y <= _PN_MAX_32100_, (y, x, kdata, pack)
+        assert 1 <= x <= _PN_MAX_32100_, (y, x, kdata, pack)
 
-        assert y >= 1, (y, y_bytes, kdata, tbp)
-        assert x >= 1, (x, x_bytes, kdata, tbp)
+        assert y >= 1, (y, y_bytes, kdata, pack)
+        assert x >= 1, (x, x_bytes, kdata, pack)
 
         return (y, x)
 
@@ -4261,7 +4266,7 @@ class TerminalBytePacket:
     # Init, Bool, Repr, Str, and .require_simple to check invariants
     #
 
-    def __init__(self, data: bytes = b"") -> None:
+    def __init__(self, data: bytes) -> None:
 
         # Init
 
@@ -4274,7 +4279,7 @@ class TerminalBytePacket:
         self.stash = bytearray()
         self.tail = bytearray()
 
-        self._require_simple_()
+        self._require_simple_()  # does let the initial .data be empty
 
         # Take in the Bytes, but require that they all fit
 
@@ -4400,16 +4405,16 @@ class TerminalBytePacket:
     # Tests, to run slowly and thoroughly across like 211ms
     #
 
-    def _try_terminal_byte_packet_(self) -> None:  # todo: call this slow Self-Test more often
+    def _try_terminal_byte_pack_(self) -> None:  # todo: call this slow Self-Test more often
         """Try some Packets open to, or closed against, taking more Bytes"""
 
         # Try some Packets left open to taking more Bytes
 
-        tbp = TerminalBytePacket(b"Superb")
-        assert str(tbp) == "'Superb'" and not tbp.closed, (tbp,)
-        extras = tbp.take_one_if(b"\xc2")
-        assert not extras and not tbp.closed, (extras, tbp.closed, tbp)
-        assert str(tbp) == r"'Superb' b'\xc2'", (repr(str(tbp)), tbp)
+        pack = TerminalBytePacket(b"Superb")
+        assert str(pack) == "'Superb'" and not pack.closed, (pack,)
+        extras = pack.take_one_if(b"\xc2")
+        assert not extras and not pack.closed, (extras, pack.closed, pack)
+        assert str(pack) == r"'Superb' b'\xc2'", (repr(str(pack)), pack)
 
         self._try_open_(b"")  # empty
         self._try_open_(b"\033")  # first Byte of Esc Sequence
@@ -4439,14 +4444,14 @@ class TerminalBytePacket:
     def _try_open_(self, *args: bytes) -> None:
         """Require the Eval of the Str of the Packet equals its Bytes"""
 
-        tbp = self._try_bytes_(*args)
-        assert not tbp.closed, (tbp,)
+        pack = self._try_bytes_(*args)
+        assert not pack.closed, (pack,)
 
     def _try_closed_(self, *args: bytes) -> None:
         """Require the Eval of the Str of the Packet equals its Bytes"""
 
-        tbp = self._try_bytes_(*args)
-        assert tbp.closed, (tbp,)
+        pack = self._try_bytes_(*args)
+        assert pack.closed, (pack,)
 
     def _try_bytes_(self, *args: bytes) -> "TerminalBytePacket":
         """Require the Eval of the Str of the Packet equals its Bytes"""
@@ -4454,14 +4459,14 @@ class TerminalBytePacket:
         data = b"".join(args)
         join = " ".join(str(_) for _ in args)
 
-        tbp = TerminalBytePacket(data)
-        tbp_to_bytes = tbp.to_bytes()
-        tbp_to_str = str(tbp)
+        pack = TerminalBytePacket(data)
+        pack_bytes = pack.to_bytes()
+        pack_str = str(pack)
 
-        assert tbp_to_bytes == data, (tbp_to_bytes, data)
-        assert tbp_to_str == join, (data, tbp_to_str, join)
+        assert pack_bytes == data, (pack_bytes, data)
+        assert pack_str == join, (data, pack_bytes, join)
 
-        return tbp
+        return pack
 
     #
     # Close
