@@ -2125,14 +2125,36 @@ class ScreenEditor:
 
         # Find a Widget beneath the Mouse Release
 
-        x_widget = ""
         wx = -1
+        x_widget = ""
+        x_word = ""
 
         for i, widget in widget_by_i.items():
-            if x in range(1 + i, 1 + i + len(widget) + 1):
-                x_widget = widget
+
+            left_margin_1 = 1
+            right_margin_1 = 1
+
+            if x in range(X1 + i - left_margin_1, X1 + i + len(widget) + right_margin_1):
+
                 wx = X1 + i
+                x_widget = widget
+
+                i_in_widget = (x - X1) - i
+                i_in_widget = min(max(0, i_in_widget), len(widget) - 1)
+
+                left_widget = widget[: i_in_widget + 1]
+                left_words = left_widget.split()
+                assert left_words, (left_words, left_widget, widget, i, x)
+
+                widget_splits = widget.split()
+                x_word = widget_splits[len(left_words) - 1]
+                x_word = x_word.removeprefix("<").removesuffix(">")
+
+                # tprint(f"{i=} {wx=} {x_widget=} {x=} {left_widget=} {x_word=} {left_words=}")
+
                 break
+
+                # todo: accept X
 
         if not x_widget:
             self.write("\a")  # for .take_widget_at_yxf_mouse_release
@@ -2150,7 +2172,7 @@ class ScreenEditor:
 
         # Run the Widget at the Mouse Release
 
-        self.take_mouse_verb_at_yxf(verb=verb, y=y, x=wx, f=f)
+        self.take_mouse_verb_at_yxf(verb=verb, x_word=x_word, y=y, x=wx, f=f)
 
     def split_widgets(self, text: str) -> dict[int, str]:
 
@@ -2221,7 +2243,7 @@ class ScreenEditor:
 
         self.write("\0338")
 
-    def take_mouse_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
+    def take_mouse_verb_at_yxf(self, verb: str, x_word: str, y: int, x: int, f: int) -> None:
         """Run the Verb at the Mouse Release"""
 
         pt = self.proxy_terminal
@@ -2257,12 +2279,9 @@ class ScreenEditor:
 
             return
 
-        # Shout out no Verb found
+        # Fall back to copy the Word
 
-        assert BEL == "\a"
-
-        self.write(repr(verb))
-        self.write("\a")  # for .take_widget_at_yxf
+        self.write(x_word + " ")
 
         # todo4: find an Italic that works at ⎋[3M or somewhere
 
