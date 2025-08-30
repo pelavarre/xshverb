@@ -3385,10 +3385,12 @@ class ProxyTerminal:
             tab_stop_1 = X1 + ((column_x - X1) // 8 + 1) * 8
             tab_stop_1 = min(x_width, tab_stop_1)
 
-            while self.column_x < tab_stop_1:  # macOS writes Background Colors for b"\t"
-                self.proxy_write_printable(text=" ")
+            # while self.column_x < tab_stop_1:  # todo10: macOS writes Background Colors for b"\t"
+            #     self.proxy_write_printable(text=" ")
+            #
+            # assert self.column_x == tab_stop_1, (self.column_x, tab_stop_1)
 
-            assert self.column_x == tab_stop_1, (self.column_x, tab_stop_1)
+            self.column_x = tab_stop_1
 
             return True
 
