@@ -101,17 +101,17 @@ def excepthook(
 
 def slam_enough_stty_bits_to_normal() -> None:
 
-    assert _RM_SGR_MOUSE_ == "\x1b[" "?1000;1006l"
-    assert _RM_XTERM_MAIN_ == "\x1b[" "?1049l"
-    assert RM_IRM == "\x1b[" "4l"
-    assert SGR_PS == "\x1b[" "{}" "m"
+    assert _RM_SGR_MOUSE_ == "\033[" "?1000;1006l"
+    assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
+    assert RM_IRM == "\033[" "4l"
+    assert SGR_PS == "\033[" "{}" "m"
 
     # Clean up after Terminal Writes, if need be
 
-    with_stderr.write("\x1b[m")  # clears Background/ Foreground SGR_PS Colors & Styles
-    with_stderr.write("\x1b[4l")  # restores Replace (not Insert)
-    with_stderr.write("\x1b[?1049l")  # restores Replace (not Insert)
-    with_stderr.write("\x1b[?1000;1006l")  # unhooks Mouse Press & Release
+    with_stderr.write("\033[m")  # clears Background/ Foreground SGR_PS Colors & Styles
+    with_stderr.write("\033[4l")  # restores Replace (not Insert)
+    with_stderr.write("\033[?1049l")  # restores Replace (not Insert)
+    with_stderr.write("\033[?1000;1006l")  # unhooks Mouse Press & Release
 
     when = termios.TCSADRAIN
     attributes = with_tcgetattr  # undoes tty.setraw
@@ -229,67 +229,67 @@ def try_tbp_self_test() -> None:
 #
 
 
-IND = "\x1b" "D"  # ESC 04/04 Index (IND) = C1 Control U+0084 IND (formerly known as INDEX)
-NEL = "\x1b" "E"  # ESC 04/05 Next Line (NEL) = C1 Control U+0085 NEXT LINE (NEL)
-RI = "\x1b" "M"  # ESC 04/06 Reverse Index (RI) = C1 Control U+0086 REVERSE LINE FEED (RI)
+IND = "\033" "D"  # ESC 04/04 Index (IND) = C1 Control U+0084 IND (formerly known as INDEX)
+NEL = "\033" "E"  # ESC 04/05 Next Line (NEL) = C1 Control U+0085 NEXT LINE (NEL)
+RI = "\033" "M"  # ESC 04/06 Reverse Index (RI) = C1 Control U+0086 REVERSE LINE FEED (RI)
 
-_ICF_RIS_ = "\x1b" "c"  # ESC 06/03 Reset To Initial State (RIS) [an Independent Control Function]
-_ICF_CUP_ = "\x1b" "l"  # ESC 06/12 Cursor Position (CUP) [an Independent Control Function]
+_ICF_RIS_ = "\033" "c"  # ESC 06/03 Reset To Initial State (RIS) [an Independent Control Function]
+_ICF_CUP_ = "\033" "l"  # ESC 06/12 Cursor Position (CUP) [an Independent Control Function]
 
 X1 = 1  # counts Columns West from 1
 Y1 = 1  # counting Rows South from 1
 
-CUU_Y = "\x1b[" "{}" "A"  # CSI 04/01 Cursor Up
-CUD_Y = "\x1b[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
-CUF_X = "\x1b[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
-CUB_X = "\x1b[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
+CUU_Y = "\033[" "{}" "A"  # CSI 04/01 Cursor Up
+CUD_Y = "\033[" "{}" "B"  # CSI 04/02 Cursor Down  # \n is Pn 1 except from last Row
+CUF_X = "\033[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
+CUB_X = "\033[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
 
-CHA_X = "\x1b[" "{}" "G"  # CSI 04/07 Cursor Character Absolute  # \r is Pn 1
+CHA_X = "\033[" "{}" "G"  # CSI 04/07 Cursor Character Absolute  # \r is Pn 1
 
-CUP_Y1_X1 = "\x1b[" "H"  # CSI 04/08 Cursor Position
-CUP_Y_X1 = "\x1b[" "{}" "H"  # CSI 04/08 Cursor Position
-CUP_Y_X = "\x1b[" "{};{}" "H"  # CSI 04/08 Cursor Position
+CUP_Y1_X1 = "\033[" "H"  # CSI 04/08 Cursor Position
+CUP_Y_X1 = "\033[" "{}" "H"  # CSI 04/08 Cursor Position
+CUP_Y_X = "\033[" "{};{}" "H"  # CSI 04/08 Cursor Position
 
-CHT_X = "\x1b[" "{}" "I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
+CHT_X = "\033[" "{}" "I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
 
-ED_PS = "\x1b[" "{}" "J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
-EL_PS = "\x1b[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
+ED_PS = "\033[" "{}" "J"  # CSI 04/10 Erase in Display  # 0 Tail # 1 Head # 2 Rows # 3 Scrollback
+EL_PS = "\033[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
-ICH_X = "\x1b[" "{}" "@"  # CSI 04/00 Insert Character
-IL_Y = "\x1b[" "{}" "L"  # CSI 04/12 Insert Line [Row]
-DCH_X = "\x1b[" "{}" "P"  # CSI 05/00 Delete Character
+ICH_X = "\033[" "{}" "@"  # CSI 04/00 Insert Character
+IL_Y = "\033[" "{}" "L"  # CSI 04/12 Insert Line [Row]
+DCH_X = "\033[" "{}" "P"  # CSI 05/00 Delete Character
 
-SU_Y = "\x1b[" "{}" "S"  # CSI 05/03 Scroll Up [Insert South Lines]
-SD_Y = "\x1b[" "{}" "T"  # CSI 05/04 Scroll Down [Insert North Lines]
+SU_Y = "\033[" "{}" "S"  # CSI 05/03 Scroll Up [Insert South Lines]
+SD_Y = "\033[" "{}" "T"  # CSI 05/04 Scroll Down [Insert North Lines]
 
-ECH_X = "\x1b[" "{}" "X"  # CSI 05/08 Erase Character
+ECH_X = "\033[" "{}" "X"  # CSI 05/08 Erase Character
 
-CBT_X = "\x1b[" "{}" "Z"  # CSI 05/10 Cursor Backward Tabulation
+CBT_X = "\033[" "{}" "Z"  # CSI 05/10 Cursor Backward Tabulation
 
-VPA_Y = "\x1b[" "{}" "d"  # CSI 06/04 Line Position Absolute
+VPA_Y = "\033[" "{}" "d"  # CSI 06/04 Line Position Absolute
 
-DECIC_X = "\x1b[" "{}" "'}}"  # CSI 02/07 07/13 VT420 DECIC_X  # "}}" to mean "}"
-DECDC_X = "\x1b[" "{}" "'~"  # CSI 02/07 07/14 VT420 DECDC_X
-
-
-SM_IRM = "\x1b[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
-RM_IRM = "\x1b[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
-
-SM_DECTCEM = "\x1b[" "?25h"  # 06/08 Set Mode (SMS) 25 VT220 Show Cursor
-RM_DECTCEM = "\x1b[" "?25l"  # 06/12 Reset Mode (RM) 25 VT220 Hide Cursor
+DECIC_X = "\033[" "{}" "'}}"  # CSI 02/07 07/13 VT420 DECIC_X  # "}}" to mean "}"
+DECDC_X = "\033[" "{}" "'~"  # CSI 02/07 07/14 VT420 DECDC_X
 
 
-_SM_XTERM_ALT_ = "\x1b[" "?1049h"  # show Alt Screen
-_RM_XTERM_MAIN_ = "\x1b[" "?1049l"  # show Main Screen
+SM_IRM = "\033[" "4h"  # CSI 06/08 4 Set Mode Insert, not Replace
+RM_IRM = "\033[" "4l"  # CSI 06/12 4 Reset Mode Replace, not Insert
 
-_SM_SGR_MOUSE_ = "\x1b[" "?1000;1006h"
-_RM_SGR_MOUSE_ = "\x1b[" "?1000;1006l"
+SM_DECTCEM = "\033[" "?25h"  # 06/08 Set Mode (SMS) 25 VT220 Show Cursor
+RM_DECTCEM = "\033[" "?25l"  # 06/12 Reset Mode (RM) 25 VT220 Hide Cursor
 
 
-SGR_PS = "\x1b[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
+_SM_XTERM_ALT_ = "\033[" "?1049h"  # show Alt Screen
+_RM_XTERM_MAIN_ = "\033[" "?1049l"  # show Main Screen
 
-DSR_6 = "\x1b[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
-CPR_Y_X_REGEX = r"\x1b\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
+_SM_SGR_MOUSE_ = "\033[" "?1000;1006h"
+_RM_SGR_MOUSE_ = "\033[" "?1000;1006l"
+
+
+SGR_PS = "\033[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
+
+DSR_6 = "\033[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
+CPR_Y_X_REGEX = r"\033\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
 
 
 DEL = "\x7f"  # 00/7F Delete [Control Character]  # aka ⌃?
@@ -300,7 +300,7 @@ PN1 = 1  # often the min & default Int of a Numeric [Int] Parameter of a Csi Esc
 _PN_MAX_32100_ = 32100  # a Numeric [Int] beyond the Counts of Rows & Columns at any Terminal
 
 
-CUP_Y_X_REGEX = r"\x1B\[((-?[0-9]+)(;(-?[0-9]+))?)?H"  # like CUP_Y_X but accepts Y <= 0 and X <= 0
+CUP_Y_X_REGEX = r"\033\[((-?[0-9]+)(;(-?[0-9]+))?)?H"  # like CUP_Y_X but accepts Y <= 0 and X <= 0
 
 
 # todo2: Pull ⎋[{y};{x}⇧R always into Side Channel, when requested or not
@@ -375,7 +375,7 @@ class ConwayLife:
         (ya, xa) = pt.proxy_read_row_y_column_x()
         x_width = bt.read_x_width()
 
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+        assert CUP_Y_X1 == "\033[" "{}" "H"
 
         conway_yx_list.clear()
 
@@ -384,7 +384,7 @@ class ConwayLife:
         if choice == 1:
 
             x_mid = x_width // 3
-            se.write(f"\x1b[{ya};{x_mid}H")
+            se.write(f"\033[{ya};{x_mid}H")
 
             self.conway_print("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
             self.conway_print("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
@@ -429,7 +429,7 @@ class ConwayLife:
         y_mid = (y_min + y_max) // 2
         x_mid = (x_min + x_max) // 2
 
-        se.write(f"\x1b[{y_mid};{x_mid}H")
+        se.write(f"\033[{y_mid};{x_mid}H")
 
     def conway_print(self, text: str) -> None:
         """Write Some Text Characters at one Y X Place"""
@@ -442,7 +442,7 @@ class ConwayLife:
         (y, x) = (ya, xb)
         for t in text:
             if t == "🔵":
-                se.write("\x1b[2C")  # todo: Conway Spots always 2 Columns wide?
+                se.write("\033[2C")  # todo: Conway Spots always 2 Columns wide?
             else:
                 self.conway_write_y_x_text(y, x=x, text=t)
 
@@ -450,7 +450,7 @@ class ConwayLife:
 
         y += 1
 
-        se.write(f"\x1b[{y};{xb}H")  # for .conway_print
+        se.write(f"\033[{y};{xb}H")  # for .conway_print
 
     def conway_write_y_x_text(self, y: int, x: int, text: str) -> None:
         """Write Some Text Characters at one Y X Place"""
@@ -460,9 +460,9 @@ class ConwayLife:
 
         pt = se.proxy_terminal
 
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
-        se.write(f"\x1b[{y};{x}H")
+        se.write(f"\033[{y};{x}H")
         se.write(text)
 
         g_width = pt.str_guess_print_width(text)
@@ -497,12 +497,12 @@ class ConwayLife:
 
         se = self.screen_editor
 
-        assert DECSC == "\x1b" "7"  # DECSC 7 Cursor Save
-        assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
+        assert DECSC == "\033" "7"  # DECSC 7 Cursor Save
+        assert DECRC == "\033" "8"  # DECRC 8 Cursor Restore
 
-        se.write("\x1b7")
+        se.write("\0337")
         self._conway_half_step_()
-        se.write("\x1b8")
+        se.write("\0338")
 
         # Spacebar
 
@@ -797,23 +797,23 @@ class ScreenEditor:
             #
             # Esc and Esc Byte Pairs
             #
-            # # b"\x1b": self.print_kcaps_plus,  # ⎋
+            # # b"\033": self.print_kcaps_plus,  # ⎋
             #
             "⎋$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim  # todo4: ⎋⇧$ vs ⎋$
             "⎋0": self.do_column_leap_leftmost,  # ⎋0 for Vim
-            # # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
-            # # b"\x1b" b"8",  # ⎋8 cursor-revert
+            # # b"\033" b"7",  # ⎋7 cursor-checkpoint
+            # # b"\033" b"8",  # ⎋8 cursor-revert
             # todo2: ⎋⇧0 ⎋⇧1 ⎋⇧2 ⎋⇧3 ⎋⇧4 ⎋⇧5 ⎋⇧6 ⎋⇧7 ⎋⇧8 ⎋⇧9 for Vim
             #
             "⎋⇧A": self.do_column_leap_rightmost_inserting_start,  # ⇧A for Vim
             "⎋⇧C": self.do_row_tail_erase_inserting_start,  # ⇧C for Vim
-            # # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
+            # # b"\033" b"D",  # ⎋⇧D ↓ (IND)
             "⎋⇧D": self.do_row_tail_erase,  # Vim ⇧D
-            # # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
-            # "\x1b" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
+            # # b"\033" b"E",  # ⎋⇧E \r\n else \r (NEL)
+            # "\033" "J": self do_end_delete_right  # ⎋⇧J  # todo2: Delete Row if at 1st Column
             "⎋⇧H": self.do_row_leap_first_column_leftmost,  # ⎋⇧H for Vim
             "⎋⇧L": self.do_row_leap_last_column_leftmost,  # ⎋⇧L for Vim
-            # # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
+            # # b"\033" b"M",  # ⎋⇧M ↑ (RI)
             "⎋⇧M": self.do_row_leap_middle_column_leftmost,  # ⎋⇧M for Vim
             "⎋⇧O": self.do_row_insert_inserting_start,  # ⎋⇧O for Vim
             "⎋⇧Q": self.do_assert_false,  # ⎋⇧Q for Vim
@@ -823,12 +823,12 @@ class ScreenEditor:
             # todo2: ⎋⇧Z⇧Q ⎋⇧Z⇧W for Vim
             #
             "⎋A": self.do_column_right_inserting_start,  # ⎋A for Vim
-            # # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
+            # # b"\033" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
             "⎋H": self.do_column_left,  # ⎋H for Vim
             "⎋I": self.do_inserting_start,  # ⎋I for Vim
             "⎋J": self.do_row_down,  # ⎋J for Vim
             "⎋K": self.do_row_up,  # ⎋K for Vim
-            # # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            # # b"\033" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
             "⎋L": self.do_column_right,  # ⎋L for Vim
             "⎋O": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
             "⎋R": self.do_replacing_one_kdata,  # ⎋R for Vim
@@ -837,14 +837,14 @@ class ScreenEditor:
             #
             # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
             #
-            # # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
+            # # b"\033[": self.print_kcaps_plus,  # ⎋ [
             #
-            # b"\x1b[" b"A",  # ⎋[⇧A ↑
-            # b"\x1b[" b"B",  # ⎋[⇧B ↓
-            # b"\x1b[" b"C",  # ⎋[⇧C →
-            # b"\x1b[" b"D",  # ⎋[⇧D ←
-            # # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
-            # b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
+            # b"\033[" b"A",  # ⎋[⇧A ↑
+            # b"\033[" b"B",  # ⎋[⇧B ↓
+            # b"\033[" b"C",  # ⎋[⇧C →
+            # b"\033[" b"D",  # ⎋[⇧D ←
+            # # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            # b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
             "F5": self.do_kdata_fn_f5,  # FnF5
             "F8": self.do_kdata_fn_f8,  # FnF8
@@ -852,7 +852,7 @@ class ScreenEditor:
             #
             # Ss3 Esc Byte Sequences
             #
-            # # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            # # b"\033O": self.print_kcaps_plus,  # ⎋⇧O
             #
             "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
             "F2": self.do_kdata_fn_f2,  # FnF2
@@ -875,7 +875,7 @@ class ScreenEditor:
         #
         # for (kstr, func) in items:
         #     if len(kstr) == 2:
-        #         if kstr.startswith("\x1b"):
+        #         if kstr.startswith("\033"):
         #             alt_kstr = b"\x15" + kdata[1:]  # ⌃O
         #
         #             assert alt_kstr not in func_by_str.keys()
@@ -891,25 +891,25 @@ class ScreenEditor:
             b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
             # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
             #
-            # b"\x1b": self.print_kcaps_plus,  # ⎋
+            # b"\033": self.print_kcaps_plus,  # ⎋
             #
-            # b"\x1b" b"7",  # ⎋7 cursor-checkpoint
-            # b"\x1b" b"8",  # ⎋8 cursor-revert
-            # b"\x1b" b"D",  # ⎋⇧D ↓ (IND)
-            # b"\x1b" b"E",  # ⎋⇧E \r\n else \r (NEL)
-            # b"\x1b" b"M",  # ⎋⇧M ↑ (RI)
-            # b"\x1b" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
-            # b"\x1b" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            # b"\033" b"7",  # ⎋7 cursor-checkpoint
+            # b"\033" b"8",  # ⎋8 cursor-revert
+            # b"\033" b"D",  # ⎋⇧D ↓ (IND)
+            # b"\033" b"E",  # ⎋⇧E \r\n else \r (NEL)
+            # b"\033" b"M",  # ⎋⇧M ↑ (RI)
+            # b"\033" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
+            # b"\033" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
             #
-            # b"\x1bO": self.print_kcaps_plus,  # ⎋⇧O
+            # b"\033O": self.print_kcaps_plus,  # ⎋⇧O
             #
-            # b"\x1b[": self.print_kcaps_plus,  # ⎋ [
-            b"\x1b[" b"A",  # ⎋[⇧A ↑
-            b"\x1b[" b"B",  # ⎋[⇧B ↓
-            b"\x1b[" b"C",  # ⎋[⇧C →
-            b"\x1b[" b"D",  # ⎋[⇧D ←
-            # b"\x1b[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
-            b"\x1b[" b"Z",  # ⎋[⇧Z ⇧Tab
+            # b"\033[": self.print_kcaps_plus,  # ⎋ [
+            b"\033[" b"A",  # ⎋[⇧A ↑
+            b"\033[" b"B",  # ⎋[⇧B ↓
+            b"\033[" b"C",  # ⎋[⇧C →
+            b"\033[" b"D",  # ⎋[⇧D ←
+            # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
         )
 
         loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please PyLance
@@ -932,12 +932,12 @@ class ScreenEditor:
 
         pt = self.proxy_terminal
 
-        assert CUU_Y == "\x1b[" "{}" "A"
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
-        assert ED_PS == "\x1b[" "{}" "J"
-        assert EL_PS == "\x1b[" "{}" "K"
-        assert SGR_PS == "\x1b[" "{}" "m"
-        assert _SM_SGR_MOUSE_ == "\x1b[" "?1000;1006h"
+        assert CUU_Y == "\033[" "{}" "A"
+        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
+        assert ED_PS == "\033[" "{}" "J"
+        assert EL_PS == "\033[" "{}" "K"
+        assert SGR_PS == "\033[" "{}" "m"
+        assert _SM_SGR_MOUSE_ == "\033[" "?1000;1006h"
 
         # Tell the Mirror where the first Write will land
 
@@ -955,33 +955,33 @@ class ScreenEditor:
 
         y_height = -1
 
-        if 11 in autolaunchers:  # todo10: change over to \033 from \x1B
-            self.write("\x1b[8;32100;101t")  # Chosen Width, Max Height
+        if 11 in autolaunchers:
+            self.write("\033[8;32100;101t")  # Chosen Width, Max Height
             (y_height, x_width) = pt.proxy_read_y_height_x_width()
 
         if 21 in autolaunchers:
             for _ in range(4):
-                self.write("\x1b[A")
+                self.write("\033[A")
 
         if 22 in autolaunchers:
             self.write(y_height * "\n")  # scrolls the Screen into Scrollback
-            self.write("\x1b[H")
+            self.write("\033[H")
 
             # no destructive wipe of the Rows above via ⎋[2⇧J Screen Erase
 
         if 33 in autolaunchers:
-            self.write("\x1b[?1000;1006h")
+            self.write("\033[?1000;1006h")
 
         if 44 in autolaunchers:
             pt.write_screen()
 
-        self.write("\x1b[K")
+        self.write("\033[K")
         self.print("<#555 on #224>  <Jabberwocky>  ⎋[255M")
-        self.write("\x1b[K")
+        self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
-        self.write("\x1b[K")
+        self.write("\033[K")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
-        self.write("\x1b[K")
+        self.write("\033[K")
         self.print()
 
         # Walk one step after another
@@ -1040,7 +1040,7 @@ class ScreenEditor:
         self.reply_to_kdata(tbp, n=n)  # may raise SystemExit
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
-        # todo2: Stop taking slow b'\x1b[' b'L' as 1 Whole Packet from gCloud
+        # todo2: Stop taking slow b'\033[' b'L' IL_Y as 1 Whole Packet from gCloud
 
     def klog_to_kcount(self) -> int:
         """Count how many times the same Keyboard Chord struck"""
@@ -1128,7 +1128,7 @@ class ScreenEditor:
         # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
         # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
         csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
@@ -1199,11 +1199,11 @@ class ScreenEditor:
         pt = self.proxy_terminal
         bt = pt.bytes_terminal
 
-        assert DCH_X == "\x1b[" "{}" "P"
-        assert VPA_Y == "\x1b[" "{}" "d"
-        assert DECDC_X == "\x1b[" "{}" "'~"
+        assert DCH_X == "\033[" "{}" "P"
+        assert VPA_Y == "\033[" "{}" "d"
+        assert DECDC_X == "\033[" "{}" "'~"
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and ((tbp.back + tbp.tail) == b"'~")):
             return False
 
@@ -1215,9 +1215,9 @@ class ScreenEditor:
         (row_y, column_x) = pt.proxy_read_row_y_column_x()
 
         for y in range(1, y_height + 1):
-            self.write(f"\x1b[{y}d")  # for .columns_delete_n
-            self.write(f"\x1b[{pn}P")  # for .columns_delete_n
-        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
+            self.write(f"\033[{y}d")  # for .columns_delete_n
+            self.write(f"\033[{pn}P")  # for .columns_delete_n
+        self.write(f"\033[{row_y}d")  # for .columns_delete_n
 
         return True
 
@@ -1229,12 +1229,12 @@ class ScreenEditor:
         pt = self.proxy_terminal
         bt = pt.bytes_terminal
 
-        assert ICH_X == "\x1b[" "{}" "@"
-        assert VPA_Y == "\x1b[" "{}" "d"
-        assert DECDC_X == "\x1b[" "{}" "'~"
-        assert DECIC_X == "\x1b[" "{}" "'}}"
+        assert ICH_X == "\033[" "{}" "@"
+        assert VPA_Y == "\033[" "{}" "d"
+        assert DECDC_X == "\033[" "{}" "'~"
+        assert DECIC_X == "\033[" "{}" "'}}"
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and ((tbp.back + tbp.tail) == b"'}")):
             return False
 
@@ -1246,9 +1246,9 @@ class ScreenEditor:
         (row_y, column_x) = pt.proxy_read_row_y_column_x()
 
         for y in range(1, y_height + 1):
-            self.write(f"\x1b[{y}d")  # for .columns_delete_n
-            self.write(f"\x1b[{pn}@")  # for .columns_delete_n
-        self.write(f"\x1b[{row_y}d")  # for .columns_delete_n
+            self.write(f"\033[{y}d")  # for .columns_delete_n
+            self.write(f"\033[{pn}@")  # for .columns_delete_n
+        self.write(f"\033[{row_y}d")  # for .columns_delete_n
 
         return True
 
@@ -1257,14 +1257,14 @@ class ScreenEditor:
     def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
 
-        assert CUP_Y1_X1 == "\x1b[" "H"
+        assert CUP_Y1_X1 == "\033[" "H"
 
-        if kdata != b"\x1b" b"l":
+        if kdata != b"\033" b"l":
             return False
 
         tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
 
-        self.write("\x1b[H")  # for ⎋L
+        self.write("\033[H")  # for ⎋L
 
         return True
 
@@ -1273,7 +1273,7 @@ class ScreenEditor:
     def _take_csi_mouse_press_if_(self, tbp: TerminalBytePacket, n: int) -> bool:
         """Shrug off a Mouse Press if quick"""
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if (n == 1) and csi and (tbp.tail == b"M"):
             tprint("# _take_csi_mouse_press_if_")
             return True  # drops first 1/2 or 2/3 of Sgr Mouse
@@ -1285,7 +1285,7 @@ class ScreenEditor:
 
         # Eval the Sgr Mouse Report
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and (tbp.tail == b"m")):
             return False
 
@@ -1332,14 +1332,14 @@ class ScreenEditor:
     def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
 
-        assert VPA_Y == "\x1b[" "{}" "d"
+        assert VPA_Y == "\033[" "{}" "d"
 
-        if kdata != b"\x1b[d":
+        if kdata != b"\033[d":
             return False
 
         tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
 
-        self.write("\x1b[1d")  # carefully not empty Parameters via "\x1b[d"
+        self.write("\033[1d")  # carefully not empty Parameters via "\033[d"
 
         return True
 
@@ -1348,23 +1348,23 @@ class ScreenEditor:
     def _take_csi_rows_down_if_(self, tbp: TerminalBytePacket) -> bool:
         """Emulate Scroll Down [Insert North Lines]"""
 
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
+        assert DECSC == "\033" "7"
+        assert DECRC == "\033" "8"
 
-        assert CUU_Y == "\x1b[" "{}" "A"
-        assert IL_Y == "\x1b[" "{}" "L"
-        assert SD_Y == "\x1b[" "{}" "T"
+        assert CUU_Y == "\033[" "{}" "A"
+        assert IL_Y == "\033[" "{}" "L"
+        assert SD_Y == "\033[" "{}" "T"
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and (tbp.tail == b"T")):
             return False
 
         pn = int(tbp.neck) if tbp.neck else PN1
 
-        self.write("\x1b7")
-        self.write("\x1b[32100A")
-        self.write(f"\x1b[{pn}L")
-        self.write("\x1b8")
+        self.write("\0337")
+        self.write("\033[32100A")
+        self.write(f"\033[{pn}L")
+        self.write("\0338")
 
         return True
 
@@ -1375,23 +1375,23 @@ class ScreenEditor:
 
         assert LF == "\n"
 
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
+        assert DECSC == "\033" "7"
+        assert DECRC == "\033" "8"
 
-        assert CUD_Y == "\x1b[" "{}" "B"
-        assert SU_Y == "\x1b[" "{}" "S"
+        assert CUD_Y == "\033[" "{}" "B"
+        assert SU_Y == "\033[" "{}" "S"
         assert _PN_MAX_32100_ == 32100
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and (tbp.tail == b"S")):
             return False
 
         pn = int(tbp.neck) if tbp.neck else PN1
 
-        self.write("\x1b7")
-        self.write("\x1b[32100B")
+        self.write("\0337")
+        self.write("\033[32100B")
         self.write(pn * "\n")
-        self.write("\x1b8")
+        self.write("\0338")
 
         return True
 
@@ -1407,10 +1407,10 @@ class ScreenEditor:
         x_width = bt.read_x_width()
 
         assert HT == "\t"
-        assert CHA_X == "\x1b[" "{}" "G"
-        assert CHT_X == "\x1b[" "{}" "I"
+        assert CHA_X == "\033[" "{}" "G"
+        assert CHT_X == "\033[" "{}" "I"
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and (tbp.tail == b"I")):
             return False
 
@@ -1421,7 +1421,7 @@ class ScreenEditor:
 
         tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
         x = min(x_width, tab_stop_n)
-        self.write(f"\x1b[{x}G")  # does Not fill with Background Color
+        self.write(f"\033[{x}G")  # does Not fill with Background Color
 
         return True
 
@@ -1479,7 +1479,7 @@ class ScreenEditor:
         kdata = tbp.to_bytes()
         t1t0 = t1 - t0
 
-        arrows_kdata_tuple = (b"\x1b[A", b"\x1b[B", b"\x1b[C", b"\x1b[D")
+        arrows_kdata_tuple = (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
 
         if kdata not in arrows_kdata_tuple:
             self.arrows = 0  # written only by Init & this Def
@@ -1497,13 +1497,13 @@ class ScreenEditor:
             assert packet_kdata in arrows_kdata_tuple, (packet_kdata,)
 
             (y, x) = (row_y, column_x)
-            if packet_kdata == b"\x1b[A":
+            if packet_kdata == b"\033[A":
                 y += 1  # goes up, not down
-            elif packet_kdata == b"\x1b[B":
+            elif packet_kdata == b"\033[B":
                 y -= 1  # goes up, not down
-            elif packet_kdata == b"\x1b[C":
+            elif packet_kdata == b"\033[C":
                 x -= 1  # goes left, not right
-            elif packet_kdata == b"\x1b[D":
+            elif packet_kdata == b"\033[D":
                 x += 1  # goes right, not left
 
             self.arrow_row_y = y
@@ -1512,8 +1512,8 @@ class ScreenEditor:
         while (not tbp.text) and (not tbp.closed) and (not bt.extras):
 
             kdata = tbp.to_bytes()
-            # if kdata in (b"\x1b", b"\x1bO", b"\x1b[", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b["):
-            if kdata == b"\x1bO":  # ⎋⇧O for Vim
+            # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
+            if kdata == b"\033O":  # ⎋⇧O for Vim
                 break
 
             n += 1
@@ -1534,19 +1534,19 @@ class ScreenEditor:
 
         pt = self.proxy_terminal
 
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
+        assert CUP_Y_X == "\033[" "{};{}" "H"
 
         yx = pt.proxy_read_row_y_column_x()
         (row_y, column_x) = yx
 
-        cup = f"\x1b[{arrow_row_y};{arrow_column_x}H"
-        self.write(f"\x1b[{arrow_row_y};{arrow_column_x}H")
+        cup = f"\033[{arrow_row_y};{arrow_column_x}H"
+        self.write(f"\033[{arrow_row_y};{arrow_column_x}H")
         after_write_yx = (pt.row_y, pt.column_x)
 
         assert after_write_yx == arrow_yx, (after_write_yx, arrow_yx, yx, cup)
 
         option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
-        ktext = f"\x1b[<{option_f};{column_x};{row_y}m"
+        ktext = f"\033[<{option_f};{column_x};{row_y}m"
         kdata = ktext.encode()
 
         tbp = TerminalBytePacket(kdata)
@@ -1619,8 +1619,8 @@ class ScreenEditor:
     def do_column_right(self) -> None:
         """Go right by 1 Column"""
 
-        assert CUF_X == "\x1b[" "{}" "C"
-        self.write("\x1b[C")
+        assert CUF_X == "\033[" "{}" "C"
+        self.write("\033[C")
 
         # Emacs ⌃F
 
@@ -1637,8 +1637,8 @@ class ScreenEditor:
     def do_char_delete_here(self) -> None:
         """Delete the Character beneath the Cursor"""
 
-        assert DCH_X == "\x1b[" "{}" "P"
-        self.write("\x1b[P")
+        assert DCH_X == "\033[" "{}" "P"
+        self.write("\033[P")
 
         # Emacs ⌃D  # Vim X
 
@@ -1656,13 +1656,13 @@ class ScreenEditor:
         pt = self.proxy_terminal
 
         assert BS == "\b"
-        assert DCH_X == "\x1b[" "{}" "P"
+        assert DCH_X == "\033[" "{}" "P"
 
         x = pt.proxy_read_column_x()
 
         if x > 1:
             self.write("\b")
-            self.write("\x1b[P")
+            self.write("\033[P")
 
         # Emacs Delete  # Vim ⇧X
 
@@ -1679,9 +1679,9 @@ class ScreenEditor:
     def do_column_leap_rightmost(self) -> None:
         """Leap to the Rightmost Column"""
 
-        assert CUF_X == "\x1b[" "{}" "C"
+        assert CUF_X == "\033[" "{}" "C"
         assert _PN_MAX_32100_ == 32100
-        self.write("\x1b[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
+        self.write("\033[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
 
         # todo3: Leap to Rightmost Mirror, if Row Mirrored
 
@@ -1698,8 +1698,8 @@ class ScreenEditor:
     def do_inserting_start(self) -> None:
         """Start Inserting Characters at the Cursor"""
 
-        assert SM_IRM == "\x1b[" "4h"
-        self.write("\x1b[4h")
+        assert SM_IRM == "\033[" "4h"
+        self.write("\033[4h")
 
         # Vim I
 
@@ -1708,8 +1708,8 @@ class ScreenEditor:
     def do_replacing_start(self) -> None:
         """Start Replacing Characters at the Cursor"""
 
-        assert RM_IRM == "\x1b[" "4l"
-        self.write("\x1b[4l")
+        assert RM_IRM == "\033[" "4l"
+        self.write("\033[4l")
 
         # Vim ⇧R
 
@@ -1729,8 +1729,8 @@ class ScreenEditor:
     def do_row_down(self) -> None:
         """Go down by 1 Row, but stop in last Row"""
 
-        assert CUD_Y == "\x1b[" "{}" "B"
-        self.write("\x1b[B")
+        assert CUD_Y == "\033[" "{}" "B"
+        self.write("\033[B")
 
         # Emacs ⌃N
 
@@ -1753,8 +1753,8 @@ class ScreenEditor:
     def do_row_insert(self) -> None:
         """Insert 1 Row above the Cursor"""
 
-        assert IL_Y == "\x1b[" "{}" "L"
-        self.write("\x1b[L")
+        assert IL_Y == "\033[" "{}" "L"
+        self.write("\033[L")
 
         # Emacs ⌃O when leftmost
 
@@ -1769,15 +1769,15 @@ class ScreenEditor:
         x_width = bt.read_x_width()
         mid_width = (x_width // 2) + (x_width % 2)
 
-        assert CUP_Y1_X1 == "\x1b[" "H"
+        assert CUP_Y1_X1 == "\033[" "H"
 
         if (depth % 3) == 1:
-            self.write("\x1b[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+            self.write("\033[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
         elif (depth % 3) == 2:
             x = mid_width
-            self.write(f"\x1b[1;{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+            self.write(f"\033[1;{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
         else:
-            self.write("\x1b[1;31200H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+            self.write("\033[1;31200H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
 
         if (depth % 3) == 1:
             (y, x) = (Y1, X1)  # todo: send "H" in place of "1;1H"
@@ -1786,7 +1786,7 @@ class ScreenEditor:
         else:
             (y, x) = (Y1, 31200)
 
-        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+        self.write(f"\033[{y};{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
         # Vim ⇧H
 
         # todo3: Leap to First Mirror Row, if Column Mirrored
@@ -1803,7 +1803,7 @@ class ScreenEditor:
         mid_width = (x_width // 2) + (x_width % 2)
 
         assert _PN_MAX_32100_ == 32100
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+        assert CUP_Y_X1 == "\033[" "{}" "H"
 
         if (depth % 3) == 1:
             (y, x) = (32100, X1)  # todo: send "H" in place of ";1H"
@@ -1812,7 +1812,7 @@ class ScreenEditor:
         else:
             (y, x) = (32100, 31200)
 
-        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
+        self.write(f"\033[{y};{x}H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
 
         # todo3: Leap to Last Mirror Row, if Column Mirrored
 
@@ -1830,7 +1830,7 @@ class ScreenEditor:
         mid_height = (y_height // 2) + (y_height % 2)
         mid_width = (x_width // 2) + (x_width % 2)
 
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
+        assert CUP_Y_X1 == "\033[" "{}" "H"
         assert _PN_MAX_32100_ == 32100
 
         if (depth % 3) == 1:
@@ -1840,15 +1840,15 @@ class ScreenEditor:
         else:
             (y, x) = (mid_height, 31200)
 
-        self.write(f"\x1b[{y};{x}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
+        self.write(f"\033[{y};{x}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
 
         # Vim ⇧M
 
     def do_row_tail_erase(self) -> None:
         """Erase from the Cursor to the Tail of the Row"""
 
-        assert EL_PS == "\x1b[" "{}" "K"
-        self.write("\x1b[K")
+        assert EL_PS == "\033[" "{}" "K"
+        self.write("\033[K")
 
         # Vim ⇧D  # Emacs ⌃K when not rightmost
 
@@ -1863,8 +1863,8 @@ class ScreenEditor:
     def do_row_up(self) -> None:
         """Go up by 1 Row, but stop in Top Row"""
 
-        assert CUU_Y == "\x1b[" "{}" "A"
-        self.write("\x1b[A")
+        assert CUU_Y == "\033[" "{}" "A"
+        self.write("\033[A")
 
         # Emacs ⌃P
 
@@ -1909,10 +1909,10 @@ class ScreenEditor:
 
         # Default to Replacing, not Inserting
 
-        assert SM_IRM == "\x1b[" "4h"
-        assert RM_IRM == "\x1b[" "4l"
+        assert SM_IRM == "\033[" "4h"
+        assert RM_IRM == "\033[" "4l"
 
-        irm_stext = pt.proxy_read_toggle_mirrors("\x1b[4h", stext1="\x1b[4l")
+        irm_stext = pt.proxy_read_toggle_mirrors("\033[4h", stext1="\033[4l")
         restore_inserting_replacing = irm_stext  # maybe empty
 
         self.do_replacing_start()  # for F2
@@ -1943,10 +1943,10 @@ class ScreenEditor:
 
         # Default to Replacing, not Inserting
 
-        assert SM_IRM == "\x1b[" "4h"
-        assert RM_IRM == "\x1b[" "4l"
+        assert SM_IRM == "\033[" "4h"
+        assert RM_IRM == "\033[" "4l"
 
-        irm_stext = pt.proxy_read_toggle_mirrors("\x1b[4h", stext1="\x1b[4l")
+        irm_stext = pt.proxy_read_toggle_mirrors("\033[4h", stext1="\033[4l")
         restore_inserting_replacing = irm_stext  # maybe empty
 
         self.do_replacing_start()  # for F2
@@ -2030,13 +2030,13 @@ class ScreenEditor:
 
         #
 
-        self.write("\x1b[m")
+        self.write("\033[m")
 
         print_gaps = True
         if print_gaps:
 
-            self.write("\x1b[32100H")
-            self.write("\x1b[A")
+            self.write("\033[32100H")
+            self.write("\033[A")
             self.print("(((", end=" ")
 
             for pn in range(32, 231 + 1):
@@ -2176,34 +2176,34 @@ class ScreenEditor:
 
         assert BEL == "\a"  # todo7: more complete doc/ comment of Screen Encodings
         assert BS == "\b"
-        assert DECSC == "\x1b" "7"
-        assert DECRC == "\x1b" "8"
-        assert CUP_Y_X == "\x1b[" "{};{}" "H"
-        assert DCH_X == "\x1b[" "{}" "P"
-        assert RM_IRM == "\x1b[" "4l"
-        assert SM_IRM == "\x1b[" "4h"
+        assert DECSC == "\033" "7"
+        assert DECRC == "\033" "8"
+        assert CUP_Y_X == "\033[" "{};{}" "H"
+        assert DCH_X == "\033[" "{}" "P"
+        assert RM_IRM == "\033[" "4l"
+        assert SM_IRM == "\033[" "4h"
 
-        self.write("\x1b7")
+        self.write("\0337")
 
-        self.write(f"\x1b[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
+        self.write(f"\033[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
         assert pt.row_y == y, (pt.row_y, y)
         assert pt.column_x == x, (pt.column_x, x)
 
         # Vanish if the Widget is no more than the Verb, unmarked
 
-        irm_stext = pt.proxy_read_toggle_mirrors("\x1b[4h", stext1="\x1b[4l")
-        if irm_stext == "\x1b[4h":
+        irm_stext = pt.proxy_read_toggle_mirrors("\033[4h", stext1="\033[4l")
+        if irm_stext == "\033[4h":
 
-            self.write(f"\x1b[{len(widget)}P")  # deletes a Widget while inserting Texts
+            self.write(f"\033[{len(widget)}P")  # deletes a Widget while inserting Texts
 
         else:
-            assert (not irm_stext) or (irm_stext == "\x1b[4l"), (irm_stext,)
+            assert (not irm_stext) or (irm_stext == "\033[4l"), (irm_stext,)
 
             self.write(len(widget) * " ")  # erases a Widget, while replacing Texts
             # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
-            self.write(f"\x1b[{y};{x}H")
+            self.write(f"\033[{y};{x}H")
 
-        self.write("\x1b8")
+        self.write("\0338")
 
     def take_mouse_verb_at_yxf(self, verb: str, y: int, x: int, f: int) -> None:
         """Run the Verb at the Mouse Release"""
@@ -2294,7 +2294,7 @@ class ScreenEditor:
         for t in keycaps:
 
             if t == "⎋":
-                sdata += b"\x1b"
+                sdata += b"\033"
             elif t == "␣":  # Spacebar as a single-wide Glyph
                 sdata += b" "
             elif t == "⇧":
@@ -2362,10 +2362,10 @@ class ScreenEditor:
         if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
             pn = self.six_cubed_color_verb_to_pn(keycaps)
             if kind == "Foreground":
-                sdata = f"\x1b[38;5;{pn}m".encode()
+                sdata = f"\033[38;5;{pn}m".encode()
                 return sdata
             else:
-                sdata = f"\x1b[48;5;{pn}m".encode()
+                sdata = f"\033[48;5;{pn}m".encode()
                 return sdata
 
         # Eval a 24-Bit Color
@@ -2375,10 +2375,10 @@ class ScreenEditor:
 
             if not sys_platform_darwin:
                 if kind == "Foreground":
-                    sdata = f"\x1b[38;2;{r};{b};{b}m".encode()
+                    sdata = f"\033[38;2;{r};{b};{b}m".encode()
                     return sdata
                 else:
-                    sdata = f"\x1b[48;2;{r};{g};{b}m".encode()
+                    sdata = f"\033[48;2;{r};{g};{b}m".encode()
                     return sdata
 
             # Else emulate the 24-Bit Color with a 6**3 Color
@@ -2390,10 +2390,10 @@ class ScreenEditor:
             pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
 
             if kind == "Foreground":
-                sdata = f"\x1b[38;5;{pn}m".encode()
+                sdata = f"\033[38;5;{pn}m".encode()
                 return sdata
             else:
-                sdata = f"\x1b[48;5;{pn}m".encode()
+                sdata = f"\033[48;5;{pn}m".encode()
                 return sdata
 
         # Else don't succeed
@@ -2532,8 +2532,8 @@ class SnuckLife:
         dx = self.dx
         sprites = self.sprites
 
-        assert DECSC == "\x1b" "7"  # DECSC 7 Cursor Save
-        assert DECRC == "\x1b" "8"  # DECRC 8 Cursor Restore
+        assert DECSC == "\033" "7"  # DECSC 7 Cursor Save
+        assert DECRC == "\033" "8"  # DECRC 8 Cursor Restore
 
         # Take in the next Move
 
@@ -2546,7 +2546,7 @@ class SnuckLife:
 
         # Move the Sprites
 
-        se.write("\x1b7")
+        se.write("\0337")
 
         for sprite, yx in zip(sprites, yx_list):
             (y, x) = yx
@@ -2555,7 +2555,7 @@ class SnuckLife:
 
             # todo: When should we not-rewrite the Z Layer below?
 
-        se.write("\x1b8")
+        se.write("\0338")
 
     def form_snuck_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
@@ -2640,19 +2640,19 @@ class TerminalSprite:
 
         # Write there
 
-        pt.proxy_write(f"\x1b[{yc};{xc}H")
+        pt.proxy_write(f"\033[{yc};{xc}H")
         for write in z_writes:
             pt.proxy_write(write)
 
         # Erase here
 
         if (ya, xa) != (-1, -1):
-            pt.proxy_write(f"\x1b[{ya};{xa}H")
+            pt.proxy_write(f"\033[{ya};{xa}H")
             for a_write in a_writes:
                 pt.proxy_write(a_write)
 
         if (yb, xb) != (-1, -1):
-            pt.proxy_write(f"\x1b[{yb};{xb}H")
+            pt.proxy_write(f"\033[{yb};{xb}H")
             for b_write in b_writes:
                 pt.proxy_write(b_write)
 
@@ -2752,15 +2752,15 @@ class ProxyTerminal:
 
         fileno = bt.fileno
 
-        assert CUU_Y == "\x1b[" "{}" "A"
-        assert CUP_Y_X1 == "\x1b[" "{}" "H"
-        assert SGR_PS == "\x1b[" "{}" "m"
-        assert RM_IRM == "\x1b[" "4l"
+        assert CUU_Y == "\033[" "{}" "A"
+        assert CUP_Y_X1 == "\033[" "{}" "H"
+        assert SGR_PS == "\033[" "{}" "m"
+        assert RM_IRM == "\033[" "4l"
         assert _PN_MAX_32100_ == 32100
 
         # Exit via 1st Column of 1 Row above the Last Row
 
-        sdata = b"\x1b[32100H" + b"\x1b[A" + b"\x1b[m" + b"\x1b[4l"
+        sdata = b"\033[32100H" + b"\033[A" + b"\033[m" + b"\033[4l"
         os.write(fileno, sdata)
 
         # Exit each, in reverse order of Enter's
@@ -2804,17 +2804,17 @@ class ProxyTerminal:
 
         tprint(f"{row_y=} {column_x=}  # write_screen")
 
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
-        assert EL_PS == "\x1b[" "{}" "K"
-        assert SGR_PS == "\x1b[" "{}" "m"
-        assert RM_IRM == "\x1b[" "4l"
+        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
+        assert EL_PS == "\033[" "{}" "K"
+        assert SGR_PS == "\033[" "{}" "m"
+        assert RM_IRM == "\033[" "4l"
 
         # Redraw the Screen per se
 
-        default = ["\x1b[48;5;255m", " "]
+        default = ["\033[48;5;255m", " "]
 
-        self.write_out("\x1b[4l")
-        self.write_out("\x1b[m")
+        self.write_out("\033[4l")
+        self.write_out("\033[m")
 
         for y in range(Y1, y_height):
             writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
@@ -2822,7 +2822,7 @@ class ProxyTerminal:
             last_x = X1
             x_sorted = sorted(writes_by_x.keys())
             if not x_sorted:
-                self.write_out(f"\x1b[{y}H")
+                self.write_out(f"\033[{y}H")
             else:
                 boring = False
                 for x in range(X1, x_sorted[-1] + 1):
@@ -2833,10 +2833,10 @@ class ProxyTerminal:
                     assert x_writes[-1].isprintable(), (y, x, x_writes)  # todo6: check often
 
                     if not boring:  # todo7: stop redrawing Cursor unnecessarily
-                        self.write_out(f"\x1b[{y};{x}H")
+                        self.write_out(f"\033[{y};{x}H")
 
                     if not boring:  # todo7: stop redrawing Clear-Style unnecessarily
-                        self.write_out("\x1b[m")
+                        self.write_out("\033[m")
 
                     last_x_write = x_writes[-1]
                     for x_write in x_writes:
@@ -2851,16 +2851,16 @@ class ProxyTerminal:
                                 boring = True
 
             if last_x < x_width:
-                self.write_out("\x1b[m")  # SGR_PS before EL_X needed at macOS
+                self.write_out("\033[m")  # SGR_PS before EL_X needed at macOS
                 for x_write in default[:-1]:
                     self.write_out(x_write)
-                self.write_out("\x1b[K")  # todo9: emulate at gCloud Shell
+                self.write_out("\033[K")  # todo9: emulate at gCloud Shell
 
-        self.write_out("\x1b[m")
+        self.write_out("\033[m")
 
         # Restore the Terminal Setup
 
-        self.write_out(f"\x1b[{row_y};{column_x}H")
+        self.write_out(f"\033[{row_y};{column_x}H")
 
         for toggle in toggles:
             self.write_out(toggle)  # todo7: stop redrawing Toggles unnecessarily
@@ -3004,9 +3004,9 @@ class ProxyTerminal:
     def proxy_y_x_text_print(self, y: int, x: int, text: str) -> None:
         """Write Some Text Characters at one Y X Place"""
 
-        assert CUP_Y_X == "\x1b[" "{}" ";" "{}" "H"
+        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
-        self.proxy_write(f"\x1b[{y};{x}H")
+        self.proxy_write(f"\033[{y};{x}H")
         self.proxy_write(text)
 
     def proxy_print(self, *args: object, end: str = "\r\n") -> None:
@@ -3269,10 +3269,10 @@ class ProxyTerminal:
         y_height = self.y_height
         x_width = self.x_width
 
-        assert CUP_Y_X_REGEX == r"\x1B\[((-?[0-9]+)(;(-?[0-9]+))?)?H"
+        assert CUP_Y_X_REGEX == r"\033\[((-?[0-9]+)(;(-?[0-9]+))?)?H"
         assert _PN_MAX_32100_ == 32100
 
-        m = re.fullmatch(r"\x1B\[((-?[0-9]+)(;(-?[0-9]+))?)?H", string=text)
+        m = re.fullmatch(r"\033\[((-?[0-9]+)(;(-?[0-9]+))?)?H", string=text)
         if m:  # as if searching for:  csi and tbp.tail == b"H"
             y = int(m.group(1)) if m.group(1) else Y1
             x = int(m.group(2)) if m.group(2) else X1
@@ -3346,12 +3346,12 @@ class ProxyTerminal:
 
         # Checkpoint and revert the Y X Cursor
 
-        if sdata == b"\x1b7":
+        if sdata == b"\0337":
             self.was_y = row_y
             self.was_x = column_x
             return True
 
-        if sdata == b"\x1b8":
+        if sdata == b"\0338":
             self.row_y = was_y
             self.column_x = was_x
             return True
@@ -3385,17 +3385,17 @@ class ProxyTerminal:
 
         #
 
-        assert CUU_Y == "\x1b[" "{}" "A"
-        assert CUD_Y == "\x1b[" "{}" "B"
-        assert CUF_X == "\x1b[" "{}" "C"
-        assert CUB_X == "\x1b[" "{}" "D"
+        assert CUU_Y == "\033[" "{}" "A"
+        assert CUD_Y == "\033[" "{}" "B"
+        assert CUF_X == "\033[" "{}" "C"
+        assert CUB_X == "\033[" "{}" "D"
 
-        assert CHA_X == "\x1b[" "{}" "G"
-        assert VPA_Y == "\x1b[" "{}" "d"
+        assert CHA_X == "\033[" "{}" "G"
+        assert VPA_Y == "\033[" "{}" "d"
 
         #
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         if csi and tbp.tail and (tbp.tail in b"ABCDGd"):  # "ABCD" Arrows per se, and also "Gd"
             if not tbp.back:
@@ -3436,10 +3436,10 @@ class ProxyTerminal:
 
         #
 
-        assert CHT_X == "\x1b[" "{}" "I"  # Cursor Forward [Horizontal] Tabulation
-        assert CBT_X == "\x1b[" "{}" "Z"  # Cursor Backward [Horizontal] Tabulation
+        assert CHT_X == "\033[" "{}" "I"  # Cursor Forward [Horizontal] Tabulation
+        assert CBT_X == "\033[" "{}" "Z"  # Cursor Backward [Horizontal] Tabulation
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         if csi and tbp.tail and (tbp.tail in b"IZ"):
             if not tbp.back:
@@ -3476,12 +3476,12 @@ class ProxyTerminal:
         row_y = self.row_y
         y_height = self.y_height
 
-        assert ED_PS == "\x1b[" "{}" "J"
-        assert EL_PS == "\x1b[" "{}" "K"
+        assert ED_PS == "\033[" "{}" "J"
+        assert EL_PS == "\033[" "{}" "K"
 
         # Mirror ⇧K Erases of Head or Tail or Whole Row
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         if csi and ((tbp.tail == b"J") or (tbp.tail == b"K")):
             if not tbp.back:
@@ -3529,7 +3529,7 @@ class ProxyTerminal:
         styles = self.styles
         x_width = self.x_width
 
-        assert EL_PS == "\x1b[" "{}" "K"
+        assert EL_PS == "\033[" "{}" "K"
 
         if ps == 0:
 
@@ -3572,12 +3572,12 @@ class ProxyTerminal:
         row_y = self.row_y
         writes_by_y_x = self.writes_by_y_x
 
-        assert DCH_X == "\x1b[" "{}" "P"
-        assert ECH_X == "\x1b[" "{}" "X"  # todo10: ⎋[⇧X columns-erase
+        assert DCH_X == "\033[" "{}" "P"
+        assert ECH_X == "\033[" "{}" "X"  # todo10: ⎋[⇧X columns-erase
 
         # Mirror ⇧P Deletes of Pn Characters in the Row
 
-        csi = tbp.head == b"\x1b["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        csi = tbp.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         if csi and (tbp.tail == b"P"):
             if not tbp.back:
@@ -3624,11 +3624,11 @@ class ProxyTerminal:
 
         toggles = self.toggles
 
-        assert SM_IRM == "\x1b[" "4h"
-        assert RM_IRM == "\x1b[" "4l"
+        assert SM_IRM == "\033[" "4h"
+        assert RM_IRM == "\033[" "4l"
 
         toggle_pairs = [
-            ("\x1b[" "4h", "\x1b[" "4l"),
+            ("\033[" "4h", "\033[" "4l"),
         ]
 
         # Find the Toggle Pair
@@ -3674,7 +3674,7 @@ class ProxyTerminal:
 
         if kind0 == "Colorless":
 
-            if sdata0 == b"\x1b[m":
+            if sdata0 == b"\033[m":
                 styles.clear()
                 return True
 
@@ -3709,9 +3709,9 @@ class ProxyTerminal:
     def tbp_to_sgr_kind(self, tbp: TerminalBytePacket) -> str:
         """Say 'Foreground' or 'Background' or 'Colorless' or '' Empty Str"""
 
-        assert SGR_PS == "\x1b[" "{}" "m"
+        assert SGR_PS == "\033[" "{}" "m"
 
-        if tbp.head != b"\x1b[":
+        if tbp.head != b"\033[":
             return ""
         if tbp.back:
             return ""
@@ -3897,8 +3897,8 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
                 pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
                 color_picker_pns.append(pn)
 
-                se.write(f"\x1b[{hy};{x}H")
-                se.write(f"\x1b[38;5;{pn}m")
+                se.write(f"\033[{hy};{x}H")
+                se.write(f"\033[38;5;{pn}m")
                 # se.write(str(g6))
                 se.write(glyph)
 
@@ -3931,8 +3931,8 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
                 pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
                 color_picker_pns.append(pn)
 
-                se.write(f"\x1b[{hy};{x}H")
-                se.write(f"\x1b[38;5;{pn}m")
+                se.write(f"\033[{hy};{x}H")
+                se.write(f"\033[38;5;{pn}m")
                 # se.write(str(g6))
                 se.write(glyph)
 
@@ -4015,17 +4015,17 @@ SCREEN_WRITER_HELP = r"""
 BEL = "\a"  # 00/07 Bell (BEL)
 BS = "\b"  # 00/08 ⌃H Backspace
 HT = "\t"  # 00/09 ⌃I Character Tabulation
-LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\x1b[" "B"
-CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\x1b[" "G"
+LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\033[" "B"
+CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\033[" "G"
 
-ESC = "\x1b"  # 01/11  ⌃[ Escape  # often known as Shell printf '\e', but Python doesn't define \e
-SS3 = "\x1bO"  # ESC 04/15 Single Shift Three  # ⎋⇧O in macOS F1 F2 F3 F4
-CSI = "\x1b["  # ESC 05/11 Control Sequence Introducer
+ESC = "\033"  # 01/11  ⌃[ Escape  # often known as Shell printf '\e', but Python doesn't define \e
+SS3 = "\033O"  # ESC 04/15 Single Shift Three  # ⎋⇧O in macOS F1 F2 F3 F4
+CSI = "\033["  # ESC 05/11 Control Sequence Introducer
 
-DECSC = "\x1b" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
-DECRC = "\x1b" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
+DECSC = "\033" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
+DECRC = "\033" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
 
-CSI_PIF_REGEX = r"(\x1b\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
+CSI_PIF_REGEX = r"(\033\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
 
 class BytesTerminal:
@@ -4162,7 +4162,7 @@ class BytesTerminal:
 
         # if not extras:
         #     kdata = tbp.to_bytes()
-        #     if kdata in (b"\x1b", b"\x1bO", b"\x1b[", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b["):
+        #     if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
         #         tbp.close()
         #         return None
 
@@ -4185,7 +4185,7 @@ class BytesTerminal:
 
                 kdata = tbp.to_bytes()
                 if not extras:
-                    if kdata == b"\x1bO":  # ⎋⇧O for Vim
+                    if kdata == b"\033O":  # ⎋⇧O for Vim
                         if not self.kbhit(timeout=0.333):
                             break  # rejects slow SS3 ⎋⇧O P Q R S of FnF1..FnF4
 
@@ -4229,17 +4229,17 @@ class BytesTerminal:
 
         stdio = self.stdio
 
-        assert DSR_6 == "\x1b[" "6n"
-        assert CPR_Y_X_REGEX == r"\x1b\[([0-9]+);([0-9]+)R"
+        assert DSR_6 == "\033[" "6n"
+        assert CPR_Y_X_REGEX == r"\033\[([0-9]+);([0-9]+)R"
 
         kbhit = self.kbhit(timeout=0.000)  # flushes output, then polls input
         assert not kbhit  # todo: cope when Mouse or Paste or Keyboard work disrupts replies to Csi
 
-        stdio.write("\x1b[6n")  # bypass Screen Logs & Screen Mirrors above
+        stdio.write("\033[6n")  # bypass Screen Logs & Screen Mirrors above
         tbp = self.read_byte_packet(timeout=None)
         kdata = tbp.to_bytes()
 
-        m = re.fullmatch(rb"\x1b\[([0-9]+);([0-9]+)R", string=kdata)
+        m = re.fullmatch(rb"\033\[([0-9]+);([0-9]+)R", string=kdata)
         assert m, (m, kdata, tbp)
 
         y_bytes = m.group(1)
@@ -4298,8 +4298,8 @@ class TerminalBytePacket:
 
         self._require_simple_()
 
-        # doesn't take bytes([0x80 | 0x0B]) as meaning b"\x1b\x5b" CSI ⎋[
-        # doesn't take bytes([0x80 | 0x0F]) as meaning b"\x1b\x4f" SS3 ⎋O
+        # doesn't take bytes([0x80 | 0x0B]) as meaning b"\033\x5b" CSI ⎋[
+        # doesn't take bytes([0x80 | 0x0F]) as meaning b"\033\x4f" SS3 ⎋O
 
     def __bool__(self) -> bool:
         truthy = bool(
@@ -4363,7 +4363,7 @@ class TerminalBytePacket:
 
         return s  # no matter if .closed
 
-        # "b'\x1b[' b'6' b' q'"
+        # "b'\033[' b'6' b' q'"
 
     def to_bytes(self) -> bytes:
         """List the Bytes taken, as yet"""
@@ -4426,27 +4426,27 @@ class TerminalBytePacket:
         assert str(tbp) == r"'Superb' b'\xc2'", (repr(str(tbp)), tbp)
 
         self._try_open_(b"")  # empty
-        self._try_open_(b"\x1b")  # first Byte of Esc Sequence
-        self._try_open_(b"\x1b\x1b")  # first Two Bytes of Esc-Esc Sequence
-        self._try_open_(b"\x1bO")  # first Two Bytes of Three-Byte SS3 Sequence
-        self._try_open_(b"\x1b[", b"6", b" ")  # CSI Head with Neck and Back but no Tail
+        self._try_open_(b"\033")  # first Byte of Esc Sequence
+        self._try_open_(b"\033\033")  # first Two Bytes of Esc-Esc Sequence
+        self._try_open_(b"\033O")  # first Two Bytes of Three-Byte SS3 Sequence
+        self._try_open_(b"\033[", b"6", b" ")  # CSI Head with Neck and Back but no Tail
         self._try_open_(b"\xed\x80")  # Head of >= 3 Byte UTF-8 Encoding
         self._try_open_(b"\xf4\x80\x80")  # Head of >= 4 Byte UTF-8 Encoding
-        self._try_open_(b"\x1b[M#\xff")  # Undecodable Head, incomplete CSI Mouse Report
-        self._try_open_(b"\x1b[M \xc4\x8a")  # Head only, 6 Byte incomplete CSI Mouse Report
+        self._try_open_(b"\033[M#\xff")  # Undecodable Head, incomplete CSI Mouse Report
+        self._try_open_(b"\033[M \xc4\x8a")  # Head only, 6 Byte incomplete CSI Mouse Report
 
         # Try some Packets closed against taking more Bytes
 
         self._try_closed_(b"\n")  # Head only, of 7-bit Control Byte
-        self._try_closed_(b"\x1b\x1b[", b"3;5", b"~")  # CSI Head with Neck and Tail, no Back
+        self._try_closed_(b"\033\033[", b"3;5", b"~")  # CSI Head with Neck and Tail, no Back
         self._try_closed_(b"\xc0")  # Head only, of 8-bit Control Byte
         self._try_closed_(b"\xff")  # Head only, of 8-bit Control Byte
         self._try_closed_(b"\xc2\xad")  # Head only, of 2 Byte UTF-8 of U+00AD Soft-Hyphen Control
-        self._try_closed_(b"\x1b", b"A")  # Head & Text Tail of a Two-Byte Esc Sequence
-        self._try_closed_(b"\x1b", b"\t")  # Head & Control Tail of a Two-Byte Esc Sequence
-        self._try_closed_(b"\x1bO", b"P")  # Head & Text Tail of a Three-Byte SS3 Sequence
-        self._try_closed_(b"\x1b[", b"3;5", b"H")  # CSI Head with Next and Tail
-        self._try_closed_(b"\x1b[", b"6", b" q")  # CSI Head with Neck and Back & Tail
+        self._try_closed_(b"\033", b"A")  # Head & Text Tail of a Two-Byte Esc Sequence
+        self._try_closed_(b"\033", b"\t")  # Head & Control Tail of a Two-Byte Esc Sequence
+        self._try_closed_(b"\033O", b"P")  # Head & Text Tail of a Three-Byte SS3 Sequence
+        self._try_closed_(b"\033[", b"3;5", b"H")  # CSI Head with Next and Tail
+        self._try_closed_(b"\033[", b"6", b" q")  # CSI Head with Neck and Back & Tail
 
         # todo: test each Control Flow Return? test each Control Flow Branch?
 
@@ -4494,7 +4494,7 @@ class TerminalBytePacket:
         self.closed = True
 
         head_plus = head + stash  # if closing a 6-Byte Mouse-Report that decodes to < 6 Chars
-        if head_plus.startswith(b"\x1b[M"):
+        if head_plus.startswith(b"\033[M"):
             try:
                 decode = head_plus.decode()
                 if len(decode) < 6:
@@ -4628,12 +4628,12 @@ class TerminalBytePacket:
 
         # Do take the 3rd Byte of this kind of CSI here, and don't take the first 2 Bytes here
 
-        if (head == b"\x1b[") and (not neck) and (not back):
+        if (head == b"\033[") and (not neck) and (not back):
             if data == b"M":
                 head.extend(data)
                 return b""  # takes 3rd Byte of CSI Mouse Report here
 
-        if not head.startswith(b"\x1b[M"):  # ⎋[M Mouse Report
+        if not head.startswith(b"\033[M"):  # ⎋[M Mouse Report
             return data  # doesn't take the first 2 Bytes of Mouse Report here
 
         # Take 3..15 Bytes into a 3..6 Char Mouse Report
@@ -4674,13 +4674,13 @@ class TerminalBytePacket:
         assert not tail, (tail,)
         assert not closed, (closed,)
 
-        assert ESC == "\x1b"  # ⎋
-        assert CSI == "\x1b["  # ⎋[
-        assert SS3 == "\x1bO"  # ⎋⇧O
+        assert ESC == "\033"  # ⎋
+        assert CSI == "\033["  # ⎋[
+        assert SS3 == "\033O"  # ⎋⇧O
 
         # Look only outside of Mouse Reports
 
-        assert not head.startswith(b"\x1b[M"), (head,)  # Mouse Report
+        assert not head.startswith(b"\033[M"), (head,)  # Mouse Report
 
         # Judge as printable or not
 
@@ -4701,7 +4701,7 @@ class TerminalBytePacket:
         #
 
         head_plus = bytes(head + data)
-        if head_plus in (b"\x1b", b"\x1b\x1b", b"\x1b\x1bO", b"\x1b\x1b[", b"\x1bO", b"\x1b["):
+        if head_plus in (b"\033", b"\033\033", b"\033\033O", b"\033\033[", b"\033O", b"\033["):
             head.extend(data)
             return b""  # takes first 1 or 2 Bytes into Esc Sequences
 
@@ -4718,7 +4718,7 @@ class TerminalBytePacket:
         # Take & close 1 Escaped Printable Decoded Char,
         # as Tail after Head of  ⎋ Esc  ⎋⎋ Esc Esc  ⎋O SS3  ⎋⎋O Esc SS3
 
-        if bytes(head) in (b"\x1b", b"\x1b\x1b", b"\x1b\x1bO", b"\x1bO"):
+        if bytes(head) in (b"\033", b"\033\033", b"\033\033O", b"\033O"):
             if printable:
                 tail.extend(data)
                 self.closed = True
@@ -4732,8 +4732,8 @@ class TerminalBytePacket:
 
             # does take ⎋\x10 ⎋\b ⎋\t ⎋\n ⎋\r ⎋\x7f etc
 
-            # doesn't take bytes([0x80 | 0x0B]) as meaning b"\x1b\x5b" CSI ⎋[
-            # doesn't take bytes([0x80 | 0x0F]) as meaning b"\x1b\x4f" SS3 ⎋O
+            # doesn't take bytes([0x80 | 0x0B]) as meaning b"\033\x5b" CSI ⎋[
+            # doesn't take bytes([0x80 | 0x0F]) as meaning b"\033\x4f" SS3 ⎋O
 
         # Decline 1..4 Undecodable Bytes, when escaped by CSI or Esc CSI
 
@@ -4764,9 +4764,9 @@ class TerminalBytePacket:
 
         # Look only at unclosed CSI or Esc CSI Sequence
 
-        assert CSI == "\x1b[", (CSI,)  # ⎋[
-        if not head.startswith(b"\x1b\x1b["):  # ⎋⎋[ Esc CSI
-            assert head.startswith(b"\x1b["), (head,)  # ⎋[ CSI
+        assert CSI == "\033[", (CSI,)  # ⎋[
+        if not head.startswith(b"\033\033["):  # ⎋⎋[ Esc CSI
+            assert head.startswith(b"\033["), (head,)  # ⎋[ CSI
 
         assert not tail, (tail,)
         assert not closed, (closed,)
@@ -4827,62 +4827,62 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\x00": "⌃Spacebar",  # ⌃@  # ⌃⇧2
     "\x09": "Tab",  # '\t' ⇥
     "\x0d": "Return",  # '\r' ⏎
-    "\x1b": "⎋",  # Esc  # Meta  # includes ⎋Spacebar ⎋Tab ⎋Return ⎋Delete without ⌥
-    "\x1b" "\x01": "⌥⇧Fn←",  # ⎋⇧Fn←   # coded with ⌃A
-    "\x1b" "\x03": "⎋FnReturn",  # coded with ⌃C  # not ⌥FnReturn
-    "\x1b" "\x04": "⌥⇧Fn→",  # ⎋⇧Fn→   # coded with ⌃D
-    "\x1b" "\x08": "⎋⌃Delete",  # ⎋⌃Delete  # coded with ⌃H  # aka \b
-    "\x1b" "\x0b": "⌥⇧Fn↑",  # ⎋⇧Fn↑   # coded with ⌃K
-    "\x1b" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
-    "\x1b" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of FnF1..FnF12  # not ⌥⇧Fn  # coded with ⌃P
-    "\x1b" "\x1b": "⎋⎋",  # Meta Esc  # not ⌥⎋
-    "\x1b" "\x1bO" "A": "⌃⌥↑",  # ESC SS3 ⇧A  # gCloud Shell
-    "\x1b" "\x1bO" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # gCloud Shell
-    "\x1b" "\x1bO" "C": "⌃⌥→",  # ESC SS3 ⇧C  # gCloud Shell
-    "\x1b" "\x1bO" "D": "⌃⌥←",  # ESC SS3 ⇧D  # gCloud Shell
-    "\x1b" "\x1b[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
-    "\x1b" "\x1b[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
-    "\x1b" "\x1b[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
-    "\x1b" "\x1b[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # gCloud Shell
-    "\x1b" "\x1b[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
-    "\x1b" "\x1b[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
-    "\x1b" "\x28": "⎋FnDelete",  # not ⌥FnDelete
-    "\x1bO" "P": "F1",  # SS3 ⇧P
-    "\x1bO" "Q": "F2",  # SS3 ⇧Q
-    "\x1bO" "R": "F3",  # SS3 ⇧R
-    "\x1bO" "S": "F4",  # SS3 ⇧S
-    "\x1b[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
-    "\x1b[" "17~": "F6",  # ⌥F1  # ⎋F1
-    "\x1b[" "18~": "F7",  # ⌥F2  # ⎋F2
-    "\x1b[" "19~": "F8",  # ⌥F3  # ⎋F3
-    "\x1b[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # macOS
-    "\x1b[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # macOS
-    "\x1b[" "20~": "F9",  # ⌥F4  # ⎋F4
-    "\x1b[" "21~": "F10",  # ⌥F5  # ⎋F5
-    "\x1b[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
-    "\x1b[" "24~": "F12",  # ⌥F7  # ⎋F7
-    "\x1b[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
-    "\x1b[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
-    "\x1b[" "28~": "⇧F7",  # ⌥F10  # ⎋F10
-    "\x1b[" "29~": "⇧F8",  # ⌥F11  # ⎋F11
-    "\x1b[" "31~": "⇧F9",  # ⌥F12  # ⎋F12
-    "\x1b[" "32~": "⇧F10",
-    "\x1b[" "33~": "⇧F11",
-    "\x1b[" "34~": "⇧F12",
-    "\x1b[" "3;2~": "⇧FnDelete",
-    "\x1b[" "3;5~": "⌃FnDelete",
-    "\x1b[" "3~": "FnDelete",
-    "\x1b[" "5~": "⇧Fn↑",  # macOS
-    "\x1b[" "6~": "⇧Fn↓",  # macOS
-    "\x1b[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ macOS
-    "\x1b[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ macOS
-    "\x1b[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ macOS
-    "\x1b[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← macOS
-    "\x1b[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
-    "\x1b[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
-    "\x1b[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
-    "\x1b" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # macOS
-    "\x1b" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # macOS
+    "\033": "⎋",  # Esc  # Meta  # includes ⎋Spacebar ⎋Tab ⎋Return ⎋Delete without ⌥
+    "\033" "\x01": "⌥⇧Fn←",  # ⎋⇧Fn←   # coded with ⌃A
+    "\033" "\x03": "⎋FnReturn",  # coded with ⌃C  # not ⌥FnReturn
+    "\033" "\x04": "⌥⇧Fn→",  # ⎋⇧Fn→   # coded with ⌃D
+    "\033" "\x08": "⎋⌃Delete",  # ⎋⌃Delete  # coded with ⌃H  # aka \b
+    "\033" "\x0b": "⌥⇧Fn↑",  # ⎋⇧Fn↑   # coded with ⌃K
+    "\033" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
+    "\033" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of FnF1..FnF12  # not ⌥⇧Fn  # coded with ⌃P
+    "\033" "\033": "⎋⎋",  # Meta Esc  # not ⌥⎋
+    "\033" "\033O" "A": "⌃⌥↑",  # ESC SS3 ⇧A  # gCloud Shell
+    "\033" "\033O" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # gCloud Shell
+    "\033" "\033O" "C": "⌃⌥→",  # ESC SS3 ⇧C  # gCloud Shell
+    "\033" "\033O" "D": "⌃⌥←",  # ESC SS3 ⇧D  # gCloud Shell
+    "\033" "\033[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
+    "\033" "\033[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
+    "\033" "\033[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
+    "\033" "\033[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # gCloud Shell
+    "\033" "\033[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
+    "\033" "\033[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
+    "\033" "\x28": "⎋FnDelete",  # not ⌥FnDelete
+    "\033O" "P": "F1",  # SS3 ⇧P
+    "\033O" "Q": "F2",  # SS3 ⇧Q
+    "\033O" "R": "F3",  # SS3 ⇧R
+    "\033O" "S": "F4",  # SS3 ⇧S
+    "\033[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
+    "\033[" "17~": "F6",  # ⌥F1  # ⎋F1
+    "\033[" "18~": "F7",  # ⌥F2  # ⎋F2
+    "\033[" "19~": "F8",  # ⌥F3  # ⎋F3
+    "\033[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # macOS
+    "\033[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # macOS
+    "\033[" "20~": "F9",  # ⌥F4  # ⎋F4
+    "\033[" "21~": "F10",  # ⌥F5  # ⎋F5
+    "\033[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
+    "\033[" "24~": "F12",  # ⌥F7  # ⎋F7
+    "\033[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
+    "\033[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
+    "\033[" "28~": "⇧F7",  # ⌥F10  # ⎋F10
+    "\033[" "29~": "⇧F8",  # ⌥F11  # ⎋F11
+    "\033[" "31~": "⇧F9",  # ⌥F12  # ⎋F12
+    "\033[" "32~": "⇧F10",
+    "\033[" "33~": "⇧F11",
+    "\033[" "34~": "⇧F12",
+    "\033[" "3;2~": "⇧FnDelete",
+    "\033[" "3;5~": "⌃FnDelete",
+    "\033[" "3~": "FnDelete",
+    "\033[" "5~": "⇧Fn↑",  # macOS
+    "\033[" "6~": "⇧Fn↓",  # macOS
+    "\033[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ macOS
+    "\033[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ macOS
+    "\033[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ macOS
+    "\033[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← macOS
+    "\033[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
+    "\033[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
+    "\033[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
+    "\033" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # macOS
+    "\033" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # macOS
     "\x20": "Spacebar",  # ' ' ␠ ␣ ␢
     "\x7f": "Delete",  # ␡ ⌫ ⌦
     "\xa0": "⌥Spacebar",  # '\N{No-Break Space}'
