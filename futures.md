@@ -1,6 +1,11 @@
 things to do, futures to build
 
+pq
+both dumps and dedents - ouch, wrong
+
 more lately
+
+    v exit 1
 
     dt broke somehow
 
