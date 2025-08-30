@@ -73,6 +73,8 @@ def excepthook(
 
     assert exc_type is not SystemExit, (exc_type,)
 
+    assert EL_PS == "\033[" "{}" "K"
+
     # Quit now for visible cause, if KeyboardInterrupt
 
     if exc_type is KeyboardInterrupt:
@@ -87,9 +89,9 @@ def excepthook(
 
     # Print the Traceback, etc
 
-    print(file=with_stderr)
-    print(file=with_stderr)
-    print("ExceptHook", file=with_stderr)
+    print("\033[K", file=with_stderr)
+    print("\033[K", file=with_stderr)
+    print("\033[K" "ExceptHook", file=with_stderr)
 
     with_excepthook(exc_type, exc_value, exc_traceback)
 
@@ -100,22 +102,32 @@ def excepthook(
 
 
 def slam_enough_stty_bits_to_normal() -> None:
+    """Guess at Normal after some Terminal Writes bypass our Screen Logs, if need be"""
 
+    assert DECSC == "\0337"
+    assert DECRC == "\0338"
+
+    assert RM_IRM == "\033[" "4l"
     assert _RM_SGR_MOUSE_ == "\033[" "?1000;1006l"
     assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
-    assert RM_IRM == "\033[" "4l"
     assert SGR_PS == "\033[" "{}" "m"
 
-    # Clean up after Terminal Writes, if need be
+    write = ""
 
-    with_stderr.write("\033[m")  # clears Background/ Foreground SGR_PS Colors & Styles
-    with_stderr.write("\033[4l")  # restores Replace (not Insert)
-    with_stderr.write("\033[?1049l")  # restores Replace (not Insert)
-    with_stderr.write("\033[?1000;1006l")  # unhooks Mouse Press & Release
+    write += "\033[m"
+    write += "\033[4l"
+    write += "\0337"
+    write += "\033[?1049l"  # and implies \033[H at macOS Terminal
+    write += "\0338"
+    write += "\033[?1000;1006l"
+
+    with_stderr.write(write)
 
     when = termios.TCSADRAIN
     attributes = with_tcgetattr  # undoes tty.setraw
     termios.tcsetattr(with_stderr.fileno(), when, attributes)
+
+    # compare ProxyTerminal.__exit__
 
 
 sys.excepthook = excepthook
@@ -157,7 +169,7 @@ def try_main_else_repl() -> None:
 
     # print("try_main_else_repl: after main", file=sys.stderr)
 
-    slam_enough_stty_bits_to_normal()
+    # slam_enough_stty_bits_to_normal()  # nope, depend on ProxyTerminal.__exit__
 
     # print(">>> ", file=sys.stderr)
     # sys.excepthook = with_excepthook
@@ -384,7 +396,7 @@ class ConwayLife:
         if choice == 1:
 
             x_mid = x_width // 3
-            se.write(f"\033[{ya};{x_mid}H")
+            se.write(f"\033[{ya};{x_mid}H")  # for .restart_conway_life
 
             self.conway_print("🔵🔵⚪⚪⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
             self.conway_print("⚪⚪⚪🔴⚪🔵🔵🔵🔵🔵🔵🔵🔵🔵")
@@ -429,7 +441,7 @@ class ConwayLife:
         y_mid = (y_min + y_max) // 2
         x_mid = (x_min + x_max) // 2
 
-        se.write(f"\033[{y_mid};{x_mid}H")
+        se.write(f"\033[{y_mid};{x_mid}H")  # for .restart_conway_life
 
     def conway_print(self, text: str) -> None:
         """Write Some Text Characters at one Y X Place"""
@@ -462,7 +474,7 @@ class ConwayLife:
 
         assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
-        se.write(f"\033[{y};{x}H")
+        se.write(f"\033[{y};{x}H")  # for .conway_write_y_x_text
         se.write(text)
 
         g_width = pt.str_guess_print_width(text)
@@ -951,7 +963,7 @@ class ScreenEditor:
 
         # Prompt at Launch  # todo9: next experiments
 
-        autolaunchers = [11, 22, 33]  # todo4: 'with' Context Handlers to undo Autolaunchers
+        autolaunchers = [11, 22]  # todo4: 'with' Context Handlers to undo Autolaunchers
 
         y_height = -1
 
@@ -976,7 +988,7 @@ class ScreenEditor:
             pt.write_screen()
 
         self.write("\033[K")
-        self.print("<#555 on #224>  <Jabberwocky>  ⎋[255M")
+        self.print("<#555 on #005>  <Jabberwocky>")  # todo10: <#24 on #005>
         self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.write("\033[K")
@@ -991,6 +1003,8 @@ class ScreenEditor:
                 self.read_eval_print_once()
             except SystemExit:
                 break
+
+        # self.print("Goodbye from Screen Editor")
 
     def read_eval_print_once(self) -> None:
         """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
@@ -1590,6 +1604,8 @@ class ScreenEditor:
 
     def do_assert_false(self) -> None:
         """Assert False"""
+
+        # self.print("do_assert_false")
 
         assert False
 
@@ -2201,7 +2217,7 @@ class ScreenEditor:
 
             self.write(len(widget) * " ")  # erases a Widget, while replacing Texts
             # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
-            self.write(f"\033[{y};{x}H")
+            self.write(f"\033[{y};{x}H")  # for .vanish_widget_at_yxf
 
         self.write("\0338")
 
@@ -2640,19 +2656,19 @@ class TerminalSprite:
 
         # Write there
 
-        pt.proxy_write(f"\033[{yc};{xc}H")
+        pt.proxy_write(f"\033[{yc};{xc}H")  # for .yx_leap_to
         for write in z_writes:
             pt.proxy_write(write)
 
         # Erase here
 
         if (ya, xa) != (-1, -1):
-            pt.proxy_write(f"\033[{ya};{xa}H")
+            pt.proxy_write(f"\033[{ya};{xa}H")  # for .yx_leap_to
             for a_write in a_writes:
                 pt.proxy_write(a_write)
 
         if (yb, xb) != (-1, -1):
-            pt.proxy_write(f"\033[{yb};{xb}H")
+            pt.proxy_write(f"\033[{yb};{xb}H")  # for .yx_leap_to
             for b_write in b_writes:
                 pt.proxy_write(b_write)
 
@@ -2752,24 +2768,48 @@ class ProxyTerminal:
 
         fileno = bt.fileno
 
-        assert CUU_Y == "\033[" "{}" "A"
-        assert CUP_Y_X1 == "\033[" "{}" "H"
-        assert SGR_PS == "\033[" "{}" "m"
+        sdata = b""
+
+        # Guess at Normal after some Terminal Writes bypass our Screen Logs, if need be
+        # Compare .slam_enough_stty_bits_to_normal
+
+        assert DECSC == "\0337"
+        assert DECRC == "\0338"
+
         assert RM_IRM == "\033[" "4l"
-        assert _PN_MAX_32100_ == 32100
+        assert _RM_SGR_MOUSE_ == "\033[" "?1000;1006l"
+        assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
+        assert SGR_PS == "\033[" "{}" "m"
+
+        sdata += b"\033[m"
+        sdata += b"\033[4l"
+        sdata += b"\0337"
+        sdata += b"\033[?1049l"  # and implies \033[H at macOS Terminal
+        sdata += b"\0338"
+        sdata += b"\033[?1000;1006l"
 
         # Exit via 1st Column of 1 Row above the Last Row
 
-        sdata = b"\033[32100H" + b"\033[A" + b"\033[m" + b"\033[4l"
-        os.write(fileno, sdata)
+        assert CUP_Y_X1 == "\033[" "{}" "H"
+        assert CUU_Y == "\033[" "{}" "A"
+        assert _PN_MAX_32100_ == 32100
 
-        # Exit each, in reverse order of Enter's
+        if exc_type is None:
+
+            sdata += b"\033[32100H"
+            sdata += b"\033[A"
+
+        # Write last write, and then exit each, in reverse order of Enter's
+
+        os.write(fileno, sdata)  # not:  os.write(fileno, b"ProxyTerminal.__exit__" b"\r\n")
 
         slog.flush()
         klog.flush()
         bt.__exit__(exc_type, exc_val, exc_tb)
 
         # Succeed
+
+        # print(f"Exiting ProxyTerminal.__exit__ {exc_type}", file=sys.stderr)
 
         return None
 
@@ -2822,7 +2862,7 @@ class ProxyTerminal:
             last_x = X1
             x_sorted = sorted(writes_by_x.keys())
             if not x_sorted:
-                self.write_out(f"\033[{y}H")
+                self.write_out(f"\033[{y}H")  # for .write_screen
             else:
                 boring = False
                 for x in range(X1, x_sorted[-1] + 1):
@@ -2833,7 +2873,7 @@ class ProxyTerminal:
                     assert x_writes[-1].isprintable(), (y, x, x_writes)  # todo6: check often
 
                     if not boring:  # todo7: stop redrawing Cursor unnecessarily
-                        self.write_out(f"\033[{y};{x}H")
+                        self.write_out(f"\033[{y};{x}H")  # for .write_screen
 
                     if not boring:  # todo7: stop redrawing Clear-Style unnecessarily
                         self.write_out("\033[m")
@@ -3006,7 +3046,7 @@ class ProxyTerminal:
 
         assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
-        self.proxy_write(f"\033[{y};{x}H")
+        self.proxy_write(f"\033[{y};{x}H")  # for .proxy_y_x_text_print
         self.proxy_write(text)
 
     def proxy_print(self, *args: object, end: str = "\r\n") -> None:
@@ -3253,10 +3293,12 @@ class ProxyTerminal:
             if self.write_leap_byte_mirrors(cr_tbp):
 
                 lf_tbp = TerminalBytePacket(b"\n")
-                if self.write_leap_byte_mirrors(lf_tbp):
+                mirrored = self.write_leap_byte_mirrors(lf_tbp)
+                if not mirrored:
+                    tprint("Only mirrored the CR, not the LF, of CR LF")
 
-                    return True
-                assert False
+                return True
+
             assert False
 
             # todo: reconsider CR LF is 2 TerminalBytePacket, not 1
@@ -3274,8 +3316,8 @@ class ProxyTerminal:
 
         m = re.fullmatch(r"\033\[((-?[0-9]+)(;(-?[0-9]+))?)?H", string=text)
         if m:  # as if searching for:  csi and tbp.tail == b"H"
-            y = int(m.group(1)) if m.group(1) else Y1
-            x = int(m.group(2)) if m.group(2) else X1
+            y = int(m.group(2)) if m.group(2) else Y1
+            x = int(m.group(4)) if m.group(4) else X1
 
             row_y = y
             if y == 32100:
@@ -3977,8 +4019,8 @@ SCREEN_WRITER_HELP = r"""
         ⎋[?1049H screen-alt  ⎋[?1049L screen-main  ⎋[?25L cursor-hide  ⎋[?25H cursor-show
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m max grayscale
-        ⎋[31M red  ⎋[32M green  ⎋[34M blue  ⎋[104M on bright blue  ⎋[38;5;130M orange
-        ⎋[M plain  #211 on #344  #333366 on #CCCC99    <Jabberwocky>
+        red green bright-blue  ⎋[31M  ⎋[32M  ⎋[94M  ⎋[30M  ⎋[97M  on rgb  ⎋[41M  ⎋[42M  ⎋[104M
+        ⎋[M plain  <Jabberwocky>  #555 on #005  #003366 on #FFCC99
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
@@ -3988,6 +4030,9 @@ SCREEN_WRITER_HELP = r"""
         or ⎋[?1000 H L by itself, or 1005, or 1015
 
 """
+
+# todo10: #24 Grayscale as our reach for ⎋[38;5;231m
+
 
 # todo3: Vim Q Q ⇧@ Record/ Replay, and ⌃X ⇧( till ⌃C ⇧) and ⌃X E for Emacs
 
