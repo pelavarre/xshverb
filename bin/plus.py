@@ -47,94 +47,16 @@ _: object
 
 
 #
-# Call Main, and also launch the Repl if Main doesn't raise SystemExit
-# todo10: shuffle Quit Details below most of the Code
+# Run from the Shell Command Line
 #
 
 
-with_excepthook = sys.excepthook  # aliases old hook, and fails fast to chain hooks
-assert with_excepthook.__module__ == "sys", (with_excepthook.__module__,)
-assert with_excepthook.__name__ == "excepthook", (with_excepthook.__name__,)
-
-assert sys.__stderr__ is not None  # refuses to run headless
-with_stderr = sys.stderr
-with_tcgetattr = termios.tcgetattr(sys.__stderr__.fileno())
-
-
-assert int(0x80 + signal.SIGINT) == 130  # discloses the Nonzero Exit Code for after ⌃C SigInt
-
-
-def excepthook(
-    exc_type: type[BaseException],
-    exc_value: BaseException,
-    exc_traceback: types.TracebackType | None,
-) -> None:
-    """Run at Process Exit, when not bypassed by raisingSystemExit"""
-
-    assert exc_type is not SystemExit, (exc_type,)
-
-    assert EL_PS == "\033[" "{}" "K"
-
-    # Quit now for visible cause, if KeyboardInterrupt
-
-    if exc_type is KeyboardInterrupt:
-        with_stderr.write("KeyboardInterrupt\n")
-        sys.exit(130)  # 0x80 + signal.SIGINT
-
-    if exc_type is bdb.BdbQuit:
-        with_stderr.write("BdbQuit\n")
-        sys.exit(130)  # 0x80 + signal.SIGINT  # same as for KeyboardInterrupt
-
-    slam_enough_stty_bits_to_normal()
-
-    # Print the Traceback, etc
-
-    print("\033[K", file=with_stderr)
-    print("\033[K", file=with_stderr)
-    print("\033[K" "ExceptHook", file=with_stderr)
-
-    with_excepthook(exc_type, exc_value, exc_traceback)
-
-    # Launch the Post-Mortem Debugger
-
-    print(">>> pdb.pm()", file=with_stderr)
-    pdb.pm()
-
-
-def slam_enough_stty_bits_to_normal() -> None:
-    """Guess at Normal after some Terminal Writes bypass our Screen Logs, if need be"""
-
-    assert DECSC == "\0337"
-    assert DECRC == "\0338"
-
-    assert RM_IRM == "\033[" "4l"
-    assert _RM_SGR_MOUSE_ == "\033[" "?1000;1006l"
-    assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
-    assert SGR_PS == "\033[" "{}" "m"
-
-    write = ""
-
-    write += "\033[m"
-    write += "\033[4l"
-    write += "\0337"
-    write += "\033[?1049l"  # and implies \033[H at macOS Terminal
-    write += "\0338"
-    write += "\033[?1000;1006l"
-
-    with_stderr.write(write)
-
-    when = termios.TCSADRAIN
-    attributes = with_tcgetattr  # undoes tty.setraw
-    termios.tcsetattr(with_stderr.fileno(), when, attributes)
-
-    # compare ProxyTerminal.__exit__
-
-
-sys.excepthook = excepthook
-
-
-def try_main_else_repl() -> None:
+def main() -> None:
     """Run from the Shell Command Line, and exit into the Py Repl"""
+
+    sys.excepthook = excepthook
+
+    # Take in the Shell Command-Line Args
 
     if os.path.basename(sys.argv[0]) != "+":
         assert sys.argv[1:], sys.argv
@@ -163,11 +85,11 @@ def try_main_else_repl() -> None:
 
     # print("To get started, press Return after typing:  tryme()", file=sys.stderr)
     # print(">>> ", file=sys.stderr)
-    # print(">>> tryme()", file=sys.stderr)
+    # print(">>> try_something()", file=sys.stderr)
 
-    main()
+    try_something()
 
-    # print("try_main_else_repl: after main", file=sys.stderr)
+    # print("main: after try_something", file=sys.stderr)
 
     # slam_enough_stty_bits_to_normal()  # nope, depend on ProxyTerminal.__exit__
 
@@ -176,12 +98,7 @@ def try_main_else_repl() -> None:
     # os.environ["PYTHONINSPECT"] = str(True)
 
 
-#
-# Run from the Shell Command Line
-#
-
-
-def main() -> None:
+def try_something() -> None:
     """Run from the Shell Command Line"""
 
     tprint()
@@ -3106,7 +3023,7 @@ class ProxyTerminal:
         row_y = self.row_y
         column_x = self.column_x
 
-        tprint(f"{text!r}  # proxy_write_printable")
+        # tprint(f"{text!r}  # proxy_write_printable")
 
         # Split fitting from not-fitting
 
@@ -3117,7 +3034,7 @@ class ProxyTerminal:
             y = self.row_y
             x = self.column_x
 
-            tprint(f"{y};{x} {t!r}  # proxy_write_printable")
+            # tprint(f"{y};{x} {t!r}  # proxy_write_printable")
 
             fitting = self.proxy_y_x_write_printable_t(y, x=x, t=t)
 
@@ -3130,7 +3047,10 @@ class ProxyTerminal:
 
         if suffix:
             (y, x) = (row_y, column_x)
-            print(f"{y};{x} No proxy of {len(suffix)} {suffix!r} after {prefix!r}")
+            if not prefix:
+                tprint(f"{y};{x} No proxy of {suffix!r}")
+            else:
+                tprint(f"{y};{x} No proxy of {len(suffix)} {suffix!r} after {prefix!r}")
 
     def proxy_write_crlf(self) -> None:
         """Write CR LF if it fits"""
@@ -5149,6 +5069,89 @@ def _spaceless_ch_to_option_kstr_(t: str) -> str:
 
 
 #
+# Amp up Import Traceback
+#
+
+
+with_excepthook = sys.excepthook  # aliases old hook, and fails fast to chain hooks
+assert with_excepthook.__module__ == "sys", (with_excepthook.__module__,)
+assert with_excepthook.__name__ == "excepthook", (with_excepthook.__name__,)
+
+assert sys.__stderr__ is not None  # refuses to run headless
+with_stderr = sys.stderr
+with_tcgetattr = termios.tcgetattr(sys.__stderr__.fileno())
+
+
+assert int(0x80 + signal.SIGINT) == 130  # discloses the Nonzero Exit Code for after ⌃C SigInt
+
+
+def excepthook(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_traceback: types.TracebackType | None,
+) -> None:
+    """Run at Process Exit, when not bypassed by raising SystemExit"""
+
+    assert exc_type is not SystemExit, (exc_type,)
+
+    assert EL_PS == "\033[" "{}" "K"
+
+    # Quit now for visible cause, if KeyboardInterrupt
+
+    if exc_type is KeyboardInterrupt:
+        with_stderr.write("KeyboardInterrupt\n")
+        sys.exit(130)  # 0x80 + signal.SIGINT
+
+    if exc_type is bdb.BdbQuit:
+        with_stderr.write("BdbQuit\n")
+        sys.exit(130)  # 0x80 + signal.SIGINT  # same as for KeyboardInterrupt
+
+    slam_enough_stty_bits_to_normal()
+
+    # Print the Traceback, etc
+
+    print("\033[K", file=with_stderr)
+    print("\033[K", file=with_stderr)
+    print("\033[K" "ExceptHook", file=with_stderr)
+
+    with_excepthook(exc_type, exc_value, exc_traceback)
+
+    # Launch the Post-Mortem Debugger
+
+    print(">>> pdb.pm()", file=with_stderr)
+    pdb.pm()
+
+
+def slam_enough_stty_bits_to_normal() -> None:
+    """Guess at Normal after some Terminal Writes bypass our Screen Logs, if need be"""
+
+    assert DECSC == "\0337"
+    assert DECRC == "\0338"
+
+    assert RM_IRM == "\033[" "4l"
+    assert _RM_SGR_MOUSE_ == "\033[" "?1000;1006l"
+    assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
+    assert SGR_PS == "\033[" "{}" "m"
+
+    write = ""
+
+    write += "\033[m"
+    write += "\033[4l"
+    write += "\0337"
+    write += "\033[?1049l"  # and implies \033[H at macOS Terminal
+    write += "\0338"
+    write += "\033[?1000;1006l"
+
+    with_stderr.write(write)
+
+    when = termios.TCSADRAIN
+    attributes = with_tcgetattr  # undoes tty.setraw
+    termios.tcsetattr(with_stderr.fileno(), when, attributes)
+
+    # compare ProxyTerminal.__exit__
+
+
+#
 # Quote some words to choose at random
 #
 
@@ -5231,8 +5234,8 @@ _ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
 
 
 if __name__ == "__main__":
-    try_main_else_repl()
-    # print("__main__: after try_main_else_repl", file=sys.stderr)
+    main()
+    # print("__main__: after main", file=sys.stderr)
 
 
 # todo8: Help people whose /usr/bin/python3 runs better than their /usr/local/bin/python3
