@@ -910,7 +910,7 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
-        self.print("<#555 on #005>  <Jabberwocky>")  # todo10: <#24 on #005>
+        self.print("<#555 on #005>  <Jabberwocky>  ⎋[M plain")  # todo10: <#24 on #005>
         self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.write("\033[K")
@@ -2041,7 +2041,7 @@ class ScreenEditor:
         # List the Widgets of the Row
 
         y_text = pt.proxy_read_y_row_text(y, default=" ")
-        widget_by_i = self.split_widgets(text=y_text)
+        widget_by_i = self._split_widgets_(text=y_text)
 
         # Find a Widget beneath the Mouse Release
 
@@ -2088,13 +2088,13 @@ class ScreenEditor:
 
         vanisher = False  # todo8: do vanish each verb run almost at left of cursor
         if vanisher:
-            self.vanish_widget_at_yxf(x_widget, y=y, x=wx)
+            self._vanish_widget_at_yxf_(x_widget, y=y, x=wx)
 
         # Run the Widget at the Mouse Release
 
         self.take_mouse_verb_at_yxf(verb=verb, x_word=x_word, y=y, x=wx, f=f)
 
-    def split_widgets(self, text: str) -> dict[int, str]:
+    def _split_widgets_(self, text: str) -> dict[int, str]:
 
         widget_by_i = dict()
 
@@ -2124,7 +2124,7 @@ class ScreenEditor:
 
         return widget_by_i
 
-    def vanish_widget_at_yxf(self, widget: str, y: int, x: int) -> None:
+    def _vanish_widget_at_yxf_(self, widget: str, y: int, x: int) -> None:
         """Vanish the Widget at the Mouse"""
 
         pt = self.proxy_terminal
@@ -2143,7 +2143,7 @@ class ScreenEditor:
 
         self.write("\0337")
 
-        self.write(f"\033[{y};{x}H")  # for .vanish_widget_at_yxf per Mouse Csi ⎋[M Release
+        self.write(f"\033[{y};{x}H")  # for ._vanish_widget_at_yxf_ per Mouse Csi ⎋[M Release
         assert pt.row_y == y, (pt.row_y, y)
         assert pt.column_x == x, (pt.column_x, x)
 
@@ -2159,51 +2159,30 @@ class ScreenEditor:
 
             self.write(len(widget) * " ")  # erases a Widget, while replacing Texts
             # self.write(len(widget) * "\b")  # todo4: Burst \b more naturally than ⎋[D or ⎋[H
-            self.write(f"\033[{y};{x}H")  # for .vanish_widget_at_yxf
+            self.write(f"\033[{y};{x}H")  # for ._vanish_widget_at_yxf_
 
         self.write("\0338")
 
     def take_mouse_verb_at_yxf(self, verb: str, x_word: str, y: int, x: int, f: int) -> None:
         """Run the Verb at the Mouse Release"""
 
-        pt = self.proxy_terminal
-        column_x = pt.column_x
-        row_y = pt.row_y
-        writes_by_y_x = pt.writes_by_y_x
-
-        # Eval some Keycaps
+        # Eval our well-known Verbs
 
         if self.mouse_verb_to_write_sdata(verb):
             return
 
-        # Sample Jabberwocky
-
-        casefold = verb.casefold()
-
-        if casefold == "jabberwocky":
-            splits = Jabberwocky.split()
-            split = random.choice(splits)
-
-            if column_x > X1:
-                sep = " "
-                if row_y in writes_by_y_x.keys():
-                    writes_by_x = writes_by_y_x[row_y]
-                    if (column_x - 1) in writes_by_x.keys():
-                        writes = writes_by_x[column_x - 1]
-                        sep = writes[-1]
-
-                if sep != " ":
-                    self.write(" ")
-
-            self.write(split)
-
+        if self.mouse_verb_do_jabberwocky(verb):
             return
 
-        # Fall back to copy the Word
+        # Fall back to copy the Word beneath the Mouse Release
 
         self.write(x_word + " ")
 
         # todo4: find an Italic that works at ⎋[3M or somewhere
+
+    #
+    # Eval some Keycaps
+    #
 
     def mouse_verb_to_write_sdata(self, verb: str) -> bool:
         """Eval some Keycaps"""
@@ -2386,6 +2365,41 @@ class ScreenEditor:
         assert len(verb) == 7, (verb,)
 
         return (r, g, b)
+
+    #
+    # Write out Random Words of Jabberwocky
+    #
+
+    def mouse_verb_do_jabberwocky(self, verb: str) -> bool:
+        """Write out a Random Word of Jabberwocky"""
+
+        pt = self.proxy_terminal
+        column_x = pt.column_x
+        row_y = pt.row_y
+        writes_by_y_x = pt.writes_by_y_x
+
+        casefold = verb.casefold()
+
+        if casefold != "jabberwocky":
+            return False
+
+        splits = Jabberwocky.split()
+        split = random.choice(splits)
+
+        if column_x > X1:
+            sep = " "
+            if row_y in writes_by_y_x.keys():
+                writes_by_x = writes_by_y_x[row_y]
+                if (column_x - 1) in writes_by_x.keys():
+                    writes = writes_by_x[column_x - 1]
+                    sep = writes[-1]
+
+            if sep != " ":
+                self.write(" ")
+
+        self.write(split)
+
+        return True
 
 
 class SnuckLife:
@@ -3018,10 +3032,12 @@ class ProxyTerminal:
         # Else write the Bytes, and log them as written, and write them into the Mirrors
 
         self.write_out(text)
-        self.y_x_write_mirrors(y=row_y, x=column_x, text=text)
+        self._y_x_write_mirrors_(y=row_y, x=column_x, text=text)
 
     def proxy_write_printable(self, text: str) -> None:
         """Write Printable Text, but not CR LF, and log it as written"""
+
+        assert text.isprintable(), (text,)
 
         row_y = self.row_y
         column_x = self.column_x
@@ -3039,7 +3055,7 @@ class ProxyTerminal:
 
             # tprint(f"{y};{x} {t!r}  # proxy_write_printable")
 
-            fitting = self.proxy_y_x_write_printable_t(y, x=x, t=t)
+            fitting = self._y_x_write_printable_t_(y, x=x, t=t)
 
             if fitting:
                 prefix += t
@@ -3067,9 +3083,9 @@ class ProxyTerminal:
         else:
             self.write_out("\r")
 
-        self.y_x_write_mirrors(y=row_y, x=column_x, text="\r\n")
+        self._y_x_write_mirrors_(y=row_y, x=column_x, text="\r\n")
 
-    def proxy_y_x_write_printable_t(self, y: int, x: int, t: str) -> bool:
+    def _y_x_write_printable_t_(self, y: int, x: int, t: str) -> bool:
         """Write & log a small Text if it fits, but mirror it always"""
 
         y_height = self.y_height
@@ -3089,7 +3105,7 @@ class ProxyTerminal:
 
         # Always do write the Mirrors
 
-        self.y_x_write_mirrors(y=y, x=x, text=t)
+        self._y_x_write_mirrors_(y=y, x=x, text=t)
 
         # End by saying if it fit
 
@@ -3109,21 +3125,21 @@ class ProxyTerminal:
 
         return g_width
 
-    def y_x_write_mirrors(self, y: int, x: int, text: str) -> None:
+    #
+    # Write into the Mirrors
+    #
+
+    def _y_x_write_mirrors_(self, y: int, x: int, text: str) -> None:
         """Mirror the Screen Panel"""
 
-        matching = self.try_write_mirrors(text)
+        matching = self._write_mirrors_(text)
 
         if matching:
             tprint(f"{y};{x}", repr(text)[1:-1])
         else:
             tprint(f"{y};{x} No mirror of {text!r}")
 
-    #
-    # Write into the Mirrors
-    #
-
-    def try_write_mirrors(self, text: str) -> bool:
+    def _write_mirrors_(self, text: str) -> bool:
         """Mirror the Screen Panel"""
 
         stext = text
@@ -3138,46 +3154,46 @@ class ProxyTerminal:
         if not stext:
             return True
 
-        if self.write_text_mirrors(stext):  # todo10: self._write_text_mirrors_ surely?
+        if self._write_text_mirrors_(stext):
             return True
 
         # Take bursts of HT or LF, or a single CR LF
 
-        if self.write_byte_burst_mirrors(sdata):
+        if self._write_byte_burst_mirrors_(sdata):
             return True
 
-        if self.write_crlf_mirrors(sdata):
+        if self._write_crlf_mirrors_(sdata):
             return True
 
         # Take ⎋[{y};{x}H as meaningful, even when Y X negative, zero, or otherwise out of bounds
 
-        if self.write_leap_csi_cup_y_x_mirrors(stext):
+        if self._write_leap_csi_cup_y_x_mirrors_(stext):
             return True
 
         # Write one whole Packet into the Mirrors
 
         pack = TerminalBytePacket(sdata)
 
-        if self.write_leap_byte_mirrors(pack):
+        if self._write_leap_byte_mirrors_(pack):
             return True
 
-        if self.write_leap_csi_mirrors(pack):
+        if self._write_leap_csi_mirrors_(pack):
             return True
 
-        if self.write_edit_csi_mirrors(pack):
+        if self._write_edit_csi_mirrors_(pack):
             return True
 
-        if self.write_toggle_mirrors(pack):
+        if self._write_toggle_mirrors_(pack):
             return True
 
-        if self.write_style_mirrors(pack):
+        if self._write_style_mirrors_(pack):
             return True
 
         # Else ask our caller to .tprint our confusion
 
         return False
 
-    def write_text_mirrors(self, stext: str) -> bool:
+    def _write_text_mirrors_(self, stext: str) -> bool:
         """Mirror the Text"""
 
         writes_by_y_x = self.writes_by_y_x
@@ -3205,7 +3221,7 @@ class ProxyTerminal:
 
         return True
 
-    def write_byte_burst_mirrors(self, sdata: bytes) -> bool:
+    def _write_byte_burst_mirrors_(self, sdata: bytes) -> bool:
         """Write bursts of HT or LF"""
 
         pn = len(sdata)
@@ -3216,7 +3232,7 @@ class ProxyTerminal:
 
                 mirrored = 0
                 for _ in range(pn):
-                    if not self.write_leap_byte_mirrors(sdata_pack):
+                    if not self._write_leap_byte_mirrors_(sdata_pack):
                         mirrored += 1
 
                 if mirrored < pn:
@@ -3226,16 +3242,16 @@ class ProxyTerminal:
 
         return False
 
-    def write_crlf_mirrors(self, sdata: bytes) -> bool:
+    def _write_crlf_mirrors_(self, sdata: bytes) -> bool:
         """Write a single CR LF"""
 
         if sdata == b"\r\n":
 
             cr_pack = TerminalBytePacket(b"\r")
-            if self.write_leap_byte_mirrors(cr_pack):
+            if self._write_leap_byte_mirrors_(cr_pack):
 
                 lf_pack = TerminalBytePacket(b"\n")
-                mirrored = self.write_leap_byte_mirrors(lf_pack)
+                mirrored = self._write_leap_byte_mirrors_(lf_pack)
                 if not mirrored:
                     tprint("Only mirrored the CR, not the LF, of CR LF")
 
@@ -3247,7 +3263,7 @@ class ProxyTerminal:
 
         return False
 
-    def write_leap_csi_cup_y_x_mirrors(self, text: str) -> bool:
+    def _write_leap_csi_cup_y_x_mirrors_(self, text: str) -> bool:
         """Mirror the ⇧H leaps to Y X into the Mirrors"""
 
         y_height = self.y_height
@@ -3269,14 +3285,14 @@ class ProxyTerminal:
             if x == 32100:
                 column_x = x_width
 
-            self.row_y = row_y  # for .write_leap_csi_cup_y_x_mirrors
-            self.column_x = column_x  # for .write_leap_csi_cup_y_x_mirrors
+            self.row_y = row_y  # for ._write_leap_csi_cup_y_x_mirrors_
+            self.column_x = column_x  # for ._write_leap_csi_cup_y_x_mirrors_
 
             return True
 
         return False
 
-    def write_leap_byte_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_leap_byte_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Control Byte Sequences that move the Terminal Cursor"""
 
         sdata = pack.to_bytes()
@@ -3346,20 +3362,20 @@ class ProxyTerminal:
 
         return False
 
-    def write_leap_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_leap_csi_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that move the Terminal Cursor"""
 
-        if self.write_leap_csi_arrow_plus_mirrors(pack):
+        if self._write_leap_csi_arrow_plus_mirrors_(pack):
             return True
 
-        if self.write_leap_csi_tab_and_forth_mirrors(pack):
+        if self._write_leap_csi_tab_and_forth_mirrors_(pack):
             return True
 
         return False
 
-        # omits .write_leap_csi_cup_y_x_mirrors
+        # omits ._write_leap_csi_cup_y_x_mirrors_
 
-    def write_leap_csi_arrow_plus_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_leap_csi_arrow_plus_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
 
         bt = self.bytes_terminal
@@ -3412,7 +3428,7 @@ class ProxyTerminal:
 
         return False
 
-    def write_leap_csi_tab_and_forth_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_leap_csi_tab_and_forth_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the plainest ← ↑ → ↓ Arrows, even with Repeat Counts, and the Y or X Leaps"""
 
         bt = self.bytes_terminal
@@ -3444,18 +3460,18 @@ class ProxyTerminal:
 
         return False
 
-    def write_edit_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_edit_csi_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that edit the Rows and Columns"""
 
-        if self.write_erase_csi_mirrors(pack):
+        if self._write_erase_csi_mirrors_(pack):
             return True
 
-        if self.write_delete_insert_csi_mirrors(pack):
+        if self._write_delete_insert_csi_mirrors_(pack):
             return True
 
         return False
 
-    def write_erase_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_erase_csi_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that erase Rows and Columns"""
 
         column_x = self.column_x
@@ -3551,7 +3567,7 @@ class ProxyTerminal:
         for x in range(xa, xb + 1):
             writes_by_x[x] = list(styles) + [" "]
 
-    def write_delete_insert_csi_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_delete_insert_csi_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
 
         column_x = self.column_x
@@ -3593,7 +3609,7 @@ class ProxyTerminal:
                         del writes_by_x[from_x]
 
                     # todo10: Mark the Row as ended with Background Color
-                    # todo10: [..., ""] is the encoding
+                    # todo10: [..., ""] is the encoding, or [..., "\t"]
                     # todo10: replay it properly, encode it properly, be happier
                     # todo10: then go test at gShell too
 
@@ -3603,7 +3619,7 @@ class ProxyTerminal:
 
         return False
 
-    def write_toggle_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_toggle_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Replacing/ Inserting choice for before writing each Character"""
 
         sdata = pack.to_bytes()
@@ -3640,7 +3656,7 @@ class ProxyTerminal:
 
         return False
 
-    def write_style_mirrors(self, pack: TerminalBytePacket) -> bool:
+    def _write_style_mirrors_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Foreground-on-Background Colors of the next Text"""
 
         sdata = pack.to_bytes()
@@ -3650,7 +3666,7 @@ class ProxyTerminal:
 
         # Write only Sgr Styles into the Mirrors
 
-        kind = self.pack_to_sgr_kind(pack)
+        kind = self._pack_to_sgr_kind_(pack)
         if not kind:
             return False
 
@@ -3683,7 +3699,7 @@ class ProxyTerminal:
             rdata = rstyle.encode()
             rpack = TerminalBytePacket(rdata)
 
-            rkind = self.pack_to_sgr_kind(rpack)
+            rkind = self._pack_to_sgr_kind_(rpack)
             if rkind == kind:
                 styles.remove(rstyle)
 
@@ -3694,7 +3710,7 @@ class ProxyTerminal:
 
         return True
 
-    def pack_to_sgr_kind(self, pack: TerminalBytePacket) -> str:
+    def _pack_to_sgr_kind_(self, pack: TerminalBytePacket) -> str:
         """Say 'Foreground' or 'Background' or 'Colorless' or '' Empty Str"""
 
         assert SGR_PS == "\033[" "{}" "m"
@@ -4737,10 +4753,10 @@ class TerminalBytePacket:
 
         # Take or don't take 1 Decodable Char into CSI or Esc CSI Sequence
 
-        esc_csi_extras = self.take_one_esc_csi_if_(decode)
+        esc_csi_extras = self._take_one_esc_csi_if_(decode)
         return esc_csi_extras  # maybe empty
 
-    def take_one_esc_csi_if_(self, decode: str) -> bytes:
+    def _take_one_esc_csi_if_(self, decode: str) -> bytes:
         """Take 1 Char into CSI or Esc CSI Sequence, else return 1..4 Bytes that don't fit"""
 
         assert len(decode) == 1, decode
