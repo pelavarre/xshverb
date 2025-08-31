@@ -3346,7 +3346,8 @@ class ProxyTerminal:
 
             return True
 
-            # todo10: macOS b"\t" fills Unwritten Chars with Colored Spaces
+            # todo10: macOS b"\t" at Written Char leaps with no fill
+            # todo10: macOS b"\t" at Unwritten Char fills right with Colored Spaces
 
         if sdata == b"\n":
             if row_y < y_height:
@@ -3451,8 +3452,6 @@ class ProxyTerminal:
 
         x_width = bt.read_x_width()
 
-        #
-
         assert CHT_X == "\033[" "{}" "I"  # Cursor Forward [Horizontal] Tabulation
         assert CBT_X == "\033[" "{}" "Z"  # Cursor Backward [Horizontal] Tabulation
 
@@ -3475,6 +3474,8 @@ class ProxyTerminal:
                     tab_stop_n = X1 + ((column_x + (8 - 1) - X1) // 8 - pn) * 8
                     self.column_x = max(X1, tab_stop_n)
                     return True
+
+                # ⎋[⇧I and ⎋[⇧Z do Not fill with Colored Spaces like ⌃I  # todo: indeed, nowhere?
 
         return False
 
