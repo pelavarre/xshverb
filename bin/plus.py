@@ -908,7 +908,7 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
-        self.print("<#555 on #005>  <Jabberwocky>  ⎋[M plain")  # todo10: <#24 on #005>
+        self.print("<#24 on #005>  <Jabberwocky>  ⎋[M plain")
         self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.write("\033[K")
@@ -2318,6 +2318,18 @@ class ScreenEditor:
 
         keycaps = splits[0]
 
+        # Eval a 25-Step Grayscale Color
+
+        twenty_five = list(f"#{d}" for d in range(25))
+        if keycaps in twenty_five:
+            pn = self.twenty_five_gray_color_verb_to_pn(keycaps)
+            if kind == "Foreground":
+                sdata = f"\033[38;5;{pn}m".encode()
+                return sdata
+            else:
+                sdata = f"\033[48;5;{pn}m".encode()
+                return sdata
+
         # Eval a 6**3 Color
 
         if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
@@ -2360,6 +2372,18 @@ class ScreenEditor:
         # Else don't succeed
 
         return b""
+
+    def twenty_five_gray_color_verb_to_pn(self, verb: str) -> int:
+        """Eval a #n color"""
+
+        assert verb[0] == "#", (verb,)
+
+        gray = int(verb[1:])
+        assert 0 <= gray <= 24, (gray, verb)
+
+        pn = 231 if (gray == 24) else (232 + gray)
+
+        return pn
 
     def six_cubed_color_verb_to_pn(self, verb: str) -> int:
         """Eval a #RGB color"""
@@ -4073,7 +4097,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m max grayscale
         red green bright-blue  ⎋[31M  ⎋[32M  ⎋[94M  ⎋[30M  ⎋[97M  on rgb  ⎋[41M  ⎋[42M  ⎋[104M
-        ⎋[M plain  <Jabberwocky>  #555 on #005  #003366 on #FFCC99
+        ⎋[M plain  <Jabberwocky>  #24 on #005  #003366 on #FFCC99
 
         ⎋[5N call for reply ⎋[0N
         ⎋[6N call for reply ⎋[{y};{x}⇧R
@@ -4083,8 +4107,6 @@ SCREEN_WRITER_HELP = r"""
         or ⎋[?1000 H L by itself, or 1005, or 1015
 
 """
-
-# todo10: #24 Grayscale as our reach for ⎋[38;5;231m
 
 
 # todo3: Vim Q Q ⇧@ Record/ Replay, and ⌃X ⇧( till ⌃C ⇧) and ⌃X E for Emacs
