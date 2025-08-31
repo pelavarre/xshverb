@@ -2909,7 +2909,7 @@ class ProxyTerminal:
                 self.write_out("\033[m")  # SGR_PS before EL_X needed at macOS
                 for style in y_fill_styles:
                     self.write_out(style)
-                self.write_out("\033[K")  # todo9: .write_screen and mirror correctly at gCloud Shell
+                self.write_out("\033[K")
 
         self.write_out("\033[m")
 
@@ -3402,8 +3402,9 @@ class ProxyTerminal:
                 last_eraseable_x = max(writes_by_x.keys())
 
             if column_x > last_eraseable_x:
-                for x in range(column_x, tab_stop_1):
-                    writes_by_x[x] = list(self.styles) + [" "]
+                if sys_platform_darwin:
+                    for x in range(column_x, tab_stop_1):
+                        writes_by_x[x] = list(self.styles) + [" "]
 
             return True
 
@@ -3646,18 +3647,23 @@ class ProxyTerminal:
                 last_eraseable_x = max(writes_by_x.keys())
 
             fx = min(last_eraseable_x + 1, column_x)
-            self._y_set_fill_styles_(y=row_y, x=fx)
+            self._y_set_fill_styles_(y=row_y, x=fx)  # for ⎋[⇧K row-tail-erase
 
         elif ps == 1:  # ⎋[1⇧K row-head-erase
 
-            for x in range(1, column_x + 1):
-                writes_by_x[x] = list(styles) + [" "]  # erases beneath and to the West
+            if sys_platform_darwin:
+                for x in range(1, column_x + 1):
+                    writes_by_x[x] = list(styles) + [" "]  # erases beneath and to the West
+            else:
+                for x in range(1, column_x + 1):
+                    if x in writes_by_x.keys():
+                        del writes_by_x[x]  # deletes beneath and to the East
 
         else:
             assert ps == 2, (ps,)  # ⎋[2⇧K row-erase
 
             writes_by_x.clear()  # erases the whole Row
-            self._y_set_fill_styles_(y=row_y, x=X1)
+            self._y_set_fill_styles_(y=row_y, x=X1)  # for ⎋[2⇧K row-erase
 
     def _y_set_fill_styles_(self, y: int, x: int) -> None:
         """Fill the unfilled Chars in the West, and set this Row's Fill Styles"""
@@ -3665,16 +3671,18 @@ class ProxyTerminal:
         writes_by_y_x = self.writes_by_y_x
         fill_styles_by_y = self.fill_styles_by_y
 
-        y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
+        if sys_platform_darwin:
 
-        if y not in writes_by_y_x.keys():
-            writes_by_y_x[y] = dict()
+            y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
 
-        writes_by_x = writes_by_y_x[y]
+            if y not in writes_by_y_x.keys():
+                writes_by_y_x[y] = dict()
 
-        for fx in range(1, x):
-            if fx not in writes_by_x.keys():
-                writes_by_x[fx] = list(y_fill_styles) + [" "]
+            writes_by_x = writes_by_y_x[y]
+
+            for fx in range(1, x):
+                if fx not in writes_by_x.keys():
+                    writes_by_x[fx] = list(y_fill_styles) + [" "]
 
         fill_styles_by_y[y] = list(self.styles)
 
@@ -3719,8 +3727,9 @@ class ProxyTerminal:
 
                 # Insert the Colored Space Chars themselves
 
-                for x in range(column_x, xpn):
-                    writes_by_x[x] = list(styles) + [" "]
+                if sys_platform_darwin:
+                    for x in range(column_x, xpn):
+                        writes_by_x[x] = list(styles) + [" "]
 
                 # Succeed
 
@@ -3761,7 +3770,7 @@ class ProxyTerminal:
 
                 # Fill the unfilled Chars in the West, and set this Row's Fill Styles
 
-                self._y_set_fill_styles_(y=y, x=column_x)
+                self._y_set_fill_styles_(y=y, x=column_x)  # for ⎋[⇧P chars-delete
 
                 # Succeed
 
@@ -3923,12 +3932,17 @@ class ProxyTerminal:
 
 #
 
-# todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
 # todo9: Press Return inside a Button to click it
 # todo9: Press Return just after a Button to vanish and run it
 
-# todo9: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
+# todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
+
 # todo9: hh:mm and hh:mm:ss tracks local time, or UTC, can be marked with eraseable -07:00 etc
+# todo9: 2005-08-30 hh:mm tracks local date+time, or UTC, can be marked with eraseable -07:00 etc
+# todo9: (August 30th, 2025) tracks local civil date
+
+# todo9: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
+# todo9: (#), or (on #), or (# on #), button could track Foreground on Background Color such as #24 on #005
 
 # todo8: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
 
