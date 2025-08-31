@@ -361,7 +361,7 @@ class ConwayLife:
         se.write(f"\033[{y_mid};{x_mid}H")  # for .restart_conway_life
 
     def conway_print(self, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
+        """Write Some Text Chars at one Y X Place"""
 
         se = self.screen_editor
         pt = se.proxy_terminal
@@ -382,7 +382,7 @@ class ConwayLife:
         se.write(f"\033[{y};{xb}H")  # for .conway_print
 
     def conway_write_y_x_text(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
+        """Write Some Text Chars at one Y X Place"""
 
         se = self.screen_editor
         conway_yx_list = self.conway_yx_list
@@ -665,7 +665,7 @@ class ScreenEditor:
         return None
 
     def y_x_text_print(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
+        """Write Some Text Chars at one Y X Place"""
 
         pt = self.proxy_terminal
         pt.proxy_y_x_text_print(y=y, x=x, text=text)
@@ -787,7 +787,7 @@ class ScreenEditor:
             "F2": self.do_kdata_fn_f2,  # FnF2
             "F3": self.do_kdata_fn_f3,  # FnF3  # todo9: should this be "FnF3" ?
             #
-            # Printable but named Characters
+            # Printable but named Chars
             #
             "Spacebar": self.do_write_spacebar,  # Spacebar
             #
@@ -908,7 +908,7 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
-        self.print("<#24 on #005>  <Jabberwocky>  ⎋[M plain")
+        self.print("<On #500>  <On #050>  <#24 on #005>  <Jabberwocky>  ⎋[M plain")
         self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.write("\033[K")
@@ -1043,7 +1043,7 @@ class ScreenEditor:
 
                 return
 
-        # Pass through 1 Unicode Character
+        # Pass through 1 Unicode Char
 
         if pack.text:
 
@@ -1051,7 +1051,7 @@ class ScreenEditor:
 
             return
 
-            # todo2: stop wrongly passing through multibyte Control Characters
+            # todo2: stop wrongly passing through multibyte Control Chars
 
         # Pass-Through, or emulate, the famous Control Byte Sequences
 
@@ -1457,7 +1457,7 @@ class ScreenEditor:
 
             pack = terminal_byte_packets[-1]
             pack_kdata = pack.to_bytes()
-            assert pack_kdata in arrows_kdata_tuple, (pack_kdata,)
+            assert pack_kdata in arrows_kdata_tuple, (pack_kdata,)  # todo10: ⎋ [ ↓
 
             (y, x) = (row_y, column_x)
             if pack_kdata == b"\033[A":
@@ -1600,7 +1600,7 @@ class ScreenEditor:
         # todo3: Vim <Digits> ⇧H and Vim <Digits> ⇧L and Vim <Digits> ⇧|T
 
     def do_char_delete_here(self) -> None:
-        """Delete the Character beneath the Cursor"""
+        """Delete the Char beneath the Cursor"""
 
         assert DCH_X == "\033[" "{}" "P"
         self.write("\033[P")
@@ -1608,7 +1608,7 @@ class ScreenEditor:
         # Emacs ⌃D  # Vim X
 
     def do_char_delete_here_start_inserting(self) -> None:
-        """Delete the Character beneath the Cursor, and Start Inserting"""
+        """Delete the Char beneath the Cursor, and Start Inserting"""
 
         self.do_char_delete_here()  # Emacs ⌃D  # Vim X
         self.do_inserting_start()  # Vim I
@@ -1616,7 +1616,7 @@ class ScreenEditor:
         # Vim S = Vim X I
 
     def do_char_delete_left(self) -> None:
-        """Delete the Character at left of the Cursor"""
+        """Delete the Char at left of the Cursor"""
 
         pt = self.proxy_terminal
 
@@ -1661,7 +1661,7 @@ class ScreenEditor:
         # Vim ⇧A = Vim ⇧$ I
 
     def do_inserting_start(self) -> None:
-        """Start Inserting Characters at the Cursor"""
+        """Start Inserting Chars at the Cursor"""
 
         assert SM_IRM == "\033[" "4h"
         self.write("\033[4h")
@@ -1671,7 +1671,7 @@ class ScreenEditor:
         # todo2: Show Inserting while Inserting
 
     def do_replacing_start(self) -> None:
-        """Start Replacing Characters at the Cursor"""
+        """Start Replacing Chars at the Cursor"""
 
         assert RM_IRM == "\033[" "4l"
         self.write("\033[4l")
@@ -2656,9 +2656,9 @@ class TerminalSprite:
 
         # Read there
 
-        default = (" ",)  # Single Wide Space
-        ycxc_writes = pt.proxy_read_yx_writes(yc, x=xc, default=default)
-        ydxd_writes = pt.proxy_read_yx_writes(yd, x=xd, default=default)
+        defaults = (" ",)  # Single Wide Space
+        ycxc_writes = pt.proxy_read_yx_writes(yc, x=xc, defaults=defaults)
+        ydxd_writes = pt.proxy_read_yx_writes(yd, x=xd, defaults=defaults)
 
         # Write there
 
@@ -2698,7 +2698,8 @@ class ProxyTerminal:
 
     row_y: int  # Y places encoded as Southbound across 1 .. Height
     column_x: int  # X places encoded as Eastbound across 1 .. Width
-    writes_by_y_x: dict[int, dict[int, list[str]]] = dict()  # mirrors the last Write at each Place
+    writes_by_y_x: dict[int, dict[int, list[str]]] = dict()  # the last Char Write at each Place
+    fill_styles_by_y: dict[int, list[str]] = dict()  # the last Style Write per Row
 
     toggles: list[str]  # Replacing/ Inserting/ etc
     styles: list[str]  # Foreground on Background Colors, etc
@@ -2733,6 +2734,7 @@ class ProxyTerminal:
         self.row_y = -1
         self.column_x = -1
         self.writes_by_y_x = dict()
+        self.fill_styles_by_y = dict()
 
         self.toggles = list()
         self.styles = list()  # todo: or default to ⎋[⇧H ⎋[2⇧J ⎋[m etc but not ⎋[3⇧J
@@ -2842,6 +2844,7 @@ class ProxyTerminal:
 
         column_x = self.column_x
         writes_by_y_x = self.writes_by_y_x
+        fill_styles_by_y = self.fill_styles_by_y
         row_y = self.row_y
         styles = self.styles
         toggles = self.toggles
@@ -2857,13 +2860,14 @@ class ProxyTerminal:
 
         # Redraw the Screen per se
 
-        default = ["\033[48;5;255m", " "]
+        defaults = ["\033[48;5;255m", " "]
 
         self.write_out("\033[4l")
         self.write_out("\033[m")
 
         for y in range(Y1, y_height):
             writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
+            y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
 
             last_x = X1
             x_sorted = sorted(writes_by_x.keys())
@@ -2875,7 +2879,7 @@ class ProxyTerminal:
                     if x > x_width:
                         continue
 
-                    x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else default
+                    x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else defaults
                     assert x_writes[-1].isprintable(), (y, x, x_writes)  # todo6: check often
 
                     if not boring:  # todo7: stop redrawing Cursor unnecessarily
@@ -2896,8 +2900,8 @@ class ProxyTerminal:
 
             if last_x < x_width:
                 self.write_out("\033[m")  # SGR_PS before EL_X needed at macOS
-                for x_write in default[:-1]:
-                    self.write_out(x_write)
+                for style in y_fill_styles:
+                    self.write_out(style)
                 self.write_out("\033[K")  # todo9: emulate at gCloud Shell
 
         self.write_out("\033[m")
@@ -2982,17 +2986,17 @@ class ProxyTerminal:
 
         return tuple(yx_list)
 
-    def proxy_read_yx_writes(self, y: int, x: int, default: tuple[str, ...]) -> tuple[str, ...]:
+    def proxy_read_yx_writes(self, y: int, x: int, defaults: tuple[str, ...]) -> tuple[str, ...]:
         """Read back Writes from one Y X Pair, else the Default"""
 
         writes_by_y_x = self.writes_by_y_x
 
         if y not in writes_by_y_x.keys():
-            return default
+            return defaults
 
         writes_by_x = writes_by_y_x[y]
         if x not in writes_by_x.keys():
-            return default
+            return defaults
 
         yx_writes = writes_by_x[x]
 
@@ -3046,7 +3050,7 @@ class ProxyTerminal:
     #
 
     def proxy_y_x_text_print(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Characters at one Y X Place"""
+        """Write Some Text Chars at one Y X Place"""
 
         assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
@@ -3353,6 +3357,7 @@ class ProxyTerminal:
 
         row_y = self.row_y
         column_x = self.column_x
+        writes_by_y_x = self.writes_by_y_x
         y_height = self.y_height
         x_width = self.x_width
         was_y = self.was_y
@@ -3378,17 +3383,21 @@ class ProxyTerminal:
             tab_stop_1 = X1 + ((column_x - X1) // 8 + 1) * 8
             tab_stop_1 = min(x_width, tab_stop_1)
 
-            # while self.column_x < tab_stop_1:
-            #     self.proxy_write_printable(text=" ")
-            #
-            # assert self.column_x == tab_stop_1, (self.column_x, tab_stop_1)
-
             self.column_x = tab_stop_1
 
-            return True
+            if row_y not in writes_by_y_x.keys():
+                writes_by_y_x[row_y] = dict()
+            writes_by_x = writes_by_y_x[row_y]
 
-            # todo10: macOS b"\t" at Written Char leaps with no fill
-            # todo10: macOS b"\t" at Unwritten Char fills right with Colored Spaces
+            last_eraseable_x = 0
+            if writes_by_x:
+                last_eraseable_x = max(writes_by_x.keys())
+
+            if column_x > last_eraseable_x:
+                for x in range(column_x, tab_stop_1):
+                    writes_by_x[x] = list(self.styles) + [" "]
+
+            return True
 
         if sdata == b"\n":
             if row_y < y_height:
@@ -3576,7 +3585,7 @@ class ProxyTerminal:
                             (ya, yb) = (row_y + 1, y_height)  # default to PS0 ⎋[⇧J after-erase
                         elif ps == 1:  # ⎋[1⇧J before-erase
                             self._write_row_erase_(ps)
-                            (ya, yb) = (Y1, row_y - 1)  # includes the Character beneath the Cursor
+                            (ya, yb) = (Y1, row_y - 1)  # includes the Char beneath the Cursor
                         else:
                             assert ps == 2, (ps,)  # ⎋[2⇧J screen-erase
                             # self._write_row_erase_(ps)  # harmless, but unneeded
@@ -3608,39 +3617,58 @@ class ProxyTerminal:
 
         assert EL_PS == "\033[" "{}" "K"
 
-        if ps == 0:
+        # Demand Writes-by-X
 
-            (xa, xb) = (column_x, x_width)  # default to PS0 ⎋[⇧K row-tail-erase
+        if row_y not in writes_by_y_x.keys():
+            writes_by_y_x[row_y] = dict()
 
-            writes_by_x = dict()
-            if row_y in writes_by_y_x.keys():
-                writes_by_x = writes_by_y_x[row_y]
+        writes_by_x = writes_by_y_x[row_y]
 
-            max_x = -1
+        # Erase beneath and to the West, or delete beneath and to the East
+        # Fill the unfilled Chars in the West, and set this Row's Fill Styles
+
+        if ps == 0:  #  ⎋[0⇧K row-tail-erase  # ⎋[⇧K row-tail-erase
+
+            for x in range(column_x, x_width + 1):
+                if x in writes_by_x.keys():
+                    del writes_by_x[x]  # deletes beneath and to the East
+
+            last_eraseable_x = 0
             if writes_by_x:
-                max_x = max(writes_by_x.keys())
+                last_eraseable_x = max(writes_by_x.keys())
 
-            if xa > max_x:
-                if xa not in writes_by_x.keys():
-                    while (xa > 1) and ((xa - 1) not in writes_by_x.keys()):
-                        xa -= 1
+            fx = min(last_eraseable_x + 1, column_x)
+            self._y_set_fill_styles_(y=row_y, x=fx)
 
         elif ps == 1:  # ⎋[1⇧K row-head-erase
 
-            (xa, xb) = (X1, column_x)  # includes the Character beneath the Cursor
+            for x in range(1, column_x + 1):
+                writes_by_x[x] = list(styles) + [" "]  # erases beneath and to the West
 
         else:
-
             assert ps == 2, (ps,)  # ⎋[2⇧K row-erase
-            (xa, xb) = (1, x_width)
 
-        y = row_y
+            writes_by_x.clear()  # erases the whole Row
+            self._y_set_fill_styles_(y=row_y, x=X1)
+
+    def _y_set_fill_styles_(self, y: int, x: int) -> None:
+        """Fill the unfilled Chars in the West, and set this Row's Fill Styles"""
+
+        writes_by_y_x = self.writes_by_y_x
+        fill_styles_by_y = self.fill_styles_by_y
+
+        y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
+
         if y not in writes_by_y_x.keys():
             writes_by_y_x[y] = dict()
 
         writes_by_x = writes_by_y_x[y]
-        for x in range(xa, xb + 1):
-            writes_by_x[x] = list(styles) + [" "]
+
+        for fx in range(1, x):
+            if fx not in writes_by_x.keys():
+                writes_by_x[fx] = list(y_fill_styles) + [" "]
+
+        fill_styles_by_y[y] = list(self.styles)
 
     def _mirror_delete_insert_csi_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
@@ -3655,7 +3683,7 @@ class ProxyTerminal:
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        # Mirror ⇧@ Inserts of Pn Characters in the Row
+        # Mirror ⇧@ Inserts of Pn Chars in the Row
 
         if csi and (pack.tail == b"@"):  # ⎋[⇧@ chars-insert
             if not pack.back:
@@ -3672,7 +3700,7 @@ class ProxyTerminal:
 
                 writes_by_x = writes_by_y_x[y]
 
-                # Shift Right each Char that follows
+                # Shift East each Char that follows
 
                 x_list = sorted(_ for _ in writes_by_x.keys() if _ >= column_x)
                 for from_x in reversed(x_list):
@@ -3690,7 +3718,7 @@ class ProxyTerminal:
 
                 return True
 
-        # Mirror ⇧P Deletes of Pn Characters in the Row
+        # Mirror ⇧P Deletes of Pn Chars in the Row
 
         if csi and (pack.tail == b"P"):  # ⎋[⇧P chars-delete
             if not pack.back:
@@ -3714,7 +3742,7 @@ class ProxyTerminal:
                     if x in writes_by_x.keys():
                         del writes_by_x[x]
 
-                # Shift Left each Char that follows
+                # Shift West each Char that follows
 
                 x_list = sorted(_ for _ in writes_by_x.keys() if _ >= xpn)
                 for from_x in x_list:
@@ -3723,12 +3751,9 @@ class ProxyTerminal:
                     writes_by_x[to_x] = writes_by_x[from_x]
                     del writes_by_x[from_x]
 
-                # todo10: macOS ⎋[⇧K decides Background Colors after last Written Char
+                # Fill the unfilled Chars in the West, and set this Row's Fill Styles
 
-                # todo10: Mark the Row as ended with Background Color
-                # todo10: [..., "\r\n"] as the encoding
-                # todo10: replay it properly, encode it properly, be happier
-                # todo10: then go test at gShell too
+                self._y_set_fill_styles_(y=y, x=column_x)
 
                 # Succeed
 
@@ -3737,7 +3762,7 @@ class ProxyTerminal:
         return False
 
     def _mirror_toggle_(self, pack: TerminalBytePacket) -> bool:
-        """Mirror the Replacing/ Inserting choice for before writing each Character"""
+        """Mirror the Replacing/ Inserting choice for before writing each Char"""
 
         sdata = pack.to_bytes()
 
@@ -4380,7 +4405,7 @@ class BytesTerminal:
 
 
 class TerminalBytePacket:
-    """Hold 1 Control Character, else 1 or more Text Characters, else some Bytes"""
+    """Hold 1 Control Char, else 1 or more Text Chars, else some Bytes"""
 
     text: str  # 0 or more Chars of Printable Text
 
