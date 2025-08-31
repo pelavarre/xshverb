@@ -208,11 +208,14 @@ SM_DECTCEM = "\033[" "?25h"  # 06/08 Set Mode (SMS) 25 VT220 Show Cursor
 RM_DECTCEM = "\033[" "?25l"  # 06/12 Reset Mode (RM) 25 VT220 Hide Cursor
 
 
-_SM_XTERM_ALT_ = "\033[" "?1049h"  # show Alt Screen
-_RM_XTERM_MAIN_ = "\033[" "?1049l"  # show Main Screen
+_SM_XTERM_ALT_ = "\033[" "?1049h"  # chooses Alt/ Main Screen
+_RM_XTERM_MAIN_ = "\033[" "?1049l"  #
 
-_SM_SGR_MOUSE_ = "\033[" "?1000;1006h"
+_SM_SGR_MOUSE_ = "\033[" "?1000;1006h"  # codes Press/ Release as ⎋[{f};{x};{y} ⇧M and M
 _RM_SGR_MOUSE_ = "\033[" "?1000;1006l"
+
+_SM_BRACKETED_PASTE_ = "\033[" "?2004h"  # codes Start/ End as ⎋[200~ and ⎋[201~
+_RM_BRACKETED_PASTE_ = "\033[" "?2004l"
 
 
 SGR_PS = "\033[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
@@ -930,47 +933,10 @@ class ScreenEditor:
     def read_eval_print_once(self) -> None:
         """Fetch and time one Keyboard Chord, and then quit, else reply to it"""
 
-        terminal_byte_packets = self.terminal_byte_packets
+        # Quit in several ways
 
-        pt = self.proxy_terminal
-        klog = pt.keyboard_bytes_log
-
-        # Fetch and time one Keyboard Chord
-
-        t0 = time.time()
-        (pack, n) = self.read_some_byte_packets()
-        t1 = time.time()
-        t1t0 = t1 - t0
-        millis = int(t1t0 * 1000)
-
-        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
-
-        assert pack, (pack, n)  # because .timeout=None
-        terminal_byte_packets.append(pack)
-
+        (pack, n) = self.read_one_pack()
         kdata = pack.to_bytes()
-        assert kdata, (kdata,)  # because .timeout=None
-
-        # Log the one Keyboard Chord
-
-        if millis:
-            steganographic = f"\033[0;{millis}I".encode()
-            klog.write(steganographic)
-
-        klog.write(kdata)  # todo4: often less latency because without klog.flush()
-
-        arrows = self.arrows
-        if len(kdata) == 1:
-            tprint(str(kdata)[2:-1], "in", millis)
-        elif (not arrows) and (t1t0 > 0.020):
-            if kdata in self.loopable_kdata_tuple:
-                tprint(str(kdata)[2:-1], "in", millis)
-            elif n > 1:
-                tprint(str(kdata)[2:-1], "as", n, "in", millis)
-            else:
-                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
-        else:
-            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
 
         # Quit in several ways
 
@@ -1403,10 +1369,61 @@ class ScreenEditor:
         # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
 
     #
-    #
+    # todo9
     #
 
-    def read_some_byte_packets(self) -> tuple[TerminalBytePacket, int]:
+    def read_one_pack(self) -> tuple[TerminalBytePacket, int]:
+        """todo9"""
+
+        terminal_byte_packets = self.terminal_byte_packets
+
+        pt = self.proxy_terminal
+        klog = pt.keyboard_bytes_log
+
+        # Fetch and time one Keyboard-Chord Terminal-Byte-Packet
+
+        t0 = time.time()
+        (pack, n) = self.read_arrows_or_one_pack()
+        t1 = time.time()
+        t1t0 = t1 - t0
+        millis = int(t1t0 * 1000)
+
+        # Update the Mirror of the X-Width x Y-Height of the Screen
+
+        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
+
+        # Inspect the Terminal-Byte-Packet
+
+        assert pack, (pack, n)  # because .timeout=None
+        terminal_byte_packets.append(pack)
+
+        kdata = pack.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
+
+        # Log the one Keyboard Chord
+
+        if millis:
+            steganographic = f"\033[0;{millis}I".encode()
+            klog.write(steganographic)
+
+        klog.write(kdata)  # todo4: often less latency because without klog.flush()
+
+        arrows = self.arrows
+        if len(kdata) == 1:
+            tprint(str(kdata)[2:-1], "in", millis)
+        elif (not arrows) and (t1t0 > 0.020):
+            if kdata in self.loopable_kdata_tuple:
+                tprint(str(kdata)[2:-1], "in", millis)
+            elif n > 1:
+                tprint(str(kdata)[2:-1], "as", n, "in", millis)
+            else:
+                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
+        else:
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
+
+        return (pack, n)
+
+    def read_arrows_or_one_pack(self) -> tuple[TerminalBytePacket, int]:
         """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
 
         terminal_byte_packets = self.terminal_byte_packets
@@ -1436,7 +1453,6 @@ class ScreenEditor:
                 pack = self.read_arrows_as_byte_packet()
                 assert pack, (pack,)
 
-                # tprint("return (pack, n)  # 1")
                 return (pack, n)
 
         t1 = time.time()
@@ -1474,9 +1490,7 @@ class ScreenEditor:
                 self.arrow_row_y = y
                 self.arrow_column_x = x
 
-        # tprint("SQUIRREL 1")
         while (not pack.text) and (not pack.closed) and (not bt.extras):
-            # tprint(f"{pack.text=} {pack.closed=} {bt.extras=}")
 
             kdata = pack.to_bytes()
             # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
@@ -1484,14 +1498,10 @@ class ScreenEditor:
                 break
 
             n += 1
-            # tprint(f"bt.close_byte_pack_if {n=}")
             bt.close_byte_pack_if(pack, timeout=None)
-
-        # tprint("SQUIRREL 2")
 
         # Succeed
 
-        # tprint("return (pack, n)  # 2")
         return (pack, n)
 
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
@@ -1552,7 +1562,7 @@ class ScreenEditor:
     def do_quote_one_kdata(self) -> None:
         """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
-        (pack, n) = self.read_some_byte_packets()
+        (pack, n) = self.read_one_pack()
 
         kdata = pack.to_bytes()
         self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
@@ -1652,11 +1662,36 @@ class ScreenEditor:
     def do_column_leap_rightmost(self) -> None:
         """Leap to the Rightmost Column"""
 
+        pt = self.proxy_terminal
+        row_y = pt.row_y
+        x_width = pt.x_width
+        writes_by_y_x = pt.writes_by_y_x
+        terminal_byte_packets = self.terminal_byte_packets
+
+        assert CHA_X == "\033[" "{}" "G"
         assert CUF_X == "\033[" "{}" "C"
         assert _PN_MAX_32100_ == 32100
-        self.write("\033[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
 
-        # todo3: Leap to Rightmost Mirror, if Row Mirrored
+        # Leap to rightmost, till we know better
+
+        if row_y not in writes_by_y_x.keys():
+            self.write("\033[32100C")  # for .do_column_leap_rightmost  # Emacs ⌃E  # Vim ⇧$
+            return
+
+        # Leap to last, or beyond it
+
+        writes_by_x = writes_by_y_x[row_y]
+        assert writes_by_x, (writes_by_x,)
+
+        max_x = max(writes_by_x.keys())
+
+        pack = terminal_byte_packets[-1]
+        kdata = pack.to_bytes()
+        x = max_x if (kdata == b"\033$") else max_x + 1  # vs b"\x05"
+
+        self.write(f"\033[{x}G")
+
+        assert pt.column_x == x, (pt.column_x, x)
 
         # Emacs ⌃E  # Vim ⇧$
 
@@ -2106,8 +2141,6 @@ class ScreenEditor:
                 widget_splits = widget.split()
                 x_word = widget_splits[len(left_words) - 1]
                 x_word = x_word.removeprefix("<").removesuffix(">")
-
-                # tprint(f"{i=} {wx=} {x_widget=} {x=} {left_widget=} {x_word=} {left_words=}")
 
                 break
 
@@ -3106,8 +3139,6 @@ class ProxyTerminal:
         row_y = self.row_y
         column_x = self.column_x
 
-        # tprint(f"{text!r}  # proxy_write_printable")
-
         # Split fitting from not-fitting
 
         prefix = ""
@@ -3116,8 +3147,6 @@ class ProxyTerminal:
 
             y = self.row_y
             x = self.column_x
-
-            # tprint(f"{y};{x} {t!r}  # proxy_write_printable")
 
             fitting = self._y_x_write_printable_t_(y, x=x, t=t)
 
@@ -3933,21 +3962,29 @@ class ProxyTerminal:
 
 #
 
-# todo9: Press Return inside a Button to click it
-# todo9: Press Return just after a Button to vanish and run it
+# todo9: paste/ sum a column of ints, floats
 
-# todo9: (Inserting) query buttons, subscribe themselves to update streams when first clicked
-
-# todo9: hh:mm and hh:mm:ss tracks local time, or UTC, can be marked with eraseable -07:00 etc
-# todo9: 2005-08-30 hh:mm tracks local date+time, or UTC, can be marked with eraseable -07:00 etc
-# todo9: (August 30th, 2025) tracks local civil date
-
-# todo9: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
-# todo9: (#), or (on #), or (# on #), button could track Foreground on Background Color such as #24 on #005
+# todo8: Press Return inside a Button to click it
+#
+# todo8: (Inserting) query buttons, subscribe themselves to update streams when first clicked
+#
+# todo8:  <Cupertino>  <Prague>  <Bucharest>  <Chennai>
+# todo8: edit : to toggle :SS off/on; edit -+ to toggle timezone off on
+#
+# todo8: tab-complete <Monday, September 2nd>
+# todo8: tab-complete <Mo Tu We Th Fr Sa Su>
+#
+# todo8: hh:mm and hh:mm:ss tracks local time, or UTC, can be marked with eraseable -07:00 etc
+# todo8: 2005-08-30 hh:mm tracks local date+time, or UTC, can be marked with eraseable -07:00 etc
+# todo8: (August 30th, 2025) tracks local civil date
+#
+# todo8: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
+# todo8: (#), or (on #), or (# on #), button could track Foreground on Background Color such as #24 on #005
 
 #
 
-# todo9: Mirrors for ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧T rows-down  ⎋[⇧S rows-up
+# todo8: Mirrors for  ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧T rows-down  ⎋[⇧S rows-up
+# todo8: Mirror the  ⎋[H ⎋[⇧2J bundled into  ⎋[⇧?1049H
 
 #
 
@@ -3958,6 +3995,8 @@ class ProxyTerminal:
 # todo8: open up |d |e |f |l |m |p |q |v |y |z- gateways do gateway only at left
 # todo8: keep |a |c |g |h |i |j |k |n |o |r |s |t |u |w |x
 # todo8: |g pattern pattern - we're saying patterns can't be single letters
+
+# todo8: Press Return just after a Button to vanish and run it
 
 # todo8: bin/xshverb.py conway
 # todo8: bin/xshverb.py puckman
@@ -4336,32 +4375,21 @@ class BytesTerminal:
 
         t = 0.000_001  # defines "immediately"  # 0.000 works as "instantaneously" at macOS
 
-        # if not extras:
-        #     kdata = pack.to_bytes()
-        #     if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
-        #         pack.close()
-        #         return None
-
         if extras or self.kbhit(timeout=timeout):
             while extras or self.kbhit(timeout=t):
 
                 if not extras:
-                    # t0 = time.time()
                     byte = os.read(fileno, 1)
-                    # t1 = time.time()
-                    # tprint(f"{byte!r} at {t1 - t0} into {pack}")
                 else:
                     pop = extras.pop(0)
                     byte = bytes([pop])
 
                 more = pack.take_one_if(byte)
                 if more:
-                    # tprint(f"{more!r} into extras")
                     extras.extend(more)
                     break
 
                 if pack.closed:
-                    # tprint(f"pack.closed {pack}")
                     break
 
                 kdata = pack.to_bytes()
@@ -4373,14 +4401,14 @@ class BytesTerminal:
     def read_y_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
-        (y_height, x_width) = self.read_y_height_x_width()
+        (y_height, _) = self.read_y_height_x_width()
 
         return y_height
 
     def read_x_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
-        (y_height, x_width) = self.read_y_height_x_width()
+        (_, x_width) = self.read_y_height_x_width()
 
         return x_width
 
