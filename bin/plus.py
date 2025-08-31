@@ -3324,7 +3324,7 @@ class ProxyTerminal:
             tab_stop_1 = X1 + ((column_x - X1) // 8 + 1) * 8
             tab_stop_1 = min(x_width, tab_stop_1)
 
-            # while self.column_x < tab_stop_1:  # todo10: macOS writes Background Colors for b"\t"
+            # while self.column_x < tab_stop_1:
             #     self.proxy_write_printable(text=" ")
             #
             # assert self.column_x == tab_stop_1, (self.column_x, tab_stop_1)
@@ -3332,6 +3332,8 @@ class ProxyTerminal:
             self.column_x = tab_stop_1
 
             return True
+
+            # todo10: macOS b"\t" fills Unwritten Chars
 
         if sdata == b"\n":
             if row_y < y_height:
@@ -3399,7 +3401,7 @@ class ProxyTerminal:
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and pack.tail and (pack.tail in b"ABCDGd"):  # "ABCD" Arrows per se, and also "Gd"
+        if csi and pack.tail and (pack.tail in b"ABCDGd"):  # ⎋[ "ABCD" Arrows per se, and also "Gd"
             if not pack.back:
                 pn = int(pack.neck) if pack.neck else PN1
                 if pn:
@@ -3443,7 +3445,7 @@ class ProxyTerminal:
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and pack.tail and (pack.tail in b"IZ"):
+        if csi and pack.tail and (pack.tail in b"IZ"):  # ⎋[⇧I ⌃I  # ⎋[⇧Z ⇧Tab
             if not pack.back:
                 pn = int(pack.neck) if pack.neck else PN1
                 if pn:
@@ -3480,12 +3482,25 @@ class ProxyTerminal:
 
         assert ED_PS == "\033[" "{}" "J"
         assert EL_PS == "\033[" "{}" "K"
-
-        # Mirror ⇧K Erases of Head or Tail or Whole Row
+        assert ECH_X == "\033[" "{}" "X"
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and ((pack.tail == b"J") or (pack.tail == b"K")):
+        # Mirror Erases of >= 1 Y X Spots
+
+        if csi and (pack.tail == b"X"):  # ⎋[⇧X chars-erase
+            if not pack.back:
+                ps = int(pack.neck) if (pack.neck and (pack.neck != b"0")) else 1
+
+                self._write_text_mirrors_(ps * " ")
+                self.column_x = column_x
+                assert self.row_y == row_y, (row_y,)
+
+                return True
+
+        # Mirror Erases of Head or Tail or Whole Row or Screen
+
+        if csi and pack.tail and (pack.tail in b"JK"):  # ⎋[⇧K row-erase  # ⎋[⇧J screen-erase
             if not pack.back:
                 ps = int(pack.neck) if pack.neck else 0
                 if ps in (0, 1, 2):
@@ -3575,13 +3590,13 @@ class ProxyTerminal:
         writes_by_y_x = self.writes_by_y_x
 
         assert DCH_X == "\033[" "{}" "P"
-        assert ECH_X == "\033[" "{}" "X"  # todo10: ⎋[⇧X columns-erase
+        assert ICH_X == "\033[" "{}" "@"  # todo10:  ⎋[⇧@ chars-insert
 
         # Mirror ⇧P Deletes of Pn Characters in the Row
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
-        if csi and (pack.tail == b"P"):
+        if csi and (pack.tail == b"P"):  # ⎋[⇧P chars-delete
             if not pack.back:
                 pn = max(PN1, int(pack.neck) if pack.neck else PN1)
                 if pn:
@@ -3607,6 +3622,8 @@ class ProxyTerminal:
 
                         writes_by_x[to_x] = writes_by_x[from_x]
                         del writes_by_x[from_x]
+
+                    # todo10: macOS ⎋[⇧K decides Background Colors after last Written Char
 
                     # todo10: Mark the Row as ended with Background Color
                     # todo10: [..., ""] is the encoding, or [..., "\t"]
@@ -3974,7 +3991,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
         ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
-        ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase  ⎋[⇧X columns-erase
+        ⎋[⇧K row-tail-erase  ⎋[1⇧K row-head-erase  ⎋[2⇧K row-erase  ⎋[⇧X chars-erase
         ⎋[⇧T rows-down  ⎋[⇧S rows-up  ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
         ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
