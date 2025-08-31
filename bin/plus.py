@@ -268,7 +268,7 @@ class ConwayLife:
         se.print()
         se.print("← ↑ → ↓ Arrows or ⌥ Mouse to move around")
         # se.print("+ - to make a Cell older or younger")  # todo4:
-        se.print("Spacebar to step, ⌃Spacebar to make a half step")  # todo9: , ⌥← to undo
+        se.print("Spacebar to step, ⌃Spacebar to make a half step")  # todo8: , ⌥← to undo
         se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
         se.print()
         se.print()
@@ -785,7 +785,7 @@ class ScreenEditor:
             #
             "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
             "F2": self.do_kdata_fn_f2,  # FnF2
-            "F3": self.do_kdata_fn_f3,  # FnF3  # todo9: should this be "FnF3" ?
+            "F3": self.do_kdata_fn_f3,  # FnF3  # todo8: should this be "FnF3" ?
             #
             # Printable but named Chars
             #
@@ -875,7 +875,7 @@ class ScreenEditor:
         assert pt.y_height == -1, (pt.y_height,)  # for .play_screen_editor
         assert pt.x_width == -1, (pt.x_width,)  # for .play_screen_editor
 
-        # Prompt at Launch  # todo9: next experiments
+        # Prompt at Launch
 
         autolaunchers = [11, 21, 32, 99]  # todo4: 'with' Context Handlers to undo Autolaunchers
 
@@ -1435,6 +1435,7 @@ class ScreenEditor:
                 pack = self.read_arrows_as_byte_packet()
                 assert pack, (pack,)
 
+                # tprint("return (pack, n)  # 1")
                 return (pack, n)
 
         t1 = time.time()
@@ -1453,26 +1454,28 @@ class ScreenEditor:
         else:
             assert arrows == 0, (arrows,)
 
-            self.arrows += 1
+            was_pack = terminal_byte_packets[-1]
+            was_pack_kdata = was_pack.to_bytes()
+            if was_pack_kdata in arrows_kdata_tuple:  # like not ⎋ [ ↓
 
-            pack = terminal_byte_packets[-1]
-            pack_kdata = pack.to_bytes()
-            assert pack_kdata in arrows_kdata_tuple, (pack_kdata,)  # todo10: ⎋ [ ↓
+                self.arrows += 1
 
-            (y, x) = (row_y, column_x)
-            if pack_kdata == b"\033[A":
-                y += 1  # goes up, not down
-            elif pack_kdata == b"\033[B":
-                y -= 1  # goes up, not down
-            elif pack_kdata == b"\033[C":
-                x -= 1  # goes left, not right
-            elif pack_kdata == b"\033[D":
-                x += 1  # goes right, not left
+                (y, x) = (row_y, column_x)
+                if was_pack_kdata == b"\033[A":
+                    y += 1  # goes up, not down
+                elif was_pack_kdata == b"\033[B":
+                    y -= 1  # goes up, not down
+                elif was_pack_kdata == b"\033[C":
+                    x -= 1  # goes left, not right
+                elif was_pack_kdata == b"\033[D":
+                    x += 1  # goes right, not left
 
-            self.arrow_row_y = y
-            self.arrow_column_x = x
+                self.arrow_row_y = y
+                self.arrow_column_x = x
 
+        # tprint("SQUIRREL 1")
         while (not pack.text) and (not pack.closed) and (not bt.extras):
+            # tprint(f"{pack.text=} {pack.closed=} {bt.extras=}")
 
             kdata = pack.to_bytes()
             # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
@@ -1480,10 +1483,14 @@ class ScreenEditor:
                 break
 
             n += 1
+            # tprint(f"bt.close_byte_pack_if {n=}")
             bt.close_byte_pack_if(pack, timeout=None)
+
+        # tprint("SQUIRREL 2")
 
         # Succeed
 
+        # tprint("return (pack, n)  # 2")
         return (pack, n)
 
         # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
@@ -2902,7 +2909,7 @@ class ProxyTerminal:
                 self.write_out("\033[m")  # SGR_PS before EL_X needed at macOS
                 for style in y_fill_styles:
                     self.write_out(style)
-                self.write_out("\033[K")  # todo9: emulate at gCloud Shell
+                self.write_out("\033[K")  # todo9: .write_screen and mirror correctly at gCloud Shell
 
         self.write_out("\033[m")
 
@@ -2916,7 +2923,8 @@ class ProxyTerminal:
         for style in styles:
             self.write_out(style)
 
-        # todo4: .write_screen of Csi ⇧J ⇧H etc bypasses our mirrored writes
+        # todo4: .write_screen of Csi bypasses our mirrored writes
+        # todo4: .sys_platform_darwin and .env_cloud_shell could emulate one another
 
     #
     # Read from the Mirrors
@@ -3627,7 +3635,7 @@ class ProxyTerminal:
         # Erase beneath and to the West, or delete beneath and to the East
         # Fill the unfilled Chars in the West, and set this Row's Fill Styles
 
-        if ps == 0:  #  ⎋[0⇧K row-tail-erase  # ⎋[⇧K row-tail-erase
+        if ps == 0:  # ⎋[0⇧K row-tail-erase  # ⎋[⇧K row-tail-erase
 
             for x in range(column_x, x_width + 1):
                 if x in writes_by_x.keys():
@@ -3922,7 +3930,7 @@ class ProxyTerminal:
 # todo9: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
 # todo9: hh:mm and hh:mm:ss tracks local time, or UTC, can be marked with eraseable -07:00 etc
 
-# todo9: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
+# todo8: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
 
 #
 
@@ -4317,17 +4325,22 @@ class BytesTerminal:
             while extras or self.kbhit(timeout=t):
 
                 if not extras:
+                    # t0 = time.time()
                     byte = os.read(fileno, 1)
+                    # t1 = time.time()
+                    # tprint(f"{byte!r} at {t1 - t0} into {pack}")
                 else:
                     pop = extras.pop(0)
                     byte = bytes([pop])
 
                 more = pack.take_one_if(byte)
                 if more:
+                    # tprint(f"{more!r} into extras")
                     extras.extend(more)
                     break
 
                 if pack.closed:
+                    # tprint(f"pack.closed {pack}")
                     break
 
                 kdata = pack.to_bytes()
@@ -5398,6 +5411,8 @@ if __name__ == "__main__":
     main()
     # print("__main__: after main", file=sys.stderr)
 
+
+# todo9: take the two Keyboard Chords ⎋ ← ↑ → ↓ into the Games
 
 # todo8: Help people whose /usr/bin/python3 runs better than their /usr/local/bin/python3
 # todo8: TUI for:  rgb = 104 - 0x10; print(rgb // 36, (rgb // 6) % 6, rgb % 6)
