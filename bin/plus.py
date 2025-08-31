@@ -945,6 +945,7 @@ class ScreenEditor:
         (pack, n) = self.read_some_byte_packets()
         t1 = time.time()
         t1t0 = t1 - t0
+        millis = int(t1t0 * 1000)
 
         arrows = self.arrows
 
@@ -952,12 +953,12 @@ class ScreenEditor:
         kdata = pack.to_bytes()
 
         if len(kdata) == 1:
-            tprint(str(kdata)[2:-1], "in")
+            tprint(str(kdata)[2:-1], "in", millis)
         elif (not arrows) and (t1t0 > 0.020):
             if kdata in self.loopable_kdata_tuple:
-                tprint(str(kdata)[2:-1], "in")
+                tprint(str(kdata)[2:-1], "in", millis)
             elif n > 1:
-                tprint(str(kdata)[2:-1], "in", n)
+                tprint(str(kdata)[2:-1], "as", n, "in", millis)
             else:
                 tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
         else:
@@ -968,7 +969,15 @@ class ScreenEditor:
         kdata = pack.to_bytes()
         assert kdata, (kdata,)  # because .timeout=None
 
-        klog.write(kdata)
+        #
+
+        if millis:
+            steganographic = f"\033[0;{millis}I".encode()
+            klog.write(steganographic)
+
+        klog.write(kdata)  # todo4: often less latency because without klog.flush()
+
+        #
 
         if kdata == b"\x04":  # ⌃D
             raise SystemExit()  # todo10: make all the classic Vim/ Emacs/ Sh Quits work
@@ -1061,7 +1070,7 @@ class ScreenEditor:
             return True
 
         # Emulate famous Csi Control Byte Sequences,
-        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
+        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧X⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
         # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -1351,9 +1360,13 @@ class ScreenEditor:
         tprint(f"⎋[...I {pack=}  # _take_csi_tab_right_leap_if_")
 
         pn = int(pack.neck) if pack.neck else PN1
-        assert pn >= 1, (pn,)
 
-        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
+        if sys_platform_darwin:
+            if not pn:
+                return True
+
+        alt_pn = pn if pn else 1
+        tab_stop_n = X1 + ((column_x - X1) // 8 + alt_pn) * 8
         x = min(x_width, tab_stop_n)
         self.write(f"\033[{x}G")  # does Not fill with Background Color
 
@@ -1390,7 +1403,7 @@ class ScreenEditor:
 
         # Count out a rapid burst of >= 2 Arrows
 
-        arrows_timeout = 0.010
+        arrows_timeout = 0.009
 
         n = 1
 
@@ -3129,6 +3142,8 @@ class ProxyTerminal:
     # Write into the Mirrors
     #
 
+    # todo10: rename to mirror_ from write.*mirror
+
     def _y_x_write_mirrors_(self, y: int, x: int, text: str) -> None:
         """Mirror the Screen Panel"""
 
@@ -3448,17 +3463,20 @@ class ProxyTerminal:
         if csi and pack.tail and (pack.tail in b"IZ"):  # ⎋[⇧I ⌃I  # ⎋[⇧Z ⇧Tab
             if not pack.back:
                 pn = int(pack.neck) if pack.neck else PN1
-                if pn:
 
-                    if pack.tail == b"I":
-                        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
-                        self.column_x = min(x_width, tab_stop_n)
+                if sys_platform_darwin:
+                    if not pn:
                         return True
 
-                    if pack.tail == b"Z":
-                        tab_stop_n = X1 + ((column_x + (8 - 1) - X1) // 8 - pn) * 8
-                        self.column_x = max(X1, tab_stop_n)
-                        return True
+                if pack.tail == b"I":
+                    tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
+                    self.column_x = min(x_width, tab_stop_n)
+                    return True
+
+                if pack.tail == b"Z":
+                    tab_stop_n = X1 + ((column_x + (8 - 1) - X1) // 8 - pn) * 8
+                    self.column_x = max(X1, tab_stop_n)
+                    return True
 
         return False
 
@@ -3490,7 +3508,8 @@ class ProxyTerminal:
 
         if csi and (pack.tail == b"X"):  # ⎋[⇧X chars-erase
             if not pack.back:
-                ps = int(pack.neck) if (pack.neck and (pack.neck != b"0")) else 1
+                ps = int(pack.neck) if pack.neck else 1
+                ps = ps if ps else 1  # at .sys_platform_darwin & at .env_cloud_shell
 
                 self._write_text_mirrors_(ps * " ")
                 self.column_x = column_x
