@@ -875,9 +875,10 @@ class ScreenEditor:
         assert pt.y_height == -1, (pt.y_height,)  # for .play_screen_editor
         assert pt.x_width == -1, (pt.x_width,)  # for .play_screen_editor
 
-        # Prompt at Launch
+        # Prompt at Launch  # todo4: 'with' Context Handlers to undo Autolaunchers
 
-        autolaunchers = [11, 21, 32, 99]  # todo4: 'with' Context Handlers to undo Autolaunchers
+        autolaunchers = [11, 21, 99]
+        autolaunchers = [11, 21, 32, 99]  # last wins
 
         if 11 in autolaunchers:
             pt.proxy_read_row_y_column_x()
@@ -2872,7 +2873,7 @@ class ProxyTerminal:
         self.write_out("\033[4l")
         self.write_out("\033[m")
 
-        for y in range(Y1, y_height):
+        for y in range(Y1, y_height + 1):
             writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
             y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
 
@@ -3943,6 +3944,12 @@ class ProxyTerminal:
 
 # todo9: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
 # todo9: (#), or (on #), or (# on #), button could track Foreground on Background Color such as #24 on #005
+
+#
+
+# todo9: Mirrors for ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧T rows-down  ⎋[⇧S rows-up
+
+#
 
 # todo8: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
 
