@@ -879,21 +879,19 @@ class ScreenEditor:
 
         autolaunchers = [11, 21, 32, 99]  # todo4: 'with' Context Handlers to undo Autolaunchers
 
-        y_height = -1
-
         if 11 in autolaunchers:
             pt.proxy_read_row_y_column_x()
             pt.proxy_read_y_height_x_width()
 
         if 21 in autolaunchers:
             self.write("\033[8;32100;101t")  # Chosen Width, Max Height
-            (y_height, x_width) = pt.proxy_read_y_height_x_width()
 
         if 31 in autolaunchers:
             for _ in range(4):
                 self.write("\033[A")
 
         if 32 in autolaunchers:
+            y_height = pt.proxy_read_y_height()
             self.write(y_height * "\n")  # scrolls the Screen into Scrollback
             self.write("\033[H")
 
@@ -976,6 +974,8 @@ class ScreenEditor:
             klog.write(steganographic)
 
         klog.write(kdata)  # todo4: often less latency because without klog.flush()
+
+        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
 
         #
 
@@ -1152,14 +1152,16 @@ class ScreenEditor:
 
         tprint(f"⎋['⇧~ cols-delete {pack=}   # _take_csi_cols_delete_if_")
 
-        pn = int(pack.neck) if pack.neck else PN1
-        y_height = bt.read_y_height()
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int  # accepts pn = 0
 
-        (row_y, column_x) = pt.proxy_read_row_y_column_x()
+        row_y = pt.proxy_read_row_y()
+        y_height = bt.read_y_height()
 
         for y in range(1, y_height + 1):
             self.write(f"\033[{y}d")  # for .columns_delete_n
             self.write(f"\033[{pn}P")  # for .columns_delete_n
+
         self.write(f"\033[{row_y}d")  # for .columns_delete_n
 
         return True
@@ -1183,14 +1185,16 @@ class ScreenEditor:
 
         tprint(f"⎋['⇧}} cols-insert {pack=}   # _take_csi_cols_insert_if_")
 
-        pn = int(pack.neck) if pack.neck else PN1
-        y_height = bt.read_y_height()
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int  # accepts pn = 0
 
-        (row_y, column_x) = pt.proxy_read_row_y_column_x()
+        row_y = pt.proxy_read_row_y()
+        y_height = bt.read_y_height()
 
         for y in range(1, y_height + 1):
             self.write(f"\033[{y}d")  # for .columns_delete_n
             self.write(f"\033[{pn}@")  # for .columns_delete_n
+
         self.write(f"\033[{row_y}d")  # for .columns_delete_n
 
         return True
@@ -1302,7 +1306,12 @@ class ScreenEditor:
         if not (csi and (pack.tail == b"T")):
             return False
 
-        pn = int(pack.neck) if pack.neck else PN1
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int if pn_int else PN1
+
+        if sys_platform_darwin:
+            if not pn_int:
+                return True
 
         self.write("\0337")
         self.write("\033[32100A")
@@ -1329,7 +1338,12 @@ class ScreenEditor:
         if not (csi and (pack.tail == b"S")):
             return False
 
-        pn = int(pack.neck) if pack.neck else PN1
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int if pn_int else PN1
+
+        if sys_platform_darwin:
+            if not pn_int:
+                return True
 
         self.write("\0337")
         self.write("\033[32100B")
@@ -1359,14 +1373,14 @@ class ScreenEditor:
 
         tprint(f"⎋[...I {pack=}  # _take_csi_tab_right_leap_if_")
 
-        pn = int(pack.neck) if pack.neck else PN1
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int if pn_int else PN1
 
         if sys_platform_darwin:
-            if not pn:
+            if not pn_int:
                 return True
 
-        alt_pn = pn if pn else 1
-        tab_stop_n = X1 + ((column_x - X1) // 8 + alt_pn) * 8
+        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
         x = min(x_width, tab_stop_n)
         self.write(f"\033[{x}G")  # does Not fill with Background Color
 
@@ -2841,9 +2855,7 @@ class ProxyTerminal:
                     if not boring:  # todo7: stop redrawing Cursor unnecessarily
                         self.write_out(f"\033[{y};{x}H")  # for .write_screen
 
-                    if not boring:  # todo7: stop redrawing Clear-Style unnecessarily
-                        self.write_out("\033[m")
-
+                    self.write_out("\033[m")  # todo7: stop redrawing Clear-Style unnecessarily
                     last_x_write = x_writes[-1]
                     for x_write in x_writes:
                         self.write_out(x_write)  # todo7: stop redrawing Style unnecessarily
@@ -3237,21 +3249,24 @@ class ProxyTerminal:
     def _mirror_byte_burst_(self, sdata: bytes) -> bool:
         """Write bursts of HT or LF"""
 
-        pn = len(sdata)
-        head = sdata[:1]
-        if sdata == (pn * head):
-            if sdata and (head in (b"\t", b"\n")):
-                sdata_pack = TerminalBytePacket(head)
+        if sdata:
+            pn = len(sdata)
 
-                mirrored = 0
-                for _ in range(pn):
-                    if not self._mirror_leap_byte_(sdata_pack):
-                        mirrored += 1
+            head = sdata[:1]
+            if sdata == (pn * head):
 
-                if mirrored < pn:
-                    tprint(f"Only {mirrored} of {pn} * {head!r} mirrored")
+                if sdata and (head in (b"\t", b"\n")):
+                    sdata_pack = TerminalBytePacket(head)
 
-                return True
+                    mirrored = 0
+                    for _ in range(pn):
+                        if not self._mirror_leap_byte_(sdata_pack):
+                            mirrored += 1
+
+                    if mirrored < pn:
+                        tprint(f"Only {mirrored} of {pn} * {head!r} mirrored")
+
+                    return True
 
         return False
 
@@ -3417,7 +3432,7 @@ class ProxyTerminal:
 
         if csi and pack.tail and (pack.tail in b"ABCDGd"):  # ⎋[ "ABCD" Arrows per se, and also "Gd"
             if not pack.back:
-                pn = int(pack.neck) if pack.neck else PN1
+                pn = int(pack.neck) if pack.neck else PN1  # accepts 0, even at .env_cloud_shell
                 if pn:
 
                     if pack.tail == b"A":
@@ -3459,10 +3474,11 @@ class ProxyTerminal:
 
         if csi and pack.tail and (pack.tail in b"IZ"):  # ⎋[⇧I ⌃I  # ⎋[⇧Z ⇧Tab
             if not pack.back:
-                pn = int(pack.neck) if pack.neck else PN1
+                int_pn = int(pack.neck) if pack.neck else PN1  # accepts 0
+                pn = int_pn if int_pn else PN1
 
                 if sys_platform_darwin:
-                    if not pn:
+                    if not int_pn:
                         return True
 
                 if pack.tail == b"I":
@@ -3605,52 +3621,92 @@ class ProxyTerminal:
 
         column_x = self.column_x
         row_y = self.row_y
+        styles = self.styles
         writes_by_y_x = self.writes_by_y_x
 
+        assert ICH_X == "\033[" "{}" "@"
         assert DCH_X == "\033[" "{}" "P"
-        assert ICH_X == "\033[" "{}" "@"  # todo10:  ⎋[⇧@ chars-insert
-
-        # Mirror ⇧P Deletes of Pn Characters in the Row
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
+        # Mirror ⇧@ Inserts of Pn Characters in the Row
+
+        if csi and (pack.tail == b"@"):  # ⎋[⇧@ chars-insert
+            if not pack.back:
+                pn_int = int(pack.neck) if pack.neck else PN1
+                pn = pn_int if pn_int else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+
+                xpn = column_x + pn
+
+                # Demand Writes-by-X
+
+                y = row_y
+                if y not in writes_by_y_x.keys():
+                    writes_by_y_x[y] = dict()
+
+                writes_by_x = writes_by_y_x[y]
+
+                # Shift Right each Char that follows
+
+                x_list = sorted(_ for _ in writes_by_x.keys() if _ >= column_x)
+                for from_x in reversed(x_list):
+                    to_x = from_x + pn
+
+                    writes_by_x[to_x] = writes_by_x[from_x]
+                    del writes_by_x[from_x]
+
+                # Insert the Colored Space Chars themselves
+
+                for x in range(column_x, xpn):
+                    writes_by_x[x] = list(styles) + [" "]
+
+                # Succeed
+
+                return True
+
+        # Mirror ⇧P Deletes of Pn Characters in the Row
+
         if csi and (pack.tail == b"P"):  # ⎋[⇧P chars-delete
             if not pack.back:
-                pn = max(PN1, int(pack.neck) if pack.neck else PN1)
-                if pn:
 
-                    y = row_y
-                    if y not in writes_by_y_x.keys():
-                        writes_by_y_x[y] = dict()
+                pn = int(pack.neck) if pack.neck else PN1
+                pn = pn if pn else PN1  # at .sys_platform_darwin & at .env_cloud_shell
 
-                    writes_by_x = writes_by_y_x[y]
+                xpn = column_x + pn
 
-                    # Delete the Chars themselves
+                # Demand Writes-by-X
 
-                    xpn = column_x + pn
-                    for x in range(column_x, xpn):
-                        if x in writes_by_x.keys():
-                            del writes_by_x[x]
+                y = row_y
+                if y not in writes_by_y_x.keys():
+                    writes_by_y_x[y] = dict()
 
-                    # Shift Left each Char that follows
+                writes_by_x = writes_by_y_x[y]
 
-                    x_list = sorted(_ for _ in writes_by_x.keys() if _ >= xpn)
-                    for from_x in x_list:
-                        to_x = from_x - pn
+                # Delete the Chars themselves
 
-                        writes_by_x[to_x] = writes_by_x[from_x]
-                        del writes_by_x[from_x]
+                for x in range(column_x, xpn):
+                    if x in writes_by_x.keys():
+                        del writes_by_x[x]
 
-                    # todo10: macOS ⎋[⇧K decides Background Colors after last Written Char
+                # Shift Left each Char that follows
 
-                    # todo10: Mark the Row as ended with Background Color
-                    # todo10: [..., "\r\n"] as the encoding
-                    # todo10: replay it properly, encode it properly, be happier
-                    # todo10: then go test at gShell too
+                x_list = sorted(_ for _ in writes_by_x.keys() if _ >= xpn)
+                for from_x in x_list:
+                    to_x = from_x - pn
 
-                    # Succeed
+                    writes_by_x[to_x] = writes_by_x[from_x]
+                    del writes_by_x[from_x]
 
-                    return True
+                # todo10: macOS ⎋[⇧K decides Background Colors after last Written Char
+
+                # todo10: Mark the Row as ended with Background Color
+                # todo10: [..., "\r\n"] as the encoding
+                # todo10: replay it properly, encode it properly, be happier
+                # todo10: then go test at gShell too
+
+                # Succeed
+
+                return True
 
         return False
 
