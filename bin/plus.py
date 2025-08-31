@@ -927,17 +927,14 @@ class ScreenEditor:
         # self.print("Goodbye from Screen Editor")
 
     def read_eval_print_once(self) -> None:
-        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+        """Fetch and time one Keyboard Chord, and then quit, else reply to it"""
 
         terminal_byte_packets = self.terminal_byte_packets
 
         pt = self.proxy_terminal
         klog = pt.keyboard_bytes_log
 
-        # Reply to each Keyboard Chord Input, till quit
-
-        # todo2: Quit in many of the Emacs & Vim ways, including Vim ⌃C :vi ⇧Z ⇧Q
-        # todo2: Maybe or maybe-not quit after ⌃D, vs quitting now only at ⌃D
+        # Fetch and time one Keyboard Chord
 
         t0 = time.time()
         (pack, n) = self.read_some_byte_packets()
@@ -945,11 +942,23 @@ class ScreenEditor:
         t1t0 = t1 - t0
         millis = int(t1t0 * 1000)
 
-        arrows = self.arrows
+        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
 
+        assert pack, (pack, n)  # because .timeout=None
         terminal_byte_packets.append(pack)
-        kdata = pack.to_bytes()
 
+        kdata = pack.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
+
+        # Log the one Keyboard Chord
+
+        if millis:
+            steganographic = f"\033[0;{millis}I".encode()
+            klog.write(steganographic)
+
+        klog.write(kdata)  # todo4: often less latency because without klog.flush()
+
+        arrows = self.arrows
         if len(kdata) == 1:
             tprint(str(kdata)[2:-1], "in", millis)
         elif (not arrows) and (t1t0 > 0.020):
@@ -962,30 +971,23 @@ class ScreenEditor:
         else:
             tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
 
-        assert pack, (pack, n)  # because .timeout=None
+        # Quit in several ways
 
-        kdata = pack.to_bytes()
-        assert kdata, (kdata,)  # because .timeout=None
+        kdata_quits = [b"\x03", b"\x04", b"\x1c"]  # ⌃C  # ⌃D  # ⌃\
 
-        #
+        if kdata in kdata_quits:
+            raise SystemExit()
 
-        if millis:
-            steganographic = f"\033[0;{millis}I".encode()
-            klog.write(steganographic)
-
-        klog.write(kdata)  # todo4: often less latency because without klog.flush()
-
-        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
-
-        #
-
-        if kdata == b"\x04":  # ⌃D
-            raise SystemExit()  # todo10: make all the classic Vim/ Emacs/ Sh Quits work
+        # Else reply to the one Keyboard Chord
 
         self.reply_to_kdata(pack, n=n)  # may raise SystemExit
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
         # todo2: Stop taking slow b'\033[' b'L' IL_Y as 1 Whole Packet from gCloud
+
+        # todo2: Quit in many of the Emacs ways, including ⌃X ⌃S ⌃X ⌃C
+        # todo2: Quit in many of the Vim ways, including Vim ⇧Z ⇧Q and ⇧Z ⇧Z and ⌃L ⌃C Q ⇧! Return
+        # todo2: Maybe or maybe-not quit after ⌃D to let it be char-delete
 
     def klog_to_kcount(self) -> int:
         """Count how many times the same Keyboard Chord struck"""
@@ -5141,16 +5143,16 @@ def _kch_to_kcap_(t: str) -> str:  # noqa C901
 
     elif (o < 0x20) or (o == 0x7F):  # C0 Control Bytes, or \x7F Delete (DEL)
         if o == 0x1F:  # macOS ⌃- doesn't come through as  (0x2D ^ 0x40)
-            s = "^-"  # macOS ⌃-  and ⌃⇧_ do come through as (0x5F ^ 0x40)
+            s = "⌃-"  # macOS ⌃-  and ⌃⇧_ do come through as (0x5F ^ 0x40)
         else:
-            s = "⌃" + chr(o ^ 0x40)  # '^ 0x40' mixes ⌃ into one of @ A..Z [\]^_ ?
+            s = "⌃" + chr(o ^ 0x40)  # '^ 0x40' mixes ⌃ into one of @ A..Z [\]^_ ?, such as ⌃^
 
         # '^ 0x40' speaks of ⌃@ but not ⌃⇧@ and not ⌃⇧2 and not ⌃Spacebar at b"\x00"
         # '^ 0x40' speaks of ⌃M but not Return at b"\x0D"
         # '^ 0x40' speaks of ⌃[ ⌃\ ⌃] ⌃_ but not ⎋ and not ⌃⇧_ and not ⌃⇧{ ⌃⇧| ⌃⇧} ⌃-
         # '^ 0x40' speaks of ⌃? but not Delete at b"\x7F"
 
-        # ^` ^2 ^6 ^⇧~ don't work
+        # ⌃` ⌃2 ⌃6 ⌃⇧~ don't work
 
     elif "A" <= t <= "Z":  # printable Upper Case English
         s = "⇧" + chr(o)  # shifted Key Cap '⇧A' from b'A'
