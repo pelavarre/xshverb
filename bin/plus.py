@@ -624,7 +624,7 @@ class ScreenEditor:
     loopable_kdata_tuple: tuple[bytes, ...] = tuple()
 
     #
-    # Init, Enter, Exit, Print
+    # Init, Enter, Exit, Place, Print, Write
     #
 
     def __init__(self) -> None:
@@ -645,49 +645,6 @@ class ScreenEditor:
 
         loopable_kdata_tuple = self.form_loopable_kdata_tuple()
         self.loopable_kdata_tuple = loopable_kdata_tuple
-
-    def __enter__(self) -> typing.Self:
-        r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
-
-        pt = self.proxy_terminal
-        pt.__enter__()
-
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: types.TracebackType | None,
-    ) -> None:
-        r"""Start line-buffering Input, start replacing \n Output with \r\n, etc"""
-
-        pt = self.proxy_terminal  # todo7: write up MyPy Strict forbids kwarg [call-arg]
-        pt.__exit__(exc_type, exc_val, exc_tb)
-
-        return None
-
-    def y_x_text_print(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Chars at one Y X Place"""
-
-        pt = self.proxy_terminal
-        pt.proxy_y_x_text_print(y=y, x=x, text=text)
-
-    def print(self, *args: object, end: str = "\r\n") -> None:
-        """Join the Args by Space, add the End, and write the Encoded Chars"""
-
-        pt = self.proxy_terminal
-        pt.proxy_print(*args, end=end)
-
-    def write(self, text: str) -> None:
-        """Write the Bytes, log them as written, and mirror them"""
-
-        pt = self.proxy_terminal
-        pt.proxy_write(text)
-
-    #
-    # Bind Keyboard Chords to Funcs
-    #
 
     def form_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         """Bind Keycaps to Funcs"""
@@ -855,12 +812,53 @@ class ScreenEditor:
         # todo2: bind bin/é bin/e-aigu bin/latin-small-letter-e-with-acute to this kind of editing
         # todo2: history binds only while present, or falls back like ⎋⇧$ and ⌃E to max right
 
+    def __enter__(self) -> typing.Self:
+        r"""Stop line-buffering Input, stop replacing \n Output with \r\n, etc"""
+
+        pt = self.proxy_terminal
+        pt.__enter__()
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        r"""Start line-buffering Input, start replacing \n Output with \r\n, etc"""
+
+        pt = self.proxy_terminal  # todo7: write up MyPy Strict forbids kwarg [call-arg]
+        pt.__exit__(exc_type, exc_val, exc_tb)
+
+        return None
+
+    def y_x_text_print(self, y: int, x: int, text: str) -> None:
+        """Write Some Text Chars at one Y X Place"""
+
+        assert text.isprintable(), (text,)  # doesn't duck typing
+
+        pt = self.proxy_terminal
+        pt.proxy_y_x_text_print(y=y, x=x, text=text)
+
+    def print(self, *args: object, end: str = "\r\n") -> None:
+        """Join the Args by Space, add the End, and write the Encoded Chars"""
+
+        pt = self.proxy_terminal
+        pt.proxy_print(*args, end=end)
+
+    def write(self, text: str) -> None:
+        """Write the Bytes, log them as written, and mirror them"""
+
+        pt = self.proxy_terminal
+        pt.proxy_write(text)
+
     #
-    # Loop Keyboard back to Screen, but as whole Packets, & with some emulations
+    # Loop Mouse Strokes & whole Keyboard Packets to Screen
     #
 
     def play_screen_editor(self: ScreenEditor) -> None:
-        """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+        """Loop Mouse Strokes & whole Keyboard Packets to Screen"""
 
         pt = self.proxy_terminal
 
@@ -956,6 +954,175 @@ class ScreenEditor:
         # todo2: Quit in many of the Vim ways, including Vim ⇧Z ⇧Q and ⇧Z ⇧Z and ⌃L ⌃C Q ⇧! Return
         # todo2: Maybe or maybe-not quit after ⌃D to let it be char-delete
 
+    def read_one_pack(self) -> tuple[TerminalBytePacket, int]:
+        """Block till read & time & log of one Whole TerminalBytePacket"""
+
+        terminal_byte_packets = self.terminal_byte_packets
+
+        pt = self.proxy_terminal
+        klog = pt.keyboard_bytes_log
+
+        # Fetch and time one Keyboard-Chord Terminal-Byte-Packet
+
+        t0 = time.time()
+        (pack, n) = self.read_arrows_or_one_pack()
+        t1 = time.time()
+        t1t0 = t1 - t0
+        millis = int(t1t0 * 1000)
+
+        # Update the Mirror of the X-Width x Y-Height of the Screen
+        # todo9: take subscribers to changes in the the X-Width x Y-Height
+        # todo9: call .write_screen for the new portion
+        # todo9: remember a 'todo; to have resize mean clip after all
+
+        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
+
+        # Inspect the Terminal-Byte-Packet
+
+        assert pack, (pack, n)  # because .timeout=None
+        terminal_byte_packets.append(pack)
+
+        kdata = pack.to_bytes()
+        assert kdata, (kdata,)  # because .timeout=None
+
+        # Log the one Keyboard Chord
+
+        if millis:
+            steganographic = f"\033[0;{millis}I".encode()
+            klog.write(steganographic)
+
+        klog.write(kdata)  # todo4: often less latency because without klog.flush()
+
+        arrows = self.arrows
+        if len(kdata) == 1:
+            tprint(str(kdata)[2:-1], "in", millis)
+        elif (not arrows) and (t1t0 > 0.020):
+            if kdata in self.loopable_kdata_tuple:
+                tprint(str(kdata)[2:-1], "in", millis)
+            elif n > 1:
+                tprint(str(kdata)[2:-1], "as", n, "in", millis)
+            else:
+                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
+        else:
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
+
+        return (pack, n)
+
+    def read_arrows_or_one_pack(self) -> tuple[TerminalBytePacket, int]:
+        """Block till read of 1 Whole TerminalBytePacket, all at once, or as parts"""
+
+        terminal_byte_packets = self.terminal_byte_packets
+        arrows = self.arrows
+
+        pt = self.proxy_terminal
+        row_y = pt.row_y
+        column_x = pt.column_x
+
+        bt = pt.bytes_terminal
+
+        # Count out a rapid burst of >= 2 Arrows
+
+        arrows_timeout = 0.009
+
+        n = 1
+
+        t0 = time.time()
+
+        if not arrows:
+            pack = bt.read_byte_packet(timeout=None)
+        else:
+            pack = bt.read_byte_packet(timeout=arrows_timeout)
+            if not pack:
+                self.arrows = 0  # written only by Init & this Def
+
+                pack = self.read_arrows_as_byte_packet()
+                assert pack, (pack,)
+
+                return (pack, n)
+
+        t1 = time.time()
+
+        kdata = pack.to_bytes()
+        t1t0 = t1 - t0
+
+        arrows_kdata_tuple = (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
+
+        if kdata not in arrows_kdata_tuple:
+            self.arrows = 0  # written only by Init & this Def
+        elif t1t0 >= arrows_timeout:
+            self.arrows = 0  # written only by Init & this Def
+        elif arrows > 0:
+            self.arrows += 1
+        else:
+            assert arrows == 0, (arrows,)
+
+            was_pack = terminal_byte_packets[-1]
+            was_pack_kdata = was_pack.to_bytes()
+            if was_pack_kdata in arrows_kdata_tuple:  # like not ⎋ [ ↓
+
+                self.arrows += 1
+
+                (y, x) = (row_y, column_x)
+                if was_pack_kdata == b"\033[A":
+                    y += 1  # goes up, not down
+                elif was_pack_kdata == b"\033[B":
+                    y -= 1  # goes up, not down
+                elif was_pack_kdata == b"\033[C":
+                    x -= 1  # goes left, not right
+                elif was_pack_kdata == b"\033[D":
+                    x += 1  # goes right, not left
+
+                self.arrow_row_y = y
+                self.arrow_column_x = x
+
+        while (not pack.text) and (not pack.closed) and (not bt.extras):
+
+            kdata = pack.to_bytes()
+            # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
+            if kdata == b"\033O":  # ⎋⇧O for Vim
+                break
+
+            n += 1
+            bt.close_byte_pack_if(pack, timeout=None)
+
+        # Succeed
+
+        return (pack, n)
+
+        # todo: time & log the Keyboard Bytes as they arrive, stop waiting for whole Packet
+        # todo: echo the Keyboard Bytes somewhere as they arrive, stop waiting for whole Packet
+
+    def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
+        """Take Delay-after-Arrow-Burst as a ⌥ Mouse Release, with never a Press"""
+
+        arrow_row_y = self.arrow_row_y
+        arrow_column_x = self.arrow_column_x
+        arrow_yx = (arrow_row_y, arrow_column_x)
+
+        pt = self.proxy_terminal
+
+        assert CUP_Y_X == "\033[" "{};{}" "H"
+
+        yx = pt.proxy_read_row_y_column_x()
+        (row_y, column_x) = yx
+
+        cup = f"\033[{arrow_row_y};{arrow_column_x}H"
+        self.write(f"\033[{arrow_row_y};{arrow_column_x}H")
+        after_write_yx = (pt.row_y, pt.column_x)
+
+        assert after_write_yx == arrow_yx, (after_write_yx, arrow_yx, yx, cup)
+
+        option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
+        ktext = f"\033[<{option_f};{column_x};{row_y}m"
+        kdata = ktext.encode()
+
+        pack = TerminalBytePacket(kdata)
+
+        return pack
+
+        # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
+        # todo6: Debug why Arrow Burst buttons after the first frequently don't work, if still so?
+
     def klog_to_kcount(self) -> int:
         """Count how many times the same Keyboard Chord struck"""
 
@@ -1030,8 +1197,86 @@ class ScreenEditor:
 
         self.print_kcaps_plus(pack)
 
+    #
+    # Write simple things and raise Exceptions
+    #
+
+    def do_write_kdata_as_sdata(self, kdata: bytes) -> None:
+        """Write the Keyboard Bytes looped back to the Screen"""
+
+        sdata = kdata
+        stext = sdata.decode()  # may raise UnicodeDecodeError
+
+        self.write(stext)
+
+    def print_kcaps_plus(self, pack: TerminalBytePacket) -> None:
+        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
+
+        kdata = pack.to_bytes()
+        assert kdata, (kdata,)
+
+        kcaps = kdata_to_kcaps(kdata)
+        self.print(kcaps, end=" ")
+
+    def do_write_spacebar(self) -> None:
+        """Write 1 Space"""
+
+        self.write(" ")
+
+    def do_write_cr_lf(self) -> None:
+        """Write CR LF"""
+
+        assert CR == "\r"
+        assert LF == "\n"
+
+        self.write("\r\n")
+
+        # todo3: Emacs ⌃M and ⌃K need the Rows mirrored, as does Vim I ⌃M
+        # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
+
+    def do_replacing_one_kdata(self) -> None:
+        """Start replacing, quote 1 Keyboard Chord, then start inserting"""
+
+        self.do_replacing_start()  # Vim ⇧R
+        self.do_quote_one_kdata()  # Emacs ⌃Q  # Vim ⌃V
+        self.do_inserting_start()  # Vim I
+
+        # Vim R
+
+    def do_quote_one_kdata(self) -> None:
+        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
+
+        (pack, n) = self.read_one_pack()
+
+        kdata = pack.to_bytes()
+        self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
+
+        # Emacs ⌃Q  # Vim ⌃V
+
+    def do_assert_false(self) -> None:
+        """Assert False"""
+
+        # self.print("do_assert_false")
+
+        assert False
+
+        # Vim ⇧Q  # (traditionally swaps Ex Key Bindings in place of Vim Key Bindings)
+
+    def do_raise_system_exit(self) -> None:
+        """Raise SystemExit"""
+
+        raise SystemExit()
+
+        # Emacs ⎋ X revert-buffer Return ⌃X ⌃C
+        # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
+        # Vim ⇧Z⇧Q
+
+    #
+    # Emulate Csi Screen Writes missing from some or many Platforms
+    #
+
     def take_pack_n_kdata_if(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
-        """Emulate the KData Control Sequence and return it, else return False"""
+        """Emulate or write KData Control Sequence and return True, else return False"""
 
         # Emulate famous Esc Byte Pairs
 
@@ -1092,18 +1337,7 @@ class ScreenEditor:
 
         return True
 
-    #
-    # Define some emulations
-    #
-
-    def print_kcaps_plus(self, pack: TerminalBytePacket) -> None:
-        """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
-
-        kdata = pack.to_bytes()
-        assert kdata, (kdata,)
-
-        kcaps = kdata_to_kcaps(kdata)
-        self.print(kcaps, end=" ")
+        # todo9: read the Csi Sequence more deeply to pass through only what we know works
 
     def _take_csi_cols_delete_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧~ cols-delete"""
@@ -1185,65 +1419,6 @@ class ScreenEditor:
         return True
 
         # gCloud Shell lacks macOS ⎋L
-
-    def _take_csi_mouse_press_if_(self, pack: TerminalBytePacket, n: int) -> bool:
-        """Shrug off a Mouse Press if quick"""
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if (n == 1) and csi and (pack.tail == b"M"):
-            tprint("# _take_csi_mouse_press_if_")
-            return True  # drops first 1/2 or 2/3 of Sgr Mouse
-
-        return False
-
-    def _take_csi_mouse_release_if_(self, pack: TerminalBytePacket) -> bool:
-        """Reply to a Mouse Release, no matter if slow or quick"""
-
-        # Eval the Sgr Mouse Report
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"m")):
-            return False
-
-        splits = pack.neck.removeprefix(b"<").split(b";")
-        assert len(splits) == 3, (splits, pack.neck, pack)
-        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
-
-        tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
-
-        # Decode f = 0b⌃⌥⇧00
-
-        Basic_0 = 0b00000
-
-        Shift_4 = 0b00100
-        Option_8 = 0b01000
-        Control_16 = 0b10000
-
-        assert (f & ~(Shift_4 | Option_8 | Control_16)) == 0, (hex(f),)
-
-        # Dispatch ⌥ Mouse Release
-
-        if f in (Basic_0, Option_8):
-
-            self.take_widget_at_yxf_mouse_release(y, x=x, f=f)
-
-            return True
-
-        # Reply to Shifting or no Shifting at Mouse Release
-
-        if f == 0:
-            self.write("*")  # unreached when f == 0 because Code far above
-
-        if f & Control_16:
-            self.write("⌃")
-        if f & Option_8:
-            self.write("⌥")  # unreached when f == 8 because Code far above
-        if f & Shift_4:
-            self.write("⇧")
-
-        return True
-
-        # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
 
     def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
@@ -1357,235 +1532,68 @@ class ScreenEditor:
 
         # gCloud Shell lacks ⎋[ {}I
 
-    def do_write_cr_lf(self) -> None:
-        """Write CR LF"""
-
-        assert CR == "\r"
-        assert LF == "\n"
-
-        self.write("\r\n")
-
-        # todo3: Emacs ⌃M and ⌃K need the Rows mirrored, as does Vim I ⌃M
-        # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
-
     #
-    # todo9
+    # Reply to Mouse Strokes
     #
 
-    def read_one_pack(self) -> tuple[TerminalBytePacket, int]:
-        """todo9"""
+    def _take_csi_mouse_press_if_(self, pack: TerminalBytePacket, n: int) -> bool:
+        """Shrug off a Mouse Press if quick"""
 
-        terminal_byte_packets = self.terminal_byte_packets
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if (n == 1) and csi and (pack.tail == b"M"):
+            tprint("# _take_csi_mouse_press_if_")
+            return True  # drops first 1/2 or 2/3 of Sgr Mouse
 
-        pt = self.proxy_terminal
-        klog = pt.keyboard_bytes_log
+        return False
 
-        # Fetch and time one Keyboard-Chord Terminal-Byte-Packet
+    def _take_csi_mouse_release_if_(self, pack: TerminalBytePacket) -> bool:
+        """Reply to a Mouse Release, no matter if slow or quick"""
 
-        t0 = time.time()
-        (pack, n) = self.read_arrows_or_one_pack()
-        t1 = time.time()
-        t1t0 = t1 - t0
-        millis = int(t1t0 * 1000)
+        # Eval the Sgr Mouse Report
 
-        # Update the Mirror of the X-Width x Y-Height of the Screen
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"m")):
+            return False
 
-        pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
+        splits = pack.neck.removeprefix(b"<").split(b";")
+        assert len(splits) == 3, (splits, pack.neck, pack)
+        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
 
-        # Inspect the Terminal-Byte-Packet
+        tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
 
-        assert pack, (pack, n)  # because .timeout=None
-        terminal_byte_packets.append(pack)
+        # Decode f = 0b⌃⌥⇧00
 
-        kdata = pack.to_bytes()
-        assert kdata, (kdata,)  # because .timeout=None
+        Basic_0 = 0b00000
 
-        # Log the one Keyboard Chord
+        Shift_4 = 0b00100
+        Option_8 = 0b01000
+        Control_16 = 0b10000
 
-        if millis:
-            steganographic = f"\033[0;{millis}I".encode()
-            klog.write(steganographic)
+        assert (f & ~(Shift_4 | Option_8 | Control_16)) == 0, (hex(f),)
 
-        klog.write(kdata)  # todo4: often less latency because without klog.flush()
+        # Dispatch ⌥ Mouse Release
 
-        arrows = self.arrows
-        if len(kdata) == 1:
-            tprint(str(kdata)[2:-1], "in", millis)
-        elif (not arrows) and (t1t0 > 0.020):
-            if kdata in self.loopable_kdata_tuple:
-                tprint(str(kdata)[2:-1], "in", millis)
-            elif n > 1:
-                tprint(str(kdata)[2:-1], "as", n, "in", millis)
-            else:
-                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
-        else:
-            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
+        if f in (Basic_0, Option_8):
 
-        return (pack, n)
+            self.take_widget_at_yxf_mouse_release(y, x=x, f=f)
 
-    def read_arrows_or_one_pack(self) -> tuple[TerminalBytePacket, int]:
-        """Read 1 TerminalBytePacket, all in one piece, else in split pieces"""
+            return True
 
-        terminal_byte_packets = self.terminal_byte_packets
-        arrows = self.arrows
+        # Reply to Shifting or no Shifting at Mouse Release
 
-        pt = self.proxy_terminal
-        row_y = pt.row_y
-        column_x = pt.column_x
+        if f == 0:
+            self.write("*")  # unreached when f == 0 because Code far above
 
-        bt = pt.bytes_terminal
+        if f & Control_16:
+            self.write("⌃")
+        if f & Option_8:
+            self.write("⌥")  # unreached when f == 8 because Code far above
+        if f & Shift_4:
+            self.write("⇧")
 
-        # Count out a rapid burst of >= 2 Arrows
+        return True
 
-        arrows_timeout = 0.009
-
-        n = 1
-
-        t0 = time.time()
-
-        if not arrows:
-            pack = bt.read_byte_packet(timeout=None)
-        else:
-            pack = bt.read_byte_packet(timeout=arrows_timeout)
-            if not pack:
-                self.arrows = 0  # written only by Init & this Def
-
-                pack = self.read_arrows_as_byte_packet()
-                assert pack, (pack,)
-
-                return (pack, n)
-
-        t1 = time.time()
-
-        kdata = pack.to_bytes()
-        t1t0 = t1 - t0
-
-        arrows_kdata_tuple = (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
-
-        if kdata not in arrows_kdata_tuple:
-            self.arrows = 0  # written only by Init & this Def
-        elif t1t0 >= arrows_timeout:
-            self.arrows = 0  # written only by Init & this Def
-        elif arrows > 0:
-            self.arrows += 1
-        else:
-            assert arrows == 0, (arrows,)
-
-            was_pack = terminal_byte_packets[-1]
-            was_pack_kdata = was_pack.to_bytes()
-            if was_pack_kdata in arrows_kdata_tuple:  # like not ⎋ [ ↓
-
-                self.arrows += 1
-
-                (y, x) = (row_y, column_x)
-                if was_pack_kdata == b"\033[A":
-                    y += 1  # goes up, not down
-                elif was_pack_kdata == b"\033[B":
-                    y -= 1  # goes up, not down
-                elif was_pack_kdata == b"\033[C":
-                    x -= 1  # goes left, not right
-                elif was_pack_kdata == b"\033[D":
-                    x += 1  # goes right, not left
-
-                self.arrow_row_y = y
-                self.arrow_column_x = x
-
-        while (not pack.text) and (not pack.closed) and (not bt.extras):
-
-            kdata = pack.to_bytes()
-            # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
-            if kdata == b"\033O":  # ⎋⇧O for Vim
-                break
-
-            n += 1
-            bt.close_byte_pack_if(pack, timeout=None)
-
-        # Succeed
-
-        return (pack, n)
-
-        # todo: log & echo the Keyboard Bytes as they arrive, stop waiting for whole Packet
-
-    def read_arrows_as_byte_packet(self) -> TerminalBytePacket:
-        """Take Slow-after-Arrow-Burst as a ⌥ Mouse Release, with never a Press"""
-
-        arrow_row_y = self.arrow_row_y
-        arrow_column_x = self.arrow_column_x
-        arrow_yx = (arrow_row_y, arrow_column_x)
-
-        pt = self.proxy_terminal
-
-        assert CUP_Y_X == "\033[" "{};{}" "H"
-
-        yx = pt.proxy_read_row_y_column_x()
-        (row_y, column_x) = yx
-
-        cup = f"\033[{arrow_row_y};{arrow_column_x}H"
-        self.write(f"\033[{arrow_row_y};{arrow_column_x}H")
-        after_write_yx = (pt.row_y, pt.column_x)
-
-        assert after_write_yx == arrow_yx, (after_write_yx, arrow_yx, yx, cup)
-
-        option_f = int("0b01000", base=0)  # f = 0b⌃⌥⇧00
-        ktext = f"\033[<{option_f};{column_x};{row_y}m"
-        kdata = ktext.encode()
-
-        pack = TerminalBytePacket(kdata)
-
-        return pack
-
-        # todo6: Undo the Arrow Burst after making it a ⌥ Mouse Release of the ⎋[m kind
-        # todo6: Debug why Arrow Burst buttons after the first frequently don't work, if still so?
-
-    def do_write_spacebar(self) -> None:
-        """Write 1 Space"""
-
-        self.write(" ")
-
-    def do_write_kdata_as_sdata(self, kdata: bytes) -> None:
-        """Write the Keyboard Bytes looped back to the Screen"""
-
-        sdata = kdata
-        stext = sdata.decode()  # may raise UnicodeDecodeError
-
-        self.write(stext)
-
-    def do_replacing_one_kdata(self) -> None:
-        """Start replacing, quote 1 Keyboard Chord, then start inserting"""
-
-        self.do_replacing_start()  # Vim ⇧R
-        self.do_quote_one_kdata()  # Emacs ⌃Q  # Vim ⌃V
-        self.do_inserting_start()  # Vim I
-
-        # Vim R
-
-    def do_quote_one_kdata(self) -> None:
-        """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
-
-        (pack, n) = self.read_one_pack()
-
-        kdata = pack.to_bytes()
-        self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
-
-        # Emacs ⌃Q  # Vim ⌃V
-
-    def do_assert_false(self) -> None:
-        """Assert False"""
-
-        # self.print("do_assert_false")
-
-        assert False
-
-        # Vim ⇧Q  # (traditionally swaps Ex Key Bindings in place of Vim Key Bindings)
-
-    def do_raise_system_exit(self) -> None:
-        """Raise SystemExit"""
-
-        raise SystemExit()
-
-        # Emacs ⎋ X revert-buffer Return ⌃X ⌃C
-        # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
-        # Vim ⇧Z⇧Q
+        # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
 
     #
     # Reply to Emacs & Vim Keyboard Chords
@@ -1664,7 +1672,6 @@ class ScreenEditor:
 
         pt = self.proxy_terminal
         row_y = pt.row_y
-        x_width = pt.x_width
         writes_by_y_x = pt.writes_by_y_x
         terminal_byte_packets = self.terminal_byte_packets
 
@@ -1693,7 +1700,7 @@ class ScreenEditor:
 
         assert pt.column_x == x, (pt.column_x, x)
 
-        # Emacs ⌃E  # Vim ⇧$
+        # Emacs ⌃E  # Vim ⇧$  # todo9: Leftmost when Row Empty, but repeat for Rightmost & Middle
 
     def do_column_leap_rightmost_inserting_start(self) -> None:
         """Leap to the Rightmost Column, and Start Inserting"""
@@ -2251,11 +2258,11 @@ class ScreenEditor:
         # todo4: find an Italic that works at ⎋[3M or somewhere
 
     #
-    # Eval some Keycaps
+    # Eval some Mouse Verbs
     #
 
     def mouse_verb_to_write_sdata(self, verb: str) -> bool:
-        """Eval some Keycaps"""
+        """Eval some Mouse Verbs"""
 
         if self.mouse_verb_to_push_kdata(verb):
             return True
@@ -2460,10 +2467,6 @@ class ScreenEditor:
 
         return (r, g, b)
 
-    #
-    # Write out Random Words of Jabberwocky
-    #
-
     def mouse_verb_do_jabberwocky(self, verb: str) -> bool:
         """Write out a Random Word of Jabberwocky"""
 
@@ -2518,7 +2521,7 @@ class SnuckLife:
         self.dx = dx
         self.sprites = sprites
 
-    def play_snuck_life(self) -> None:
+    def play_snuck_life(self) -> None:  # todo9: stop replacing Unwritten Chars w Colored Spaces
         """Play Conway's Game-of-Life"""
 
         sprites = self.sprites
@@ -3093,6 +3096,8 @@ class ProxyTerminal:
 
     def proxy_y_x_text_print(self, y: int, x: int, text: str) -> None:
         """Write Some Text Chars at one Y X Place"""
+
+        assert text.isprintable(), (text,)  # doesn't duck typing
 
         assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
@@ -3962,7 +3967,7 @@ class ProxyTerminal:
 
 #
 
-# todo9: paste/ sum a column of ints, floats
+# todo9: paste/ sum a column of ints, floats - not so \r between  ⎋[200~ and ⎋[201~
 
 # todo8: Press Return inside a Button to click it
 #
