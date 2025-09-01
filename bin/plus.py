@@ -895,7 +895,7 @@ class ScreenEditor:
         if 32 in autolaunchers:
             y_height = pt.proxy_read_y_height()
             self.write(y_height * "\n")  # scrolls the Screen into Scrollback
-            self.write("\033[H")
+            self.write("\033[H")  # for .play_screen_editor
 
             # no destructive wipe of the Rows above via ⎋[2⇧J Screen Erase
 
@@ -1052,7 +1052,7 @@ class ScreenEditor:
         elif t1t0 >= arrows_timeout:
             self.arrows = 0  # written only by Init & this Def
         elif arrows > 0:
-            self.arrows += 1
+            self.arrows += 1  # written only by Init & this Def
         else:
             assert arrows == 0, (arrows,)
 
@@ -1060,7 +1060,7 @@ class ScreenEditor:
             was_pack_kdata = was_pack.to_bytes()
             if was_pack_kdata in arrows_kdata_tuple:  # like not ⎋ [ ↓
 
-                self.arrows += 1
+                self.arrows += 1  # written only by Init & this Def
 
                 (y, x) = (row_y, column_x)
                 if was_pack_kdata == b"\033[A":
@@ -1107,7 +1107,7 @@ class ScreenEditor:
         (row_y, column_x) = yx
 
         cup = f"\033[{arrow_row_y};{arrow_column_x}H"
-        self.write(f"\033[{arrow_row_y};{arrow_column_x}H")
+        self.write(f"\033[{arrow_row_y};{arrow_column_x}H")  # for .read_arrows_as_byte_packet
         after_write_yx = (pt.row_y, pt.column_x)
 
         assert after_write_yx == arrow_yx, (after_write_yx, arrow_yx, yx, cup)
@@ -1128,14 +1128,14 @@ class ScreenEditor:
 
         terminal_byte_packets = self.terminal_byte_packets
 
-        depth = 0
+        kcount = 0
         kdata = terminal_byte_packets[-1].to_bytes()
         for pack in reversed(terminal_byte_packets):
             if pack.to_bytes() != kdata:  # todo: equality between TerminalBytePacket's
                 break
-            depth += 1
+            kcount += 1
 
-        return depth  # fed by 'terminal_byte_packets.append(pack)' inside .read_eval_print_once
+        return kcount  # fed by 'terminal_byte_packets.append(pack)' inside .read_eval_print_once
 
     def reply_to_kdata(self, pack: TerminalBytePacket, n: int) -> None:
         """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
@@ -1186,6 +1186,11 @@ class ScreenEditor:
             return
 
             # todo2: stop wrongly passing through multibyte Control Chars
+
+        # Emulate famous Esc Byte Pairs
+
+        if self._take_csi_row_1_column_1_leap_if_(kdata):  # ⎋L
+            return
 
         # Pass-Through, or emulate, the famous Control Byte Sequences
 
@@ -1278,22 +1283,21 @@ class ScreenEditor:
     def take_pack_n_kdata_if(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
         """Emulate or write KData Control Sequence and return True, else return False"""
 
-        # Emulate famous Esc Byte Pairs
+        if pack.head != b"\033[":  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+            return False
 
-        if self._take_csi_row_1_column_1_leap_if_(kdata):  # ⎋L
-            return True
+        if not pack.tail:
+            return False
 
         # Emulate famous Csi Control Byte Sequences,
         # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧X⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
         # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
 
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-
         csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
         csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
 
-        csi_famous = csi and pack.tail and (pack.tail in csi_timeless_tails)
-        if (n > 1) and csi and pack.tail and (pack.tail in csi_slow_tails):
+        csi_famous = pack.tail in csi_timeless_tails
+        if (n > 1) and (pack.tail in csi_slow_tails):
             csi_famous = True
 
         # Shrug off a Mouse Press if quick
@@ -1337,7 +1341,7 @@ class ScreenEditor:
 
         return True
 
-        # todo9: read the Csi Sequence more deeply to pass through only what we know works
+        # todo9: pass the Csi Sequence through only after test at platform
 
     def _take_csi_cols_delete_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧~ cols-delete"""
@@ -1662,16 +1666,42 @@ class ScreenEditor:
     def do_column_leap_leftmost(self) -> None:
         """Leap to the Leftmost Column"""
 
-        assert CR == "\r"
-        self.write("\r")
+        kcount = self.klog_to_kcount()  # ⌃A ⌃A ⌃A  # 0 0 0
 
-        # Emacs ⌃A  # Vim 0
+        pt = self.proxy_terminal
+        row_y = pt.row_y
+        writes_by_y_x = pt.writes_by_y_x
+        x_width = pt.x_width
+
+        writes_by_x = writes_by_y_x[row_y] if (row_y in writes_by_y_x.keys()) else dict()
+
+        assert CR == "\r"
+        assert CHA_X == "\033[" "{}" "G"
+
+        if (kcount % 3) == 1:  # ⌃A Far West of Row on Screen
+            self.write("\r")
+            return
+
+        if (kcount % 3) == 2:  # ⌃A ⌃A Westmost Mirrored Non-Space
+            x = X1
+            while (x in writes_by_x) and (writes_by_x[x][-1] == " "):
+                x += 1
+            self.write(f"\033[{x}G")
+            return
+
+        x = (x_width // 2) + (x_width % 2)  # ⌃A ⌃A ⌃A Middle of Row on Screen
+        self.write(f"\033[{x}G")
+
+        # Emacs ⌃A  # Vim 0  # Also ⌃A ⌃A ⌃A  # Also 0 0 0
 
     def do_column_leap_rightmost(self) -> None:
         """Leap to the Rightmost Column"""
 
+        kcount = self.klog_to_kcount()  # ⌃E ⌃E ⌃E  # ⇧$ ⇧$ ⇧$
+
         pt = self.proxy_terminal
         row_y = pt.row_y
+        x_width = pt.x_width
         writes_by_y_x = pt.writes_by_y_x
         terminal_byte_packets = self.terminal_byte_packets
 
@@ -1688,19 +1718,26 @@ class ScreenEditor:
         # Leap to last, or beyond it
 
         writes_by_x = writes_by_y_x[row_y]
-        assert writes_by_x, (writes_by_x,)
-
-        max_x = max(writes_by_x.keys())
+        max_x = max(writes_by_x.keys()) if writes_by_x else 0
 
         pack = terminal_byte_packets[-1]
         kdata = pack.to_bytes()
+
         x = max_x if (kdata == b"\033$") else max_x + 1  # vs b"\x05"
+        x = x if x else X1
+
+        if (kcount % 3) == 1:  # ⌃E Far East of Row Mirror
+            pass
+        elif (kcount % 3) == 2:  # ⌃E ⌃E Far East of Row on Screen
+            x = x_width
+        else:  # ⌃E ⌃E ⌃E Middle of Row on Screen
+            x = (x_width // 2) + (x_width % 2)
 
         self.write(f"\033[{x}G")
 
         assert pt.column_x == x, (pt.column_x, x)
 
-        # Emacs ⌃E  # Vim ⇧$  # todo9: Leftmost when Row Empty, but repeat for Rightmost & Middle
+        # Emacs ⌃E  # Vim ⇧$  # Also ⌃E ⌃E ⌃E  # Also ⇧$ ⇧$ ⇧$
 
     def do_column_leap_rightmost_inserting_start(self) -> None:
         """Leap to the Rightmost Column, and Start Inserting"""
@@ -1774,9 +1811,9 @@ class ScreenEditor:
         # Emacs ⌃O when leftmost
 
     def do_row_leap_first_column_leftmost(self) -> None:
-        """Leap to the Leftmost Column of the First Row"""
+        """Leap to the Westmost Column of Northmost Row on Screen, etc"""
 
-        depth = self.klog_to_kcount()
+        kcount = self.klog_to_kcount()  # ⇧H ⇧H ⇧H
 
         pt = self.proxy_terminal
         bt = pt.bytes_terminal
@@ -1786,30 +1823,22 @@ class ScreenEditor:
 
         assert CUP_Y1_X1 == "\033[" "H"
 
-        if (depth % 3) == 1:
-            self.write("\033[H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-        elif (depth % 3) == 2:
+        if (kcount % 3) == 1:  # ⇧H Westmost Column of Northmost Row on Screen
+            self.write("\033[H")  # for Vim ⇧H
+        elif (kcount % 3) == 2:  # ⇧H ⇧H Center Column of Northmost Row on Screen
             x = mid_width
-            self.write(f"\033[1;{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-        else:
-            self.write("\033[1;31200H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
+            self.write(f"\033[1;{x}H")  # for Also ⇧H ⇧H
+        else:  # ⇧H ⇧H ⇧H Eastmost Column of Northmost Row on Screen
+            self.write("\033[1;32100H")  # for Also ⇧H ⇧H ⇧H
 
-        if (depth % 3) == 1:
-            (y, x) = (Y1, X1)  # todo: send "H" in place of "1;1H"
-        elif (depth % 3) == 2:
-            (y, x) = (Y1, mid_width)
-        else:
-            (y, x) = (Y1, 31200)
+        # Vim ⇧H  # Also ⇧H ⇧H  # Also ⇧H ⇧H ⇧H
 
-        self.write(f"\033[{y};{x}H")  # for .do_row_leap_first_column_leftmost  # Vim ⇧H
-        # Vim ⇧H
-
-        # todo3: Leap to First Mirror Row, if Column Mirrored
+        # todo3: Leap to First Mirrored Row on Screen
 
     def do_row_leap_last_column_leftmost(self) -> None:
-        """Leap to the Leftmost Column of the Last Row"""
+        """Leap to the Westmost Column of Southmost Row on Screen, etc"""
 
-        depth = self.klog_to_kcount()
+        kcount = self.klog_to_kcount()  # ⇧L ⇧L ⇧L
 
         pt = self.proxy_terminal
         bt = pt.bytes_terminal
@@ -1820,23 +1849,22 @@ class ScreenEditor:
         assert _PN_MAX_32100_ == 32100
         assert CUP_Y_X1 == "\033[" "{}" "H"
 
-        if (depth % 3) == 1:
-            (y, x) = (32100, X1)  # todo: send "H" in place of ";1H"
-        elif (depth % 3) == 2:
-            (y, x) = (32100, mid_width)
-        else:
-            (y, x) = (32100, 31200)
+        if (kcount % 3) == 1:  # ⇧L Westmost Column of Southmost Row on Screen
+            self.write("\033[32100H")  # for Vim ⇧L
+        elif (kcount % 3) == 2:  # ⇧L ⇧L Center Column of Southmost Row on Screen
+            x = mid_width
+            self.write(f"\033[32100;{x}H")  # for Also ⇧L ⇧L
+        else:  # ⇧L ⇧L Eastmost Column of Southmost Row on Screen
+            self.write("\033[32100;32100H")  # for Also ⇧L ⇧L ⇧L
 
-        self.write(f"\033[{y};{x}H")  # for .do_row_leap_last_column_leftmost  # Vim ⇧L
+        # Vim ⇧L  # Also ⇧L ⇧L  # Also ⇧L ⇧L ⇧L
 
-        # todo3: Leap to Last Mirror Row, if Column Mirrored
-
-        # Vim ⇧L
+        # todo3: Leap to Last Mirrored Row on Screen
 
     def do_row_leap_middle_column_leftmost(self) -> None:
-        """Leap to the Leftmost Column of the Middle Row"""
+        """Leap to the Westmost Column of Center Row on Screen, etc"""
 
-        depth = self.klog_to_kcount()
+        kcount = self.klog_to_kcount()  # ⇧M ⇧M ⇧M
 
         pt = self.proxy_terminal
         y_height = pt.y_height
@@ -1848,16 +1876,16 @@ class ScreenEditor:
         assert CUP_Y_X1 == "\033[" "{}" "H"
         assert _PN_MAX_32100_ == 32100
 
-        if (depth % 3) == 1:
-            (y, x) = (mid_height, X1)  # todo: send "H" in place of ";1H"
-        elif (depth % 3) == 2:
-            (y, x) = (mid_height, mid_width)
-        else:
-            (y, x) = (mid_height, 31200)
+        if (kcount % 3) == 1:  # ⇧M Westmost Column of Center RowWestmost Column of Center Row
+            self.write(f"\033[{mid_height}H")  # for Vim ⇧M
+        elif (kcount % 3) == 2:  # ⇧M ⇧M Center Column of Center Row on Screen
+            self.write(f"\033[{mid_height};{mid_width}H")  # for Also ⇧M ⇧M
+        else:  # ⇧M ⇧M ⇧M Eastmost Column of Center Row on Screen
+            self.write(f"\033[{mid_height};32100H")  # for Also ⇧M ⇧M ⇧M
 
-        self.write(f"\033[{y};{x}H")  # for .do_row_leap_middle_column_leftmost  # Vim ⇧M
+        # Vim ⇧M  # Also ⇧M ⇧M  # Also ⇧M ⇧M ⇧M
 
-        # Vim ⇧M
+        # todo3: Leap to Middle Mirrored Row on Screen
 
     def do_row_tail_erase(self) -> None:
         """Erase from the Cursor to the Tail of the Row"""
@@ -2050,7 +2078,7 @@ class ScreenEditor:
         print_gaps = True
         if print_gaps:
 
-            self.write("\033[32100H")
+            self.write("\033[32100H")  # for .do_kdata_fn_f8
             self.write("\033[A")
             self.print("(((", end=" ")
 
@@ -2952,7 +2980,7 @@ class ProxyTerminal:
 
         # Restore the Terminal Setup
 
-        self.write_out(f"\033[{row_y};{column_x}H")
+        self.write_out(f"\033[{row_y};{column_x}H")  # for .write_screen
 
         for toggle in toggles:
             self.write_out(toggle)  # todo7: stop redrawing Toggles unnecessarily
@@ -4116,7 +4144,7 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
                 pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
                 color_picker_pns.append(pn)
 
-                se.write(f"\033[{hy};{x}H")
+                se.write(f"\033[{hy};{x}H")  # for .color_picker_plot
                 se.write(f"\033[38;5;{pn}m")
                 # se.write(str(g6))
                 se.write(glyph)
@@ -4150,7 +4178,7 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
                 pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
                 color_picker_pns.append(pn)
 
-                se.write(f"\033[{hy};{x}H")
+                se.write(f"\033[{hy};{x}H")  # for .color_picker_plot
                 se.write(f"\033[38;5;{pn}m")
                 # se.write(str(g6))
                 se.write(glyph)
