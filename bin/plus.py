@@ -929,7 +929,7 @@ class ScreenEditor:
         # self.print("Goodbye from Screen Editor")
 
     def read_eval_print_once(self) -> None:
-        """Fetch and time one Keyboard Chord, and then quit, else reply to it"""
+        """Fetch & time & log 1 whole TerminalBytePacket, and then quit, else reply to it"""
 
         # Quit in several ways
 
@@ -955,7 +955,7 @@ class ScreenEditor:
         # todo2: Maybe or maybe-not quit after ⌃D to let it be char-delete
 
     def read_one_pack(self) -> tuple[TerminalBytePacket, int]:
-        """Block till read & time & log of one Whole TerminalBytePacket"""
+        """Fetch & time & log 1 whole TerminalBytePacket"""
 
         terminal_byte_packets = self.terminal_byte_packets
 
@@ -1009,7 +1009,7 @@ class ScreenEditor:
         return (pack, n)
 
     def read_arrows_or_one_pack(self) -> tuple[TerminalBytePacket, int]:
-        """Block till read of 1 Whole TerminalBytePacket, all at once, or as parts"""
+        """Fetch 1 Whole TerminalBytePacket, all at once, or as parts"""
 
         terminal_byte_packets = self.terminal_byte_packets
         arrows = self.arrows
@@ -1138,10 +1138,12 @@ class ScreenEditor:
         return kcount  # fed by 'terminal_byte_packets.append(pack)' inside .read_eval_print_once
 
     def reply_to_kdata(self, pack: TerminalBytePacket, n: int) -> None:
-        """Reply to 1 Keyboard Chord Input, maybe differently if n == 1 quick, or slow"""
+        """Reply to 1 whole TerminalBytePacket, differently if n == 1 quick, or slow"""
 
         func_by_str = self.func_by_str
         loopable_kdata_tuple = self.loopable_kdata_tuple
+
+        kcap_by_kchars = KCAP_BY_KCHARS
 
         # Append to the __pycache__/k.keyboard Keylogger Keylogging File
 
@@ -1160,42 +1162,40 @@ class ScreenEditor:
 
             return
 
+        # Write the KData as Keycaps, when it is Keycaps and not Func Def
+
         if kdata in loopable_kdata_tuple:
-
             self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
-
             return
-
-        # Write the KData, but as Keycaps, when it is a Keycap but not a Func Def
 
         kchars = kdata.decode()  # may raise UnicodeDecodeError
-        if kchars in KCAP_BY_KCHARS.keys():  # already handled above
-
+        if kchars in kcap_by_kchars.keys():
             if (n == 1) or (pack.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
-
                 self.print_kcaps_plus(pack)
-
                 return
 
-        # Pass through 1 Unicode Char
+        # Pass through Unicode Chars
 
         if pack.text:
-
             self.write(pack.text)
-
             return
 
-            # todo2: stop wrongly passing through multibyte Control Chars
+        # Emulate the famous Esc Byte Pairs
 
-        # Emulate famous Esc Byte Pairs
-
-        if self._take_csi_row_1_column_1_leap_if_(kdata):  # ⎋L
+        if self._take_esc_row_1_column_1_leap_if_(kdata):  # ⎋L
             return
 
-        # Pass-Through, or emulate, the famous Control Byte Sequences
+        # Emulate or pass-through the famous Csi Control Byte Sequences
 
-        if self.take_pack_n_kdata_if(pack, n=n, kdata=kdata):
+        if self._take_csi_pack_n_kdata_if_(pack, n=n, kdata=kdata):
+            return
 
+        # Reply to Mouse Press & Release
+
+        if self._take_csi_mouse_press_if_(pack, n=n):
+            return
+
+        if self._take_csi_mouse_release_if_(pack):
             return
 
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
@@ -1239,6 +1239,22 @@ class ScreenEditor:
         # todo3: Emacs ⌃M and ⌃K need the Rows mirrored, as does Vim I ⌃M
         # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
 
+    def _take_esc_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
+        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
+
+        assert CUP_Y1_X1 == "\033[" "H"
+
+        if kdata != b"\033" b"l":
+            return False
+
+        tprint(f"{kdata=}  # _take_esc_row_1_column_1_leap_if_")
+
+        self.write("\033[H")  # for ⎋L
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋L
+
     def do_replacing_one_kdata(self) -> None:
         """Start replacing, quote 1 Keyboard Chord, then start inserting"""
 
@@ -1275,266 +1291,6 @@ class ScreenEditor:
         # Emacs ⎋ X revert-buffer Return ⌃X ⌃C
         # Vim ⌃C ⌃L ⇧: Q ⇧! Return  # after:  vim -y
         # Vim ⇧Z⇧Q
-
-    #
-    # Emulate Csi Screen Writes missing from some or many Platforms
-    #
-
-    def take_pack_n_kdata_if(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
-        """Emulate or write KData Control Sequence and return True, else return False"""
-
-        if pack.head != b"\033[":  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-            return False
-
-        if not pack.tail:
-            return False
-
-        # Emulate famous Csi Control Byte Sequences,
-        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧X⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
-        # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
-
-        csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
-        csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
-
-        csi_famous = pack.tail in csi_timeless_tails
-        if (n > 1) and (pack.tail in csi_slow_tails):
-            csi_famous = True
-
-        # Shrug off a Mouse Press if quick
-        # Reply to a Mouse Release, no matter if slow or quick
-        # And kick back on anything else that's not Csi Famous
-
-        if not csi_famous:
-            if self._take_csi_mouse_press_if_(pack, n=n):
-                return True
-            if self._take_csi_mouse_release_if_(pack):
-                return True
-
-            return False
-
-        # Emulate the Csi Famous that don't work so well when passed through
-
-        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I
-            return True
-
-        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S
-            return True
-
-        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T
-            return True
-
-        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
-            return True
-
-        if pack.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
-            self._take_csi_cols_insert_if_(pack)
-            return True
-
-        if pack.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
-            self._take_csi_cols_delete_if_(pack)
-            return True
-
-        # Pass-through the .csi_slow_tails when slow.
-        # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
-
-        self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
-
-        return True
-
-        # todo9: pass the Csi Sequence through only after test at platform
-
-    def _take_csi_cols_delete_if_(self, pack: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧~ cols-delete"""
-
-        pt = self.proxy_terminal
-        bt = pt.bytes_terminal
-
-        assert DCH_X == "\033[" "{}" "P"
-        assert VPA_Y == "\033[" "{}" "d"
-        assert DECDC_X == "\033[" "{}" "'~"
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and ((pack.back + pack.tail) == b"'~")):
-            return False
-
-        tprint(f"⎋['⇧~ cols-delete {pack=}   # _take_csi_cols_delete_if_")
-
-        pn_int = int(pack.neck) if pack.neck else PN1
-        pn = pn_int  # accepts pn = 0
-
-        row_y = pt.proxy_read_row_y()
-        y_height = bt.read_y_height()
-
-        for y in range(1, y_height + 1):
-            self.write(f"\033[{y}d")  # for .columns_delete_n
-            self.write(f"\033[{pn}P")  # for .columns_delete_n
-
-        self.write(f"\033[{row_y}d")  # for .columns_delete_n
-
-        return True
-
-        # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
-
-    def _take_csi_cols_insert_if_(self, pack: TerminalBytePacket) -> bool:
-        """Emulate ⎋['⇧} cols-insert"""
-
-        pt = self.proxy_terminal
-        bt = pt.bytes_terminal
-
-        assert ICH_X == "\033[" "{}" "@"
-        assert VPA_Y == "\033[" "{}" "d"
-        assert DECDC_X == "\033[" "{}" "'~"
-        assert DECIC_X == "\033[" "{}" "'}}"
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and ((pack.back + pack.tail) == b"'}")):
-            return False
-
-        tprint(f"⎋['⇧}} cols-insert {pack=}   # _take_csi_cols_insert_if_")
-
-        pn_int = int(pack.neck) if pack.neck else PN1
-        pn = pn_int  # accepts pn = 0
-
-        row_y = pt.proxy_read_row_y()
-        y_height = bt.read_y_height()
-
-        for y in range(1, y_height + 1):
-            self.write(f"\033[{y}d")  # for .columns_delete_n
-            self.write(f"\033[{pn}@")  # for .columns_delete_n
-
-        self.write(f"\033[{row_y}d")  # for .columns_delete_n
-
-        return True
-
-        # macOS Terminal & gCloud Shell lack ⎋['⇧} cols-insert
-
-    def _take_csi_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
-        """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
-
-        assert CUP_Y1_X1 == "\033[" "H"
-
-        if kdata != b"\033" b"l":
-            return False
-
-        tprint(f"{kdata=}  # _take_csi_row_1_column_1_leap_if_")
-
-        self.write("\033[H")  # for ⎋L
-
-        return True
-
-        # gCloud Shell lacks macOS ⎋L
-
-    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
-        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
-
-        assert VPA_Y == "\033[" "{}" "d"
-
-        if kdata != b"\033[d":
-            return False
-
-        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
-
-        self.write("\033[1d")  # carefully not empty Parameters via "\033[d"
-
-        return True
-
-        # gCloud Shell needs ⎋[1D for ⎋[D
-
-    def _take_csi_rows_down_if_(self, pack: TerminalBytePacket) -> bool:
-        """Emulate Scroll Down [Insert North Lines]"""
-
-        assert DECSC == "\033" "7"
-        assert DECRC == "\033" "8"
-
-        assert CUU_Y == "\033[" "{}" "A"
-        assert IL_Y == "\033[" "{}" "L"
-        assert SD_Y == "\033[" "{}" "T"
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"T")):
-            return False
-
-        pn_int = int(pack.neck) if pack.neck else PN1
-        pn = pn_int if pn_int else PN1
-
-        if sys_platform_darwin:
-            if not pn_int:
-                return True
-
-        self.write("\0337")
-        self.write("\033[32100A")
-        self.write(f"\033[{pn}L")
-        self.write("\0338")
-
-        return True
-
-        # gCloud Shell lacks macOS ⎋[{}⇧T
-
-    def _take_csi_rows_up_if_(self, pack: TerminalBytePacket) -> bool:
-        """Emulate Scroll Up [Insert South Lines]"""
-
-        assert LF == "\n"
-
-        assert DECSC == "\033" "7"
-        assert DECRC == "\033" "8"
-
-        assert CUD_Y == "\033[" "{}" "B"
-        assert SU_Y == "\033[" "{}" "S"
-        assert _PN_MAX_32100_ == 32100
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"S")):
-            return False
-
-        pn_int = int(pack.neck) if pack.neck else PN1
-        pn = pn_int if pn_int else PN1
-
-        if sys_platform_darwin:
-            if not pn_int:
-                return True
-
-        self.write("\0337")
-        self.write("\033[32100B")
-        self.write(pn * "\n")
-        self.write("\0338")
-
-        return True
-
-        # gCloud Shell lacks macOS ⎋[{}⇧S
-
-    def _take_csi_tab_right_leap_if_(self, pack: TerminalBytePacket) -> bool:
-        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
-
-        pt = self.proxy_terminal
-        column_x = pt.column_x
-
-        bt = pt.bytes_terminal
-        x_width = bt.read_x_width()
-
-        assert HT == "\t"
-        assert CHA_X == "\033[" "{}" "G"
-        assert CHT_X == "\033[" "{}" "I"
-
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"I")):
-            return False
-
-        tprint(f"⎋[...I {pack=}  # _take_csi_tab_right_leap_if_")
-
-        pn_int = int(pack.neck) if pack.neck else PN1
-        pn = pn_int if pn_int else PN1
-
-        if sys_platform_darwin:
-            if not pn_int:
-                return True
-
-        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
-        x = min(x_width, tab_stop_n)
-        self.write(f"\033[{x}G")  # does Not fill with Background Color
-
-        return True
-
-        # gCloud Shell lacks ⎋[ {}I
 
     #
     # Reply to Mouse Strokes
@@ -1598,6 +1354,246 @@ class ScreenEditor:
         return True
 
         # todo: support 1005 1015 Mice, not just 1006 and Arrows Burst
+
+    #
+    # Emulate Csi Screen Writes missing from some or many Platforms
+    #
+
+    def _take_csi_pack_n_kdata_if_(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
+        """Emulate or write KData Control Sequence and return True, else return False"""
+
+        if pack.head != b"\033[":  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+            return False
+
+        if not pack.tail:
+            return False
+
+        # Emulate famous Csi Control Byte Sequences,
+        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧X⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
+        # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
+
+        csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
+        csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
+
+        csi_famous = pack.tail in csi_timeless_tails
+        if (n > 1) and (pack.tail in csi_slow_tails):
+            csi_famous = True
+
+        # Shrug off a Mouse Press if quick
+        # Reply to a Mouse Release, no matter if slow or quick
+        # And kick back on anything else that's not Csi Famous
+
+        if not csi_famous:
+            return False
+
+        # Emulate the Csi Famous that don't work so well when passed through
+
+        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I
+            return True
+
+        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S
+            return True
+
+        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T
+            return True
+
+        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
+            return True
+
+        if pack.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
+            self._take_csi_cols_insert_if_(pack)
+            return True
+
+        if pack.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
+            self._take_csi_cols_delete_if_(pack)
+            return True
+
+        # Pass-through the .csi_slow_tails when slow.
+        # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
+
+        self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
+
+        return True
+
+        # todo9: pass the Csi Sequence through only after test at platform
+        # todo2: stop wrongly passing through multibyte Control Chars
+
+    def _take_csi_tab_right_leap_if_(self, pack: TerminalBytePacket) -> bool:
+        """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
+
+        pt = self.proxy_terminal
+        column_x = pt.column_x
+
+        bt = pt.bytes_terminal
+        x_width = bt.read_x_width()
+
+        assert HT == "\t"
+        assert CHA_X == "\033[" "{}" "G"
+        assert CHT_X == "\033[" "{}" "I"
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"I")):
+            return False
+
+        tprint(f"⎋[...I {pack=}  # _take_csi_tab_right_leap_if_")
+
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int if pn_int else PN1
+
+        if sys_platform_darwin:
+            if not pn_int:
+                return True
+
+        tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
+        x = min(x_width, tab_stop_n)
+        self.write(f"\033[{x}G")  # does Not fill with Background Color
+
+        return True
+
+        # gCloud Shell lacks ⎋[ {}I
+
+    def _take_csi_rows_up_if_(self, pack: TerminalBytePacket) -> bool:
+        """Emulate Scroll Up [Insert South Lines]"""
+
+        assert LF == "\n"
+
+        assert DECSC == "\033" "7"
+        assert DECRC == "\033" "8"
+
+        assert CUD_Y == "\033[" "{}" "B"
+        assert SU_Y == "\033[" "{}" "S"
+        assert _PN_MAX_32100_ == 32100
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"S")):
+            return False
+
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int if pn_int else PN1
+
+        if sys_platform_darwin:
+            if not pn_int:
+                return True
+
+        self.write("\0337")
+        self.write("\033[32100B")
+        self.write(pn * "\n")
+        self.write("\0338")
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋[{}⇧S
+
+    def _take_csi_rows_down_if_(self, pack: TerminalBytePacket) -> bool:
+        """Emulate Scroll Down [Insert North Lines]"""
+
+        assert DECSC == "\033" "7"
+        assert DECRC == "\033" "8"
+
+        assert CUU_Y == "\033[" "{}" "A"
+        assert IL_Y == "\033[" "{}" "L"
+        assert SD_Y == "\033[" "{}" "T"
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and (pack.tail == b"T")):
+            return False
+
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int if pn_int else PN1
+
+        if sys_platform_darwin:
+            if not pn_int:
+                return True
+
+        self.write("\0337")
+        self.write("\033[32100A")
+        self.write(f"\033[{pn}L")
+        self.write("\0338")
+
+        return True
+
+        # gCloud Shell lacks macOS ⎋[{}⇧T
+
+    def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
+        """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
+
+        assert VPA_Y == "\033[" "{}" "d"
+
+        if kdata != b"\033[d":
+            return False
+
+        tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
+
+        self.write("\033[1d")  # carefully not empty Parameters via "\033[d"
+
+        return True
+
+        # gCloud Shell needs ⎋[1D for ⎋[D
+
+    def _take_csi_cols_insert_if_(self, pack: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧} cols-insert"""
+
+        pt = self.proxy_terminal
+        bt = pt.bytes_terminal
+
+        assert ICH_X == "\033[" "{}" "@"
+        assert VPA_Y == "\033[" "{}" "d"
+        assert DECDC_X == "\033[" "{}" "'~"
+        assert DECIC_X == "\033[" "{}" "'}}"
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((pack.back + pack.tail) == b"'}")):
+            return False
+
+        tprint(f"⎋['⇧}} cols-insert {pack=}   # _take_csi_cols_insert_if_")
+
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int  # accepts pn = 0
+
+        row_y = pt.proxy_read_row_y()
+        y_height = bt.read_y_height()
+
+        for y in range(1, y_height + 1):
+            self.write(f"\033[{y}d")  # for .columns_delete_n
+            self.write(f"\033[{pn}@")  # for .columns_delete_n
+
+        self.write(f"\033[{row_y}d")  # for .columns_delete_n
+
+        return True
+
+        # macOS Terminal & gCloud Shell lack ⎋['⇧} cols-insert
+
+    def _take_csi_cols_delete_if_(self, pack: TerminalBytePacket) -> bool:
+        """Emulate ⎋['⇧~ cols-delete"""
+
+        pt = self.proxy_terminal
+        bt = pt.bytes_terminal
+
+        assert DCH_X == "\033[" "{}" "P"
+        assert VPA_Y == "\033[" "{}" "d"
+        assert DECDC_X == "\033[" "{}" "'~"
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if not (csi and ((pack.back + pack.tail) == b"'~")):
+            return False
+
+        tprint(f"⎋['⇧~ cols-delete {pack=}   # _take_csi_cols_delete_if_")
+
+        pn_int = int(pack.neck) if pack.neck else PN1
+        pn = pn_int  # accepts pn = 0
+
+        row_y = pt.proxy_read_row_y()
+        y_height = bt.read_y_height()
+
+        for y in range(1, y_height + 1):
+            self.write(f"\033[{y}d")  # for .columns_delete_n
+            self.write(f"\033[{pn}P")  # for .columns_delete_n
+
+        self.write(f"\033[{row_y}d")  # for .columns_delete_n
+
+        return True
+
+        # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
 
     #
     # Reply to Emacs & Vim Keyboard Chords
@@ -1876,7 +1872,7 @@ class ScreenEditor:
         assert CUP_Y_X1 == "\033[" "{}" "H"
         assert _PN_MAX_32100_ == 32100
 
-        if (kcount % 3) == 1:  # ⇧M Westmost Column of Center RowWestmost Column of Center Row
+        if (kcount % 3) == 1:  # ⇧M Westmost Column of Center Row
             self.write(f"\033[{mid_height}H")  # for Vim ⇧M
         elif (kcount % 3) == 2:  # ⇧M ⇧M Center Column of Center Row on Screen
             self.write(f"\033[{mid_height};{mid_width}H")  # for Also ⇧M ⇧M
