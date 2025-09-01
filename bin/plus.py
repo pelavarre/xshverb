@@ -174,10 +174,12 @@ CUF_X = "\033[" "{}" "C"  # CSI 04/03 Cursor [Forward] Right
 CUB_X = "\033[" "{}" "D"  # CSI 04/04 Cursor [Back] Left  # \b is Pn 1
 
 CHA_X = "\033[" "{}" "G"  # CSI 04/07 Cursor Character Absolute  # \r is Pn 1
+HPA_FINAL = "`"  # CSI 06/00 Character Position Absolute (Data / Presentation CHA)
 
 CUP_Y1_X1 = "\033[" "H"  # CSI 04/08 Cursor Position
 CUP_Y_X1 = "\033[" "{}" "H"  # CSI 04/08 Cursor Position
 CUP_Y_X = "\033[" "{};{}" "H"  # CSI 04/08 Cursor Position
+HVP_FINAL = "f"  # CSI 06/06 Character and Line Position (Data / Presentation CUP)
 
 CHT_X = "\033[" "{}" "I"  # CSI 04/09 Cursor Forward [Horizontal] Tabulation  # \t is Pn 1
 
@@ -194,6 +196,8 @@ SD_Y = "\033[" "{}" "T"  # CSI 05/04 Scroll Down [Insert North Lines]
 ECH_X = "\033[" "{}" "X"  # CSI 05/08 Erase Character
 
 CBT_X = "\033[" "{}" "Z"  # CSI 05/10 Cursor Backward Tabulation
+
+REP_X = "\033[" "{}" "b"  # CSI 05/11 Repeat [Preceding Character]
 
 VPA_Y = "\033[" "{}" "d"  # CSI 06/04 Line Position Absolute
 
@@ -910,6 +914,16 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
+        self.print("Try Background Color at macOS Terminal after invisible Tabs")
+        self.write("\033[K")
+        self.print("Also try Chars before Tab")
+        self.write("\033[K")
+        self.print("Also try Chars after Tab")
+
+        self.write("\033[K")
+        self.print()
+
+        self.write("\033[K")
         self.print("<On #500>  <On #050>  <#24 on #005>  <Jabberwocky>  ⎋[M plain")
         self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
@@ -954,6 +968,8 @@ class ScreenEditor:
         # todo2: Quit in many of the Vim ways, including Vim ⇧Z ⇧Q and ⇧Z ⇧Z and ⌃L ⌃C Q ⇧! Return
         # todo2: Maybe or maybe-not quit after ⌃D to let it be char-delete
 
+        # todo3: Vim Q Q ⇧@ Record/ Replay, and ⌃X ⇧( till ⌃C ⇧) and ⌃X E for Emacs
+
     def read_one_pack(self) -> tuple[TerminalBytePacket, int]:
         """Fetch & time & log 1 whole TerminalBytePacket"""
 
@@ -973,7 +989,7 @@ class ScreenEditor:
         # Update the Mirror of the X-Width x Y-Height of the Screen
         # todo9: take subscribers to changes in the the X-Width x Y-Height
         # todo9: call .write_screen for the new portion
-        # todo9: remember a 'todo; to have resize mean clip after all
+        # todo9: remember a 'todo:' to have resize mean clip after all
 
         pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
 
@@ -1170,22 +1186,23 @@ class ScreenEditor:
 
         kchars = kdata.decode()  # may raise UnicodeDecodeError
         if kchars in kcap_by_kchars.keys():
-            if (n == 1) or (pack.tail != b"H"):  # falls-through to pass-through slow ⎋[⇧H CUP_Y_X
+            if (n == 1) or (pack.tail != b"H"):  # falls-through to write-through slow ⎋[⇧H CUP_Y_X
                 self.print_kcaps_plus(pack)
                 return
 
-        # Pass through Unicode Chars
+        # Write-through Unicode Chars
 
         if pack.text:
             self.write(pack.text)
             return
 
-        # Emulate the famous Esc Byte Pairs
+        # Emulate some famous Esc Byte Pairs,
+        # but not the Vim-colliding Pairs ⎋7 ⎋8 ⎋⇧D ⎋⇧E ⎋⇧M that we place behind ⌃Q or ⌃V
 
         if self._take_esc_row_1_column_1_leap_if_(kdata):  # ⎋L
             return
 
-        # Emulate or pass-through the famous Csi Control Byte Sequences
+        # Emulate or write-through the famous Csi Control Byte Sequences
 
         if self._take_csi_pack_n_kdata_if_(pack, n=n, kdata=kdata):
             return
@@ -1236,8 +1253,8 @@ class ScreenEditor:
 
         self.write("\r\n")
 
-        # todo3: Emacs ⌃M and ⌃K need the Rows mirrored, as does Vim I ⌃M
-        # todo3: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
+        # todo8: Emacs ⌃M and ⌃K need the Rows mirrored, as does Vim I ⌃M
+        # todo8: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
 
     def _take_esc_row_1_column_1_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Famous Esc Byte Pairs, no matter if quick or slow"""
@@ -1274,6 +1291,9 @@ class ScreenEditor:
 
         # Emacs ⌃Q  # Vim ⌃V
 
+        # todo3: ⌃V ⌃Q combos with each other and self to strip off layers down to write-through
+        # todo3: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
+
     def do_assert_false(self) -> None:
         """Assert False"""
 
@@ -1306,6 +1326,8 @@ class ScreenEditor:
 
         return False
 
+        # todo9: don't so aggressively drop ⎋[⇧M Press
+
     def _take_csi_mouse_release_if_(self, pack: TerminalBytePacket) -> bool:
         """Reply to a Mouse Release, no matter if slow or quick"""
 
@@ -1313,6 +1335,11 @@ class ScreenEditor:
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and (pack.tail == b"m")):
+            return False
+
+            # todo9: don't so aggressively take ⎋[M Release
+
+        if not pack.neck.startswith(b"<"):
             return False
 
         splits = pack.neck.removeprefix(b"<").split(b";")
@@ -1360,7 +1387,9 @@ class ScreenEditor:
     #
 
     def _take_csi_pack_n_kdata_if_(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
-        """Emulate or write KData Control Sequence and return True, else return False"""
+        """Emulate or loopback and return True, else return False"""
+
+        # Quickly don't take all but a Csi Final Byte Sequence
 
         if pack.head != b"\033[":  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
             return False
@@ -1368,55 +1397,162 @@ class ScreenEditor:
         if not pack.tail:
             return False
 
-        # Emulate famous Csi Control Byte Sequences,
-        # beyond Screen_Writer_Help of ⎋[ ⇧@⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧X⇧Z ⇧}⇧~ and ⎋[ DHLMNQT,
-        # so as to also emulate timeless Csi ⇧F ⇧X ` F and slow Csi X
+        # Emulate the Famous Csi that failed test at platform, for >= 1 platforms
 
-        csi_timeless_tails = b"@ABCDEFGHIJKLPSTXZ" + b"`dfhlqr" + b"}~"
-        csi_slow_tails = b"M" b"cmntx"  # still not b"NOQRUVWY" and not "abegijkopsuvwyz"
+        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I  # fails at gCloud Shell
+            return True
 
-        csi_famous = pack.tail in csi_timeless_tails
-        if (n > 1) and (pack.tail in csi_slow_tails):
-            csi_famous = True
+        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S  # fails at gCloud Shell
+            return True
 
-        # Shrug off a Mouse Press if quick
-        # Reply to a Mouse Release, no matter if slow or quick
-        # And kick back on anything else that's not Csi Famous
+        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T  # fails at gCloud Shell
+            return True
 
-        if not csi_famous:
+        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d  # fails at gCloud Shell
+            return True
+
+        if self._take_csi_cols_insert_if_(pack):  # ⎋[{}'⇧}  # fails at macOS Terminal, gCloud Shell
+            return True
+
+        if self._take_csi_cols_delete_if_(pack):  # ⎋[{}'⇧~  # fails at macOS Terminal, gCloud Shell
+            return True
+
+        # Loopback the famous Csi Sequences, if not taken above
+
+        if self._match_csi_write_through_(pack):
+
+            csi_write = kdata
+            if pack.tail == b"`":  # HPA fails at gCloud Shell
+                if env_cloud_shell:
+                    csi_write = kdata[:-1] + b"G"  # CHA
+
+            self.do_write_kdata_as_sdata(csi_write)  # for ._take_csi_pack_n_kdata_if_
+            return True
+
+        # Else return False
+
+        return False
+
+    def _match_csi_write_through_(self, pack: TerminalBytePacket) -> bool:
+        """Recommend loop back for this Csi Byte Sequence, or don't"""
+
+        kdata = pack.to_bytes()
+
+        famous_sdata_tuple = FAMOUS_SDATA_TUPLE
+
+        # Accept some famous Screen Writes
+
+        if kdata in famous_sdata_tuple:
+            self.do_write_kdata_as_sdata(kdata)  # for ._take_csi_pack_n_kdata_if_
+            return True
+
+        # Accept Pn >= 1 across some famous Csi Final Bytes
+
+        if pack.tail in b"@ABCDEFGILMPSTXZ`d":  # Pn for many ⎋[⇧, and Pn for ⎋[D
+            if not pack.back:
+                if re.fullmatch(b"[0-9]*", string=pack.neck):  # Pn >= 0, or Empty Pn
+                    pn = int(pack.neck) if pack.neck else PN1
+                    if pn >= 1:
+                        return True  # misses b'ST`d' sometimes taken above
+
+                        # trusts caller to write b"`" HPA as b"G" CHA at gCloud Shell
+
+        # Accept Ps >= 0 across some famous Csi Final Bytes
+
+        elif pack.tail in b"JK":  # Ps for ⎋[⇧J  # Ps for ⎋[⇧K
+            if not pack.back:
+                if re.fullmatch(b"[0-9]*", string=pack.neck):  # Ps >= 0, or Empty Ps
+                    return True
+
+        # Accept 0, 1, or 2 of Pn >= 0 at ⎋[⇧H
+
+        elif pack.tail in b"Hf":  # ⎋[⇧H CUP_Y1_X1, CUP_Y_X1, CUP_Y_X, HVP
+            if not pack.back:
+                if self._match_csi_cup_write_through_(pack):
+                    return True
+
+        # Accept a few of the first 0x100 (256) Codes at ⎋[M
+
+        elif pack.tail == b"m":  # ⎋[M SGR_PS
+            if not pack.back:
+                if self._match_csi_sgr_write_through_(pack):
+                    return True
+
+        return False
+
+        # believes macOS has no ⎋[ ⇧ NOQRUVWY, and no [\]^_ aegijkopsuvwyz {|}~
+
+        # todo9: ⎋ waits forever and ever, ⎋[ waits forever and ever, ...
+        # todo10: ⎋[⇧M waits for more
+
+        # todo2: stop wrong write-through of multibyte Control Chars
+
+    def _match_csi_cup_write_through_(self, pack: TerminalBytePacket) -> bool:
+        """Recommend loop back for this Csi CUP_ Byte Sequence, or don't"""
+
+        if pack.tail in b"Hf":  # ⎋[⇧H CUP_Y1_X1, CUP_Y_X1, CUP_Y_X
+            if not pack.back:
+                mh = re.fullmatch(b"(([0-9]+)(;([0-9]+))?)?", string=pack.neck)
+                if mh:
+                    y = int(mh.group(2)) if mh.group(1) else Y1
+                    x = int(mh.group(4)) if mh.group(3) else X1
+                    if (y >= 1) and (x >= 1):
+                        return True
+
+                        # matches only South and East of 1 1, and does match out-of-bounds
+
+        return False
+
+    def _match_csi_sgr_write_through_(self, pack: TerminalBytePacket) -> bool:
+        """Recommend loop back for this Csi SGR_PS Byte Sequence, or don't"""
+
+        if pack.tail != b"m":
             return False
 
-        # Emulate the Csi Famous that don't work so well when passed through
+        if pack.back:
+            return False
 
-        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I
+        if not pack.neck:  # ⎋[M SGR_PS implicit 0 = Plain
             return True
 
-        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S
-            return True
+        mm = re.fullmatch(b"[0-9]*", string=pack.neck)
+        if mm:
+            ps = int(pack.neck) if pack.neck else PS0
 
-        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T
-            return True
+            if ps in (1, 4, 7):  # todo8: write-through more PS of ⎋[M
+                return True
 
-        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d
-            return True
+            if (30 <= ps <= 37) or (90 <= ps <= 97):
+                return True
+            if (40 <= ps <= 47) or (100 <= ps <= 107):
+                return True
 
-        if pack.tail == b"}":  # ⎋ [ ... ⇧} especially ' ⇧}
-            self._take_csi_cols_insert_if_(pack)
-            return True
+            return False
 
-        if pack.tail == b"~":  # ⎋ [ ... ⇧~ especially ' ⇧~
-            self._take_csi_cols_delete_if_(pack)
-            return True
+        # Accept 0x100 (256) Foreground/ Background Color Codes
 
-        # Pass-through the .csi_slow_tails when slow.
-        # Also pass-through the .csi_timeless_tails not taken above, no matter if slow or quick
+        m256 = re.fullmatch(b"(38|48);(5);([0-9]+)", string=pack.neck)
+        if m256:  # the other 8 & 8 Colors, the 216 Colors, or the 25 Grayscale
+            ps_bytes = m256.group(3)
+            ps = int(ps_bytes) if ps_bytes else 0
+            if 0 <= ps <= 0xFF:
+                return True
 
-        self.do_write_kdata_as_sdata(kdata)  # for .csi_slow_tails and untaken .csi_timeless_tails
+        # Accept 0x100 (256) Color Codes for R, G, and B
 
-        return True
+        if not sys_platform_darwin:
 
-        # todo9: pass the Csi Sequence through only after test at platform
-        # todo2: stop wrongly passing through multibyte Control Chars
+            mrgb = re.fullmatch(b"(38|48);(2);([0-9]+);([0-9]+);([0-9]+)", string=pack.neck)
+            if mrgb:  # 0x100 (256) Colors for R, G, and B
+                r = int(mrgb.group(3))
+                g = int(mrgb.group(4))
+                b = int(mrgb.group(5))
+                if (0 <= r <= 0xFF) and (0 <= g <= 0xFF) and (0 <= b <= 0xFF):
+                    return True
+
+        return False
+
+        # matches a .pack of n == 1 quick, or of n > 1 slow
 
     def _take_csi_tab_right_leap_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate Cursor Forward [Horizontal] Tabulation (CHT) for Pn >= 1"""
@@ -1431,16 +1567,23 @@ class ScreenEditor:
         assert CHA_X == "\033[" "{}" "G"
         assert CHT_X == "\033[" "{}" "I"
 
+        # Take, or don't take
+
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"I")):
+        if not (csi and (not pack.back) and (pack.tail == b"I")):
             return False
+
+        if sys_platform_darwin:
+            return False
+
+        # Emulate if taken
 
         tprint(f"⎋[...I {pack=}  # _take_csi_tab_right_leap_if_")
 
         pn_int = int(pack.neck) if pack.neck else PN1
         pn = pn_int if pn_int else PN1
 
-        if sys_platform_darwin:
+        if sys_platform_darwin:  # not much tested here
             if not pn_int:
                 return True
 
@@ -1464,14 +1607,23 @@ class ScreenEditor:
         assert SU_Y == "\033[" "{}" "S"
         assert _PN_MAX_32100_ == 32100
 
+        # Take, or don't take
+
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"S")):
+        if not (csi and (not pack.back) and (pack.tail == b"S")):
             return False
+
+        if sys_platform_darwin:
+            return False
+
+        # Emulate if taken
+
+        tprint(f"⎋[⇧S {pack}   # _take_csi_rows_up_if_")
 
         pn_int = int(pack.neck) if pack.neck else PN1
         pn = pn_int if pn_int else PN1
 
-        if sys_platform_darwin:
+        if sys_platform_darwin:  # not much tested here
             if not pn_int:
                 return True
 
@@ -1494,14 +1646,23 @@ class ScreenEditor:
         assert IL_Y == "\033[" "{}" "L"
         assert SD_Y == "\033[" "{}" "T"
 
+        # Take, or don't take
+
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"T")):
+        if not (csi and (not pack.back) and (pack.tail == b"T")):
             return False
+
+        if sys_platform_darwin:
+            return False
+
+        # Emulate if taken
+
+        tprint(f"⎋[⇧T {pack}   # _take_csi_rows_down_if_")
 
         pn_int = int(pack.neck) if pack.neck else PN1
         pn = pn_int if pn_int else PN1
 
-        if sys_platform_darwin:
+        if sys_platform_darwin:  # not much tested here
             if not pn_int:
                 return True
 
@@ -1519,8 +1680,15 @@ class ScreenEditor:
 
         assert VPA_Y == "\033[" "{}" "d"
 
+        # Take, or don't take
+
         if kdata != b"\033[d":
             return False
+
+        if sys_platform_darwin:
+            return False
+
+        # Emulate if taken
 
         tprint(f"⎋[d {kdata=}   # _take_csi_row_default_leap_if_")
 
@@ -1541,9 +1709,13 @@ class ScreenEditor:
         assert DECDC_X == "\033[" "{}" "'~"
         assert DECIC_X == "\033[" "{}" "'}}"
 
+        # Take, or don't take
+
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and ((pack.back + pack.tail) == b"'}")):
             return False
+
+        # Emulate if taken
 
         tprint(f"⎋['⇧}} cols-insert {pack=}   # _take_csi_cols_insert_if_")
 
@@ -1573,10 +1745,13 @@ class ScreenEditor:
         assert VPA_Y == "\033[" "{}" "d"
         assert DECDC_X == "\033[" "{}" "'~"
 
+        # Take, or don't take
+
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
         if not (csi and ((pack.back + pack.tail) == b"'~")):
             return False
 
+        # Emulate if taken
         tprint(f"⎋['⇧~ cols-delete {pack=}   # _take_csi_cols_delete_if_")
 
         pn_int = int(pack.neck) if pack.neck else PN1
@@ -1688,7 +1863,7 @@ class ScreenEditor:
         x = (x_width // 2) + (x_width % 2)  # ⌃A ⌃A ⌃A Middle of Row on Screen
         self.write(f"\033[{x}G")
 
-        # Emacs ⌃A  # Vim 0  # Also ⌃A ⌃A ⌃A  # Also 0 0 0
+        # Emacs ⌃A  # Vim 0  # Also ⌃A ⌃A ⌃A  # Also 0 0 0  # todo9: skip the non-replies
 
     def do_column_leap_rightmost(self) -> None:
         """Leap to the Rightmost Column"""
@@ -1733,7 +1908,7 @@ class ScreenEditor:
 
         assert pt.column_x == x, (pt.column_x, x)
 
-        # Emacs ⌃E  # Vim ⇧$  # Also ⌃E ⌃E ⌃E  # Also ⇧$ ⇧$ ⇧$
+        # Emacs ⌃E  # Vim ⇧$  # Also ⌃E ⌃E ⌃E  # Also ⇧$ ⇧$ ⇧$  # todo9: skip the non-replies
 
     def do_column_leap_rightmost_inserting_start(self) -> None:
         """Leap to the Rightmost Column, and Start Inserting"""
@@ -2042,7 +2217,7 @@ class ScreenEditor:
         board_width = (x_width - 4 * x_frame) // 2
         board_width -= 1 - (board_width % 2)
 
-        color_picker_pns.clear()
+        color_picker_ps_list.clear()
 
         # Plot the Left Panel
 
@@ -2079,7 +2254,7 @@ class ScreenEditor:
             self.print("(((", end=" ")
 
             for pn in range(32, 231 + 1):
-                if pn not in color_picker_pns:
+                if pn not in color_picker_ps_list:
                     self.print(pn, end=" ")
 
             self.print(")))", end=" ")
@@ -2089,6 +2264,10 @@ class ScreenEditor:
 
         help_ = textwrap.dedent(SCREEN_WRITER_HELP).strip()
 
+        self.write("\033[H")
+        self.write("\033[2J")
+
+        self.print("Press ⌃D to quit, else F1 for help, else see what happens")
         self.print()
         self.print()
 
@@ -2128,7 +2307,7 @@ class ScreenEditor:
 
         # todo2: toggle emulations on/off
         # todo2: toggle tracing input on/off
-        # todo2: show loss of \e7 memory because of emulations
+        # todo2: show of \e7 memory because emulations overwrite it once and more
 
         # todo2: accept lots of quits and movements as per Vim ⌃O & Emacs
 
@@ -2396,23 +2575,23 @@ class ScreenEditor:
 
         twenty_five = list(f"#{d}" for d in range(25))
         if keycaps in twenty_five:
-            pn = self.twenty_five_gray_color_verb_to_pn(keycaps)
+            ps = self.twenty_five_gray_color_verb_to_ps(keycaps)
             if kind == "Foreground":
-                sdata = f"\033[38;5;{pn}m".encode()
+                sdata = f"\033[38;5;{ps}m".encode()
                 return sdata
             else:
-                sdata = f"\033[48;5;{pn}m".encode()
+                sdata = f"\033[48;5;{ps}m".encode()
                 return sdata
 
         # Eval a 6**3 Color
 
         if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
-            pn = self.six_cubed_color_verb_to_pn(keycaps)
+            ps = self.six_cubed_color_verb_to_ps(keycaps)
             if kind == "Foreground":
-                sdata = f"\033[38;5;{pn}m".encode()
+                sdata = f"\033[38;5;{ps}m".encode()
                 return sdata
             else:
-                sdata = f"\033[48;5;{pn}m".encode()
+                sdata = f"\033[48;5;{ps}m".encode()
                 return sdata
 
         # Eval a 24-Bit Color
@@ -2422,7 +2601,7 @@ class ScreenEditor:
 
             if not sys_platform_darwin:
                 if kind == "Foreground":
-                    sdata = f"\033[38;2;{r};{b};{b}m".encode()
+                    sdata = f"\033[38;2;{r};{g};{b}m".encode()
                     return sdata
                 else:
                     sdata = f"\033[48;2;{r};{g};{b}m".encode()
@@ -2434,20 +2613,20 @@ class ScreenEditor:
             g6 = int((g / 0xFF) * 5)
             b6 = int((b / 0xFF) * 5)
 
-            pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+            ps = 0x10 + (r6 * 36 + g6 * 6 + b6)
 
             if kind == "Foreground":
-                sdata = f"\033[38;5;{pn}m".encode()
+                sdata = f"\033[38;5;{ps}m".encode()
                 return sdata
             else:
-                sdata = f"\033[48;5;{pn}m".encode()
+                sdata = f"\033[48;5;{ps}m".encode()
                 return sdata
 
         # Else don't succeed
 
         return b""
 
-    def twenty_five_gray_color_verb_to_pn(self, verb: str) -> int:
+    def twenty_five_gray_color_verb_to_ps(self, verb: str) -> int:
         """Eval a #n color"""
 
         assert verb[0] == "#", (verb,)
@@ -2455,11 +2634,11 @@ class ScreenEditor:
         gray = int(verb[1:])
         assert 0 <= gray <= 24, (gray, verb)
 
-        pn = 231 if (gray == 24) else (232 + gray)
+        ps = 231 if (gray == 24) else (232 + gray)
 
-        return pn
+        return ps
 
-    def six_cubed_color_verb_to_pn(self, verb: str) -> int:
+    def six_cubed_color_verb_to_ps(self, verb: str) -> int:
         """Eval a #RGB color"""
 
         assert verb[0] == "#", (verb,)
@@ -2474,9 +2653,9 @@ class ScreenEditor:
         assert 0 <= g6 <= 5, (g6, verb)
         assert 0 <= b6 <= 5, (b6, verb)
 
-        pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
+        ps = 0x10 + (r6 * 36 + g6 * 6 + b6)
 
-        return pn
+        return ps
 
     def twenty_four_bit_color_verb_to_r_g_b(self, verb: str) -> tuple[int, int, int]:
         """Eval a #RRGGBB color"""
@@ -3287,7 +3466,7 @@ class ProxyTerminal:
         if self._mirror_crlf_(sdata):
             return True
 
-        # Take ⎋[{y};{x}H as meaningful, even when Y X negative, zero, or otherwise out of bounds
+        # Take ⎋[{y};{x}H as meaningful, even when Y X negative, zero, or otherwise out-of-bounds
 
         if self._mirror_leap_csi_cup_y_x_(stext):
             return True
@@ -3947,12 +4126,12 @@ class ProxyTerminal:
             return "Colorless"
 
         if len(neck_splits) == 1:
-            pn = int(pack.neck)
+            ps = int(pack.neck)
 
-            if (30 <= pn <= 37) or (90 <= pn <= 97):
+            if (30 <= ps <= 37) or (90 <= ps <= 97):
                 return "Foreground"
 
-            if (40 <= pn <= 47) or (100 <= pn <= 107):
+            if (40 <= ps <= 47) or (100 <= ps <= 107):
                 return "Background"
 
             return "Colorless"
@@ -3962,8 +4141,8 @@ class ProxyTerminal:
             if bytes(neck_splits[0]) in (b"38", b"48"):
                 ground = "Foreground" if (neck_splits[0] == b"38") else "Background"
                 if neck_splits[1] == b"5":
-                    pn = int(neck_splits[2])
-                    assert 0 <= pn <= 0xFF, (pn, pack)
+                    ps = int(neck_splits[2])
+                    assert 0 <= ps <= 0xFF, (ps, pack)
                     return ground
 
             return "Colorless"
@@ -4014,6 +4193,7 @@ class ProxyTerminal:
 
 # todo8: Mirrors for  ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧T rows-down  ⎋[⇧S rows-up
 # todo8: Mirror the  ⎋[H ⎋[⇧2J bundled into  ⎋[⇧?1049H
+# todo8: Mirrors for  ⎋[` ⎋[F ⎋[B  # todo8: and run tests for the F9 suggestions vs tprint no mirror
 
 #
 
@@ -4091,7 +4271,7 @@ class ProxyTerminal:
 #
 
 
-color_picker_pns = list()
+color_picker_ps_list = list()
 
 
 def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: int) -> None:
@@ -4137,11 +4317,11 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
 
                     hy = ya + (yb - y)
 
-                pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
-                color_picker_pns.append(pn)
+                ps = 0x10 + (r6 * 36 + g6 * 6 + b6)
+                color_picker_ps_list.append(ps)
 
                 se.write(f"\033[{hy};{x}H")  # for .color_picker_plot
-                se.write(f"\033[38;5;{pn}m")
+                se.write(f"\033[38;5;{ps}m")
                 # se.write(str(g6))
                 se.write(glyph)
 
@@ -4171,11 +4351,11 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
 
                     hy = ya + (yb - y)
 
-                pn = 0x10 + (r6 * 36 + g6 * 6 + b6)
-                color_picker_pns.append(pn)
+                ps = 0x10 + (r6 * 36 + g6 * 6 + b6)
+                color_picker_ps_list.append(ps)
 
                 se.write(f"\033[{hy};{x}H")  # for .color_picker_plot
-                se.write(f"\033[38;5;{pn}m")
+                se.write(f"\033[38;5;{ps}m")
                 # se.write(str(g6))
                 se.write(glyph)
 
@@ -4188,7 +4368,7 @@ def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: 
 
 
 # Help with famous ⎋ 7 8 C L ⇧D ⇧E ⇧M (when not taken by Vim)
-# Help with famous Csi ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ DHLMNQT
+# Help with famous Csi ⎋[ ⇧@ ⇧A⇧B⇧C⇧D⇧E⇧F⇧G⇧H⇧I⇧J⇧K⇧L⇧M⇧P⇧S⇧T⇧Z ⇧}⇧~ and ⎋[ BDFHLMNQT
 
 SCREEN_WRITER_HELP = r"""
 
@@ -4197,10 +4377,10 @@ SCREEN_WRITER_HELP = r"""
         ⌃G ⌃H ⌃I ⌃J ⌃M mean \a \b \t \n \r, and ⌃[ means \e, also known as ⎋ Esc
         Tab means ⌃I \t, and Return means ⌃M \r
 
-        Minimal Emacs is ⌃A ⌃B ⌃D ⌃E ⌃F ⌃G ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V
+        Minimal Emacs is ⌃A ⌃B ⌃E ⌃F ⌃J ⌃K ⌃M ⌃N ⌃O ⌃P ⌃Q ⌃V and struggles over ⌃D ⌃G ⌃H
         Minimal Vim is ⌃L and ⎋ I ⌃V  ⎋ 0  ⎋ A I J L O R S X  ⎋ ⇧ $ A C D H L M O Q R S X
 
-    Esc ⎋ Byte Pairs
+    Esc ⎋ Byte Pairs (needs ⌃Q or ⌃V)
 
         ⎋7 cursor-checkpoint  ⎋8 cursor-revert (defaults to Y 1 X 1)
         ⎋C screen-erase  ⎋L row-column-leap
@@ -4208,8 +4388,8 @@ SCREEN_WRITER_HELP = r"""
 
     Csi ⎋[ Sequences
 
-        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←  ⎋[⇧I ⌃I  ⎋[⇧Z ⇧Tab
-        ⎋[D row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap
+        ⎋[⇧A ↑  ⎋[⇧B ↓  ⎋[⇧C →  ⎋[⇧D ←  ⎋[⇧I ⌃I  ⎋[⇧Z ⇧Tab     ⎋[⇧E \r ↓
+        ⎋[D row-leap  ⎋[⇧G column-leap  ⎋[⇧H row-column-leap   ⎋[⇧F \r ↑
 
         ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧P chars-delete  ⎋[⇧@ chars-insert
         ⎋[⇧J after-erase  ⎋[1⇧J before-erase  ⎋[2⇧J screen-erase  ⎋[3⇧J scrollback-erase
@@ -4219,36 +4399,28 @@ SCREEN_WRITER_HELP = r"""
         ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
         ⎋[?1049H screen-alt  ⎋[?1049L screen-main  ⎋[?25L cursor-hide  ⎋[?25H cursor-show
 
-        ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m max grayscale
-        red green bright-blue  ⎋[31M  ⎋[32M  ⎋[94M  ⎋[30M  ⎋[97M  on rgb  ⎋[41M  ⎋[42M  ⎋[104M
-        ⎋[M plain  <Jabberwocky>  #24 on #005  #003366 on #FFCC99
+        ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m grayscale-max
+        red green bright-blue  ⎋[31M  ⎋[32M  ⎋[94M  on  ⎋[41M  ⎋[42M  ⎋[104M
+        ⎋[M plain  <Jabberwocky>  #24 on #005  #003366 on #FFCC99   ⎋[30M  ⎋[97M
 
-        ⎋[5N call for reply ⎋[0N
-        ⎋[6N call for reply ⎋[{y};{x}⇧R
-        ⎋[18T call for reply ⎋[8;{rows};{columns}T
+        ⎋[5N call for reply ⎋[0N   ⎋[6N call for reply ⎋[{y};{x}⇧R
+        ⎋[18T call for reply ⎋[8;{rows};{columns}T   ⎋[?2004H L for ⌘V in ⎋[200~ ⎋[201~
 
-        ⎋[?1000;1006H till ⎋[?1000;1006L for mouse ⎋[<{f};{x};{y} ⇧M to M of f = 0b⌃⌥⇧00
-        or ⎋[?1000 H L by itself, or 1005, or 1015
+        ⎋[?1000;1006H till ⎋[?1000;1006L for mouse ⎋[< {f};{x};{y} ⇧M to M of f = 0b⌃⌥⇧00
+        or ⎋[?1000 H L by itself, or 1005, 1006, or 1015
 
-"""
+"""  # todo4: ⎋[B char-repeat, with an emulation for gCloud Shell
+
+# Don't help with ⎋[C call for reply ⎋[?1;2C  # 'Send Device Attributes (Primary DA)'
+# Don't help with ⎋[=C call for reply ⎋[?1;2C  # macOS
+# Don't help with ⎋[>C call for reply ⎋[>1;95;0C macOS or ⎋[>84;0;0C gCloud Shell
+
+# Don't help with ⎋[X call for reply ⎋[2;1;1;112;112;1;0X  # macOS
+# Request Terminal Parameters (DECREQTPARM).
 
 
-# todo3: Vim Q Q ⇧@ Record/ Replay, and ⌃X ⇧( till ⌃C ⇧) and ⌃X E for Emacs
-
-# todo5: Conway Life goes with Sgr Mouse at Google Cloud Shell (where no Option Mouse Arrows)
-
-# todo3: ⌃V ⌃Q combos with each other and self to strip off layers down to pass-through
-# todo3: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
-
+# todo5: Sgr Mouse at Google Cloud Shell where no Option Mouse Arrows, but Esc Arrows
 # todo2: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
-
-# ⎋[` near alias of ⎋[⇧G column-leap  # macOS
-# ⎋[F near alias of ⎋[⇧H row-column-leap
-# ⎋[R near alias of ⎋L row-column-leap
-
-# ⎋[C call for reply ⎋[?1;2C  # ⎋[=C also works at macOS
-# ⎋[>C call for reply ⎋[>1;95;0C macOS or ⎋[>84;0;0C gCloud Shell
-# ⎋[X call for reply ⎋[2;1;1;112;112;1;0X  # macOS
 
 
 #
@@ -5020,15 +5192,16 @@ class TerminalBytePacket:
         # Accept 1 Byte into Back, into Neck, or as Tail
 
         if not back:
-            if 0x30 <= ord_ < 0x40:  # 16 Codes
+            if 0x30 <= ord_ < 0x40:  # 16 Codes  # 0123456789:;<=>?
                 neck.extend(byte)
                 return b""  # takes 1 of 16 Parameter Byte Codes
 
-        if 0x20 <= ord_ < 0x30:  # 16 Codes
+        if 0x20 <= ord_ < 0x30:  # 16 Codes  # Spacebar !"#$%&\'()*+,-./
             back.extend(byte)
             return b""  # takes 1 of 16 Intermediate Byte Codes
 
-        if 0x40 <= ord_ < 0x7F:  # 63 Codes
+        if 0x40 <= ord_ < 0x7F:  # 63 Codes  # @A Z[\\]^_`a z{|}~
+            assert not tail, (tail,)
             tail.extend(byte)
             self.closed = True
             return b""  # takes 1 of 63 Final Byte Codes
@@ -5042,6 +5215,49 @@ class TerminalBytePacket:
         # todo: limit the length of a CSI Escape Sequence
 
     # todo: limit rate of input so livelocks go less wild, like in Keyboard/ Screen loopback
+
+
+#
+# Name a ton of Screen Things
+#
+
+
+FAMOUS_SDATA_TUPLE = (
+    #
+    b"\033[4h",  # SM_IRM
+    b"\033[?25h",  # SM_DECTCEM
+    b"\033[?1000h",
+    b"\033[?1000;1006h",
+    b"\033[?1005h",
+    b"\033[?1006h",  # _SGR_MOUSE_
+    b"\033[?1015h",
+    b"\033[?1049h",  # _SM_XTERM_ALT_
+    # b"\033[?2004h",  # _SM_BRACKETED_PASTE_
+    #
+    b"\033[4l",  # RM_IRM
+    b"\033[?25l",  # RM_DECTCEM
+    b"\033[?1000l",
+    b"\033[?1000;1006l",
+    b"\033[?1005l",
+    b"\033[?1006l",  # _SGR_MOUSE_
+    b"\033[?1015l",
+    b"\033[?1049l",  # _RM_XTERM_MAIN_
+    # b"\033[?2004l",  # _RM_BRACKETED_PASTE_
+    #
+    b"\033[5n",
+    b"\033[6n",  # DSR_6
+    #
+    b"\033[4q",  # DECSCUSR
+    b"\033[6q",  # DECSCUSR
+    b"\033[q",  # DECSCUSR
+    #
+    b"\033[18t",
+)
+
+
+#
+# Name a ton of Keyboard Things
+#
 
 
 # Name the Shifting Keys
@@ -5121,8 +5337,8 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\033[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
     "\033" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # macOS
     "\033" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # macOS
-    "\x20": "Spacebar",  # ' ' ␠ ␣ ␢
-    "\x7f": "Delete",  # ␡ ⌫ ⌦
+    "\x20": "Spacebar",  # ' '  # ␠  # ␣  # ␢
+    "\x7f": "Delete",  # ␡  # ⌫  # ⌦
     "\xa0": "⌥Spacebar",  # '\N{No-Break Space}'
 }
 
@@ -5167,7 +5383,7 @@ OPTION_KSTR_BY_1_KCHAR = {
     "ì": "⌥`I",
     "ò": "⌥`O",
     "ù": "⌥`U",
-    "`": "⌥`Spacebar",  # comes out as ⌥~
+    "`": "⌥`Spacebar",  # ⌥` Spacebar comes out equal to U+0060 Grave Accent ` of a US Keyboard
 }
 
 # hand-sorted by ⌥E ⌥I ⌥N ⌥U ⌥` order
@@ -5249,7 +5465,7 @@ def _kch_to_kcap_(t: str) -> str:  # noqa C901
     if t in kcap_by_kchars.keys():  # Mac US Key Caps for Spacebar, F12, etc
         s = kcap_by_kchars[t]  # '⌃Spacebar', 'Return', 'Delete', etc
 
-    elif t in option_kstr_by_1_kchar.keys():  # Mac US Option Accents
+    elif (t != "`") and (t in option_kstr_by_1_kchar.keys()):  # Mac US Option Accents
         s = option_kstr_by_1_kchar[t]
 
     elif t in option_kchars_spaceless:  # Mac US Option Key Caps
@@ -5478,6 +5694,32 @@ def tprint(*args: object) -> None:
 
 
 _ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
+
+
+#
+# Cite some Terminal Docs
+#
+
+
+#   https://unicode.org/charts/PDF/U0000.pdf
+#   https://unicode.org/charts/PDF/U0080.pdf
+#   https://en.wikipedia.org/wiki/ANSI_escape_code
+#
+#   https://www.ecma-international.org/publications-and-standards/standards/ecma-48
+#     /wp-content/uploads/ECMA-48_5th_edition_june_1991.pdf
+#
+#   https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+#
+#   https://github.com/tmux/tmux/blob/master/tools/ansicode.txt  <= close to h/t jvns.ca
+#   https://jvns.ca/blog/2025/03/07/escape-code-standards  <= h/t jvns.ca
+#   https://man7.org/linux/man-pages/man4/console_codes.4.html  <= h/t jvns.ca
+#   https://sw.kovidgoyal.net/kitty/keyboard-protocol  <= h/t jvns.ca
+#   https://vt100.net/docs/vt100-ug/chapter3.html  <= h/t jvns.ca
+#
+#   https://iterm2.com/feature-reporting  <= h/t jvns.ca
+#   https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda  <= h/t jvns.ca
+#   https://github.com/Alhadis/OSC8-Adoption?tab=readme-ov-file  <= h/t jvns.ca
+#
 
 
 #
