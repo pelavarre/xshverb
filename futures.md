@@ -1,7 +1,11 @@
 things to do, futures to build
 
-pq
-both dumps and dedents - ouch, wrong
+yah later still
+
+    touch.py --mkdirs
+
+    pq
+    both dumps and dedents - ouch, wrong
 
 more lately
 

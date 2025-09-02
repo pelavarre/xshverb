@@ -775,7 +775,7 @@ class ScreenEditor:
         #             func_by_str[alt_kstr] = func  # todo4: need Chord Sequences to do Vim I ⌃O
 
     def form_loopable_kdata_tuple(self) -> tuple[bytes, ...]:
-        """List Keyboard Encodings that run well when looped back to Screen"""
+        """List the few Keyboard Encodings that run especially well when looped back to Screen"""
 
         d = (
             b"\x07",  # ⌃G \a bell-ring
@@ -807,7 +807,7 @@ class ScreenEditor:
 
         loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please PyLance
 
-        return loopable_kdata_tuple
+        return loopable_kdata_tuple  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
 
         # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
 
@@ -945,10 +945,23 @@ class ScreenEditor:
     def read_eval_print_once(self) -> None:
         """Fetch & time & log 1 whole TerminalBytePacket, and then quit, else reply to it"""
 
-        # Quit in several ways
+        # Fetch & time & log 1 whole TerminalBytePacket,
+        # and do swap in b'\033[' b'M' Csi ⇧M for b'\033[M' incomplete 6 Char Mouse Report
 
         (pack, n) = self.read_one_pack()
         kdata = pack.to_bytes()
+
+        if kdata == b"\033[M":
+            pack = TerminalBytePacket(b"\033[")
+            pack.tail.extend(b"M")
+
+            assert pack.tail == b"M", (pack.tail,)
+            assert not pack.closed, (pack.closed,)
+            pack.closed = True
+
+            assert pack.to_bytes() == kdata, (pack.to_bytes(), kdata)
+
+            tprint(f"{str(pack)=}")
 
         # Quit in several ways
 
@@ -1013,14 +1026,14 @@ class ScreenEditor:
         if len(kdata) == 1:
             tprint(str(kdata)[2:-1], "in", millis)
         elif (not arrows) and (t1t0 > 0.020):
-            if kdata in self.loopable_kdata_tuple:
+            if kdata in self.loopable_kdata_tuple:  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
                 tprint(str(kdata)[2:-1], "in", millis)
             elif n > 1:
                 tprint(str(kdata)[2:-1], "as", n, "in", millis)
             else:
-                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 1")
+                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_one_pack 1")
         else:
-            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_eval_print_once 2")
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_one_pack 2")
 
         return (pack, n)
 
@@ -1091,15 +1104,24 @@ class ScreenEditor:
                 self.arrow_row_y = y
                 self.arrow_column_x = x
 
+        Slowly = 1.000
         while (not pack.text) and (not pack.closed) and (not bt.extras):
 
             kdata = pack.to_bytes()
-            # if kdata in (b"\033", b"\033O", b"\033[", b"\033\033", b"\033\033O", b"\033\033["):
+            if kdata == b"\033[M":  # ⎋⇧M for Csi
+                break
             if kdata == b"\033O":  # ⎋⇧O for Vim
                 break
 
             n += 1
-            bt.close_byte_pack_if(pack, timeout=None)
+            bt.close_byte_pack_if(pack, timeout=Slowly)
+
+            kdata_after = pack.to_bytes()
+            if kdata_after == kdata:
+                break
+
+            # b"\033O" is present, but not alone, in the TerminalBytePacket.Headbook
+            # b"\033[M" is absent from the TerminalBytePacket.Headbook
 
         # Succeed
 
@@ -1178,15 +1200,19 @@ class ScreenEditor:
 
             return
 
-        # Write the KData as Keycaps, when it is Keycaps and not Func Def
+        # Write KData as SData when we say it's especially loopable
 
-        if kdata in loopable_kdata_tuple:
+        if kdata in loopable_kdata_tuple:  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
             self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
             return
 
+        # Write KData as Keycaps when it is Keycaps KData in a hurry
+
         kchars = kdata.decode()  # may raise UnicodeDecodeError
         if kchars in kcap_by_kchars.keys():
-            if (n == 1) or (pack.tail != b"H"):  # falls-through to write-through slow ⎋[⇧H CUP_Y_X
+            if n == 1:  # especially the '\033[H' of ⇧Fn← at macOS
+                tprint("Sent all at once, like a Keycap, at less than Rapidly = 2 ms/byte")
+
                 self.print_kcaps_plus(pack)
                 return
 
@@ -1204,7 +1230,7 @@ class ScreenEditor:
 
         # Emulate or write-through the famous Csi Control Byte Sequences
 
-        if self._take_csi_pack_n_kdata_if_(pack, n=n, kdata=kdata):
+        if self._take_csi_pack_n_kdata_if_(pack, n=n):
             return
 
         # Reply to Mouse Press & Release
@@ -1217,6 +1243,7 @@ class ScreenEditor:
 
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
+        tprint("Fell back to bounce what delivers no signal")
         self.print_kcaps_plus(pack)
 
     #
@@ -1290,6 +1317,8 @@ class ScreenEditor:
         self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
 
         # Emacs ⌃Q  # Vim ⌃V
+
+        # todo8: When should ⌃V ⌃Q print 'F1' or exec 'F1' or write-through 'F1' ?
 
         # todo3: ⌃V ⌃Q combos with each other and self to strip off layers down to write-through
         # todo3: enough ⌃V ⌃Q to get only Keymaps, even from Mouse Work
@@ -1386,7 +1415,7 @@ class ScreenEditor:
     # Emulate Csi Screen Writes missing from some or many Platforms
     #
 
-    def _take_csi_pack_n_kdata_if_(self, pack: TerminalBytePacket, n: int, kdata: bytes) -> bool:
+    def _take_csi_pack_n_kdata_if_(self, pack: TerminalBytePacket, n: int) -> bool:
         """Emulate or loopback and return True, else return False"""
 
         # Quickly don't take all but a Csi Final Byte Sequence
@@ -1408,6 +1437,7 @@ class ScreenEditor:
         if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T  # fails at gCloud Shell
             return True
 
+        kdata = pack.to_bytes()
         if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d  # fails at gCloud Shell
             return True
 
@@ -3349,8 +3379,10 @@ class ProxyTerminal:
 
         # Split fitting from not-fitting
 
-        prefix = ""
-        suffix = ""
+        tprint(f"{row_y};{column_x} {repr(text)[1:-1]}")
+
+        start = ""
+        end = ""
         for t in text:
 
             y = self.row_y
@@ -3359,18 +3391,18 @@ class ProxyTerminal:
             fitting = self._y_x_write_printable_t_(y, x=x, t=t)
 
             if fitting:
-                prefix += t
+                start += t
             else:
-                suffix += t
+                end += t
 
         # Trace what's not fitting
 
-        if suffix:
+        if end:
             (y, x) = (row_y, column_x)
-            if not prefix:
-                tprint(f"{y};{x} No proxy of {suffix!r}")
+            if not start:
+                tprint(f"{y};{x} No proxy of {end!r}")
             else:
-                tprint(f"{y};{x} No proxy of {len(suffix)} {suffix!r} after {prefix!r}")
+                tprint(f"{y};{x} No proxy of {len(end)} {end!r} after {start!r}")
 
     def proxy_write_crlf(self) -> None:
         """Write CR LF if it fits"""
@@ -3406,7 +3438,9 @@ class ProxyTerminal:
 
         # Always do write the Mirrors
 
-        self._y_x_mirror_write_(y=y, x=x, text=t)
+        matching = self._mirror_write_(t)
+        if not matching:
+            tprint(f"{y};{x} No mirror of {t=}")
 
         # End by saying if it fit
 
@@ -4568,20 +4602,34 @@ class BytesTerminal:
         fileno = self.fileno
         extras = self.extras
 
+        headbook = (b"\033", b"\033\033", b"\033\033O", b"\033\033[", b"\033O", b"\033[")
+        assert TerminalBytePacket.Headbook == headbook
+
         # Flush last of Output, before looking for Input
 
         stdio.flush()
 
         # Wait for first Byte, add in already available Bytes. and declare victory
 
-        t = 0.000_001  # defines "immediately"  # 0.000 works as "instantaneously" at macOS
+        Immediately = 0.000_001  # 0.000 Instantaneously works at macOS
+        Rapidly = 0.002
+
+        os_read_millis = list()
+        t0 = time.time()
 
         if extras or self.kbhit(timeout=timeout):
-            while extras or self.kbhit(timeout=t):
+            while extras or self.kbhit(timeout=Immediately):
 
                 if not extras:
+
                     byte = os.read(fileno, 1)
+
+                    t1 = time.time()
+                    os_read_millis.append(round((t1 - t0) * 1000, 3))
+                    t0 = t1
+
                 else:
+
                     pop = extras.pop(0)
                     byte = bytes([pop])
 
@@ -4595,9 +4643,12 @@ class BytesTerminal:
 
                 kdata = pack.to_bytes()
                 if not extras:
-                    if kdata == b"\033O":  # ⎋⇧O for Vim
-                        if not self.kbhit(timeout=0.333):
+
+                    if kdata in headbook:
+                        if not self.kbhit(timeout=Rapidly):  # especially ⎋⇧O for Vim
                             break  # rejects slow SS3 ⎋⇧O P Q R S of FnF1..FnF4
+
+        tprint(f"{os_read_millis=}")
 
     def read_y_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
@@ -4680,6 +4731,8 @@ class TerminalBytePacket:
     tail: bytearray  # CSI Final Byte, in 0x40..0x7E (63 Codes)
 
     closed: bool = False  # closed because completed, or because continuation undefined
+
+    Headbook = (b"\033", b"\033\033", b"\033\033O", b"\033\033[", b"\033O", b"\033[")
 
     #
     # Init, Bool, Repr, Str, and .require_simple to check invariants
@@ -5011,12 +5064,12 @@ class TerminalBytePacket:
     def any_decodes_startswith(self, data: bytes) -> str:
         """Return Say if these Bytes start 1 or more UTF-8 Encodings of Chars"""
 
-        suffixes = (b"\x80", b"\xbf", b"\x80\x80", b"\xbf\xbf", b"\x80\x80\x80", b"\xbf\xbf\xbf")
+        closers = (b"\x80", b"\xbf", b"\x80\x80", b"\xbf\xbf", b"\x80\x80\x80", b"\xbf\xbf\xbf")
 
-        for suffix in suffixes:
-            suffixed = data + suffix
+        for closer in closers:
+            encode = data + closer
             try:
-                decode = suffixed.decode()
+                decode = encode.decode()
                 assert len(decode) >= 1, (decode,)
                 return decode
             except UnicodeDecodeError:
@@ -5110,8 +5163,11 @@ class TerminalBytePacket:
         #   ⎋[ CSI  # ⎋⎋[ Esc CSI
         #
 
+        headbook = (b"\033", b"\033\033", b"\033\033O", b"\033\033[", b"\033O", b"\033[")
+        assert TerminalBytePacket.Headbook == headbook
+
         head_plus = bytes(head + data)
-        if head_plus in (b"\033", b"\033\033", b"\033\033O", b"\033\033[", b"\033O", b"\033["):
+        if head_plus in headbook:
             head.extend(data)
             return b""  # takes first 1 or 2 Bytes into Esc Sequences
 
