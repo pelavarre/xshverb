@@ -914,7 +914,7 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
-        self.print("Try Background Color at macOS Terminal after invisible Tabs")
+        self.print("Try BackColor at macOS Terminal after invisible Tabs")
         self.write("\033[K")
         self.print("Also try Chars before Tab")
         self.write("\033[K")
@@ -1512,9 +1512,6 @@ class ScreenEditor:
 
         # believes macOS has no ⎋[ ⇧ NOQRUVWY, and no [\]^_ aegijkopsuvwyz {|}~
 
-        # todo9: ⎋ waits forever and ever, ⎋[ waits forever and ever, ...
-        # todo10: ⎋[⇧M waits for more
-
         # todo2: stop wrong write-through of multibyte Control Chars
 
     def _match_csi_cup_write_through_(self, pack: TerminalBytePacket) -> bool:
@@ -1559,7 +1556,7 @@ class ScreenEditor:
 
             return False
 
-        # Accept 0x100 (256) Foreground/ Background Color Codes
+        # Accept 0x100 (256) Color Codes for FrontColor/ BackColor
 
         m256 = re.fullmatch(b"(38|48);(5);([0-9]+)", string=pack.neck)
         if m256:  # the other 8 & 8 Colors, the 216 Colors, or the 25 Grayscale
@@ -1568,7 +1565,7 @@ class ScreenEditor:
             if 0 <= ps <= 0xFF:
                 return True
 
-        # Accept 0x100 (256) Color Codes for R, G, and B
+        # Accept 0x100 (256) Color Codes for R, and for G, and and for B
 
         if not sys_platform_darwin:
 
@@ -1619,7 +1616,7 @@ class ScreenEditor:
 
         tab_stop_n = X1 + ((column_x - X1) // 8 + pn) * 8
         x = min(x_width, tab_stop_n)
-        self.write(f"\033[{x}G")  # does Not fill with Background Color
+        self.write(f"\033[{x}G")  # does Not fill with BackColor
 
         return True
 
@@ -2524,7 +2521,7 @@ class ScreenEditor:
         return False
 
     def mouse_verb_to_write_keycaps_sdata(self, verb: str) -> bool:
-        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
+        """Eval some Keycaps as FrontColor, as BackColor, or as FrontColor on BackColor"""
 
         splits = verb.split()
         keycaps = splits[0]
@@ -2559,7 +2556,7 @@ class ScreenEditor:
         return True
 
     def mouse_verb_to_write_color_sdata(self, verb: str) -> bool:
-        """Eval some Keycaps as Foreground, as Background, or as Foreground on Background Color"""
+        """Eval some Keycaps as FrontColor, as BackColor, or as FrontColor on BackColor"""
 
         splits = verb.split()
 
@@ -2568,8 +2565,8 @@ class ScreenEditor:
                 fverb = splits[0]
                 bverb = splits[2]
 
-                fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
-                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
+                fg = self.verb_to_color_sdata_if(fverb, kind="FrontColor")
+                bg = self.verb_to_color_sdata_if(bverb, kind="BackColor")
                 if fg and bg:
                     self.write(bg.decode())
                     self.write(fg.decode())
@@ -2579,14 +2576,14 @@ class ScreenEditor:
             if splits[0].casefold() == "on":
                 bverb = splits[1]
 
-                bg = self.verb_to_color_sdata_if(bverb, kind="Background")
+                bg = self.verb_to_color_sdata_if(bverb, kind="BackColor")
                 if bg:
                     self.write(bg.decode())
                     return True
 
         else:
             fverb = splits[0]
-            fg = self.verb_to_color_sdata_if(fverb, kind="Foreground")
+            fg = self.verb_to_color_sdata_if(fverb, kind="FrontColor")
             if fg:
                 self.write(fg.decode())
                 return True
@@ -2594,10 +2591,10 @@ class ScreenEditor:
         return False
 
     def verb_to_color_sdata_if(self, verb: str, kind: str) -> bytes:
-        """Eval a Keycap as a Foreground or a Background Color"""
+        """Eval a Keycap as a FrontColor or a BackColor"""
 
         splits = verb.split()
-        assert kind in ("Foreground", "Background"), (kind,)
+        assert kind in ("FrontColor", "BackColor"), (kind,)
 
         keycaps = splits[0]
 
@@ -2606,7 +2603,7 @@ class ScreenEditor:
         twenty_five = list(f"#{d}" for d in range(25))
         if keycaps in twenty_five:
             ps = self.twenty_five_gray_color_verb_to_ps(keycaps)
-            if kind == "Foreground":
+            if kind == "FrontColor":
                 sdata = f"\033[38;5;{ps}m".encode()
                 return sdata
             else:
@@ -2617,7 +2614,7 @@ class ScreenEditor:
 
         if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
             ps = self.six_cubed_color_verb_to_ps(keycaps)
-            if kind == "Foreground":
+            if kind == "FrontColor":
                 sdata = f"\033[38;5;{ps}m".encode()
                 return sdata
             else:
@@ -2630,7 +2627,7 @@ class ScreenEditor:
             (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
 
             if not sys_platform_darwin:
-                if kind == "Foreground":
+                if kind == "FrontColor":
                     sdata = f"\033[38;2;{r};{g};{b}m".encode()
                     return sdata
                 else:
@@ -2645,7 +2642,7 @@ class ScreenEditor:
 
             ps = 0x10 + (r6 * 36 + g6 * 6 + b6)
 
-            if kind == "Foreground":
+            if kind == "FrontColor":
                 sdata = f"\033[38;5;{ps}m".encode()
                 return sdata
             else:
@@ -2979,7 +2976,7 @@ class ProxyTerminal:
     fill_styles_by_y: dict[int, list[str]] = dict()  # the last Style Write per Row
 
     toggles: list[str]  # Replacing/ Inserting/ etc
-    styles: list[str]  # Foreground on Background Colors, etc
+    styles: list[str]  # FrontColor on BackColor, and Colorless choices, etc
 
     y_height: int
     x_width: int
@@ -3494,34 +3491,34 @@ class ProxyTerminal:
 
         # Take bursts of HT or LF, or a single CR LF
 
-        if self._mirror_byte_burst_(sdata):
+        if self._mirror_byte_burst_(sdata):  # \t \n
             return True
 
-        if self._mirror_crlf_(sdata):
+        if self._mirror_crlf_(sdata):  # \r\n
             return True
 
         # Take ⎋[{y};{x}H as meaningful, even when Y X negative, zero, or otherwise out-of-bounds
 
-        if self._mirror_leap_csi_cup_y_x_(stext):
+        if self._mirror_leap_csi_cup_y_x_(stext):  # ⎋[⇧H
             return True
 
         # Write one whole Packet into the Mirrors
 
         pack = TerminalBytePacket(sdata)
 
-        if self._mirror_leap_byte_(pack):
+        if self._mirror_leap_bytes_(pack):  # \a \b \t \n \r ⎋7 ⎋8
             return True
 
-        if self._mirror_leap_csi_(pack):
+        if self._mirror_leap_csi_(pack):  # ⎋[⇧A ⎋[⇧B ⎋[⇧C ⎋[⇧D ⎋[⇧G ⎋[D  # ⎋[⇧I ⎋[⇧Z  # not ⎋[⇧H
             return True
 
-        if self._mirror_edit_csi_(pack):
+        if self._mirror_edit_csi_(pack):  # ⎋[⇧J ⎋[⇧K ⎋[⇧X  # ⎋[⇧M ⎋[⇧L
             return True
 
-        if self._mirror_toggle_(pack):
+        if self._mirror_toggle_(pack):  # a few of ⎋[H and ⎋[L
             return True
 
-        if self._mirror_style_(pack):
+        if self._mirror_sgr_style_(pack):  # ⎋[M
             return True
 
         # Else ask our caller to .tprint our confusion
@@ -3570,7 +3567,7 @@ class ProxyTerminal:
 
                     mirrored = 0
                     for _ in range(pn):
-                        if not self._mirror_leap_byte_(sdata_pack):
+                        if not self._mirror_leap_bytes_(sdata_pack):
                             mirrored += 1
 
                     if mirrored < pn:
@@ -3586,10 +3583,10 @@ class ProxyTerminal:
         if sdata == b"\r\n":
 
             cr_pack = TerminalBytePacket(b"\r")
-            if self._mirror_leap_byte_(cr_pack):
+            if self._mirror_leap_bytes_(cr_pack):
 
                 lf_pack = TerminalBytePacket(b"\n")
-                mirrored = self._mirror_leap_byte_(lf_pack)
+                mirrored = self._mirror_leap_bytes_(lf_pack)
                 if not mirrored:
                     tprint("Only mirrored the CR, not the LF, of CR LF")
 
@@ -3630,7 +3627,7 @@ class ProxyTerminal:
 
         return False
 
-    def _mirror_leap_byte_(self, pack: TerminalBytePacket) -> bool:
+    def _mirror_leap_bytes_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Control Byte Sequences that move the Terminal Cursor"""
 
         sdata = pack.to_bytes()
@@ -3695,12 +3692,12 @@ class ProxyTerminal:
 
         # Checkpoint and revert the Y X Cursor
 
-        if sdata == b"\0337":
+        if sdata == b"\0337":  # ⎋7
             self.was_y = row_y
             self.was_x = column_x
             return True
 
-        if sdata == b"\0338":
+        if sdata == b"\0338":  # ⎋8
             self.row_y = was_y
             self.column_x = was_x
             return True
@@ -3712,10 +3709,10 @@ class ProxyTerminal:
     def _mirror_leap_csi_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that move the Terminal Cursor"""
 
-        if self._mirror_leap_csi_arrow_plus_(pack):
+        if self._mirror_leap_csi_arrow_plus_(pack):  # ⎋[⇧A ⎋[⇧B ⎋[⇧C ⎋[⇧D ⎋[⇧G ⎋[D  # not ⎋[⇧H
             return True
 
-        if self._mirror_leap_csi_tab_and_forth_(pack):
+        if self._mirror_leap_csi_tab_and_forth_(pack):  # ⎋[⇧I ⎋[⇧Z
             return True
 
         return False
@@ -3814,13 +3811,15 @@ class ProxyTerminal:
     def _mirror_edit_csi_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that edit the Rows and Columns"""
 
-        if self._mirror_erase_csi_(pack):
+        if self._mirror_erase_csi_(pack):  # ⎋[ ⇧J ⇧K ⇧X
             return True
 
-        if self._mirror_delete_insert_csi_(pack):
+        if self._mirror_delete_insert_csi_(pack):  # ⎋[ ⇧@ ⇧P
             return True
 
         return False
+
+        # todo10: Mirrors for  ⎋[⇧M rows-delete  ⎋[⇧L rows-insert
 
     def _mirror_erase_csi_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that erase Rows and Columns"""
@@ -4087,8 +4086,8 @@ class ProxyTerminal:
 
         return False
 
-    def _mirror_style_(self, pack: TerminalBytePacket) -> bool:
-        """Mirror the Foreground-on-Background Colors of the next Text"""
+    def _mirror_sgr_style_(self, pack: TerminalBytePacket) -> bool:
+        """Mirror the FrontColor on BackColor of the next Text"""
 
         sdata = pack.to_bytes()
         stext = sdata.decode()  # may raise UnicodeDecodeError
@@ -4101,7 +4100,7 @@ class ProxyTerminal:
         if not kind:
             return False
 
-        assert kind in ("Foreground", "Background", "Colorless"), (kind,)
+        assert kind in ("FrontColor", "BackColor", "Colorless"), (kind,)
 
         # Take the cancellation of all Sgr Styles
 
@@ -4123,7 +4122,7 @@ class ProxyTerminal:
 
         # Remove the Old Stale Color if need be
 
-        assert kind in ("Foreground", "Background"), (kind,)
+        assert kind in ("FrontColor", "BackColor"), (kind,)
 
         removable_styles = list(styles)
         for rstyle in removable_styles:
@@ -4142,7 +4141,7 @@ class ProxyTerminal:
         return True
 
     def _pack_to_sgr_kind_(self, pack: TerminalBytePacket) -> str:
-        """Say 'Foreground' or 'Background' or 'Colorless' or '' Empty Str"""
+        """Say 'FrontColor' or 'BackColor' or 'Colorless' or '' Empty Str"""
 
         assert SGR_PS == "\033[" "{}" "m"
 
@@ -4163,17 +4162,17 @@ class ProxyTerminal:
             ps = int(pack.neck)
 
             if (30 <= ps <= 37) or (90 <= ps <= 97):
-                return "Foreground"
+                return "FrontColor"
 
             if (40 <= ps <= 47) or (100 <= ps <= 107):
-                return "Background"
+                return "BackColor"
 
             return "Colorless"
 
         if len(neck_splits) == 3:
 
             if bytes(neck_splits[0]) in (b"38", b"48"):
-                ground = "Foreground" if (neck_splits[0] == b"38") else "Background"
+                ground = "FrontColor" if (neck_splits[0] == b"38") else "BackColor"
                 if neck_splits[1] == b"5":
                     ps = int(neck_splits[2])
                     assert 0 <= ps <= 0xFF, (ps, pack)
@@ -4184,7 +4183,7 @@ class ProxyTerminal:
         if len(neck_splits) == 5:
 
             if bytes(neck_splits[0]) in (b"38", b"48"):
-                ground = "Foreground" if (neck_splits[0] == b"38") else "Background"
+                ground = "FrontColor" if (neck_splits[0] == b"38") else "BackColor"
                 if neck_splits[1] == b"2":
 
                     r = int(neck_splits[2])
@@ -4221,11 +4220,11 @@ class ProxyTerminal:
 # todo8: (August 30th, 2025) tracks local civil date
 #
 # todo8: Small Int Literals alone track X if not an X tracker already. X= is explicit, but eraseable
-# todo8: (#), or (on #), or (# on #), button could track Foreground on Background Color such as #24 on #005
+# todo8: (#), or (on #), or (# on #), button could track FrontColor on BackColor such as #24 on #005
 
 #
 
-# todo8: Mirrors for  ⎋[⇧M rows-delete  ⎋[⇧L rows-insert  ⎋[⇧T rows-down  ⎋[⇧S rows-up
+# todo8: Mirrors for ⎋[⇧T rows-down  ⎋[⇧S rows-up
 # todo8: Mirror the  ⎋[H ⎋[⇧2J bundled into  ⎋[⇧?1049H
 # todo8: Mirrors for  ⎋[` ⎋[F ⎋[B  # todo8: and run tests for the F9 suggestions vs tprint no mirror
 
