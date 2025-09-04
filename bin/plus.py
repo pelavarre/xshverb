@@ -3812,7 +3812,10 @@ class ProxyTerminal:
         if self._mirror_erase_csi_(pack):  # ⎋[ ⇧J ⇧K ⇧X
             return True
 
-        if self._mirror_delete_insert_csi_(pack):  # ⎋[ ⇧@ ⇧P
+        if self._mirror_insert_csi_(pack):  # ⎋[ ⇧@ ⇧L
+            return True
+
+        if self._mirror_delete_csi_(pack):  # ⎋[ ⇧M ⇧P
             return True
 
         return False
@@ -3960,20 +3963,17 @@ class ProxyTerminal:
 
         fill_styles_by_y[y] = list(styles)
 
-    def _mirror_delete_insert_csi_(self, pack: TerminalBytePacket) -> bool:
-        """Mirror the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
+    def _mirror_insert_csi_(self, pack: TerminalBytePacket) -> bool:
+        """Mirror the Csi Esc Byte Sequences that insert Rows and Columns"""
 
         column_x = self.column_x
         row_y = self.row_y
         styles = self.styles
         writes_by_y_x = self.writes_by_y_x
         fill_styles_by_y = self.fill_styles_by_y
-        y_height = self.y_height
 
         assert ICH_X == "\033[" "{}" "@"
         assert IL_Y == "\033[" "{}" "L"
-        assert DL_Y == "\033[" "{}" "M"
-        assert DCH_X == "\033[" "{}" "P"
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
@@ -4047,6 +4047,23 @@ class ProxyTerminal:
                 # Succeed
 
                 return True
+
+        return False
+
+    def _mirror_delete_csi_(self, pack: TerminalBytePacket) -> bool:
+        """Mirror the Csi Esc Byte Sequences that delete Rows and Columns"""
+
+        column_x = self.column_x
+        row_y = self.row_y
+        styles = self.styles
+        writes_by_y_x = self.writes_by_y_x
+        fill_styles_by_y = self.fill_styles_by_y
+        y_height = self.y_height
+
+        assert DL_Y == "\033[" "{}" "M"
+        assert DCH_X == "\033[" "{}" "P"
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
 
         # Mirror ⇧M Deletes of Rows
 
