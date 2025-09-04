@@ -188,6 +188,7 @@ EL_PS = "\033[" "{}" "K"  # CSI 04/11 Erase in Line  # 0 Tail # 1 Head # 2 Row
 
 ICH_X = "\033[" "{}" "@"  # CSI 04/00 Insert Character
 IL_Y = "\033[" "{}" "L"  # CSI 04/12 Insert Line [Row]
+DL_Y = "\033[" "{}" "M"  # CSI 04/13 Delete Line [Row]
 DCH_X = "\033[" "{}" "P"  # CSI 05/00 Delete Character
 
 SU_Y = "\033[" "{}" "S"  # CSI 05/03 Scroll Up [Insert South Lines]
@@ -990,9 +991,9 @@ class ScreenEditor:
         millis = int(t1t0 * 1000)
 
         # Update the Mirror of the X-Width x Y-Height of the Screen
-        # todo9: take subscribers to changes in the the X-Width x Y-Height
-        # todo9: call .write_screen for the new portion
-        # todo9: remember a 'todo:' to have resize mean clip after all
+        # todo8: take subscribers to changes in the the X-Width x Y-Height
+        # todo8: call .write_screen for the new portion
+        # todo8: remember a 'todo:' to have resize mean clip after all
 
         pt.proxy_read_y_height_x_width()  # todo4: read y_height x_width less often
 
@@ -1054,7 +1055,7 @@ class ScreenEditor:
             if not pack:
                 self.arrows = 0  # written only by Init & this Def
 
-                pack = self.read_arrows_as_byte_packet()
+                pack = self.read_arrows_as_byte_packet()  # todo: say n > 1 ?
                 assert pack, (pack,)
 
                 return (pack, n)
@@ -1338,32 +1339,37 @@ class ScreenEditor:
     def _take_csi_mouse_press_if_(self, pack: TerminalBytePacket, n: int) -> bool:
         """Shrug off a Mouse Press if quick"""
 
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if (n == 1) and csi and (pack.tail == b"M"):
-            tprint("# _take_csi_mouse_press_if_")
+        if (n == 1) and self._match_csi_mouse_(pack) and (pack.tail == b"M"):
             return True  # drops first 1/2 or 2/3 of Sgr Mouse
 
         return False
 
-        # todo9: don't so aggressively drop ⎋[⇧M Press
+    def _match_csi_mouse_(self, pack: TerminalBytePacket) -> bool:
+        """Recommend do take as a Mouse Report, or don't"""
+
+        neck = pack.neck
+        m = re.fullmatch(b"<([0-9]+);([0-9]+);([0-9]+)", string=neck)
+
+        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+        if csi and pack.tail and (pack.tail in b"Mm"):
+            if not pack.back:
+                if m:
+                    return True
+
+        return False
 
     def _take_csi_mouse_release_if_(self, pack: TerminalBytePacket) -> bool:
         """Reply to a Mouse Release, no matter if slow or quick"""
 
-        # Eval the Sgr Mouse Report
+        neck = pack.neck
 
-        csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
-        if not (csi and (pack.tail == b"m")):
+        if not (self._match_csi_mouse_(pack) and (pack.tail == b"m")):
             return False
 
-            # todo9: don't so aggressively take ⎋[M Release
+        m = re.fullmatch(b"<([0-9]+);([0-9]+);([0-9]+)", string=neck)
+        assert m, (m, neck, pack)
 
-        if not pack.neck.startswith(b"<"):
-            return False
-
-        splits = pack.neck.removeprefix(b"<").split(b";")
-        assert len(splits) == 3, (splits, pack.neck, pack)
-        (f, x, y) = list(int(_) for _ in splits)  # ⎋[<{f};{x};{y}m
+        (f, x, y) = (int(m.group(1)), int(m.group(2)), int(m.group(3)))  # ⎋[<{f};{x};{y}m
 
         tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
 
@@ -1880,7 +1886,7 @@ class ScreenEditor:
         x = (x_width // 2) + (x_width % 2)  # ⌃A ⌃A ⌃A Middle of Row on Screen
         self.write(f"\033[{x}G")
 
-        # Emacs ⌃A  # Vim 0  # Also ⌃A ⌃A ⌃A  # Also 0 0 0  # todo9: skip the non-replies
+        # Emacs ⌃A  # Vim 0  # Also ⌃A ⌃A ⌃A  # Also 0 0 0  # todo8: skip the non-replies
 
     def do_column_leap_rightmost(self) -> None:
         """Leap to the Rightmost Column"""
@@ -1925,7 +1931,7 @@ class ScreenEditor:
 
         assert pt.column_x == x, (pt.column_x, x)
 
-        # Emacs ⌃E  # Vim ⇧$  # Also ⌃E ⌃E ⌃E  # Also ⇧$ ⇧$ ⇧$  # todo9: skip the non-replies
+        # Emacs ⌃E  # Vim ⇧$  # Also ⌃E ⌃E ⌃E  # Also ⇧$ ⇧$ ⇧$  # todo8: skip the non-replies
 
     def do_column_leap_rightmost_inserting_start(self) -> None:
         """Leap to the Rightmost Column, and Start Inserting"""
@@ -2741,7 +2747,7 @@ class SnuckLife:
         self.dx = dx
         self.sprites = sprites
 
-    def play_snuck_life(self) -> None:  # todo9: stop replacing Unwritten Chars w Colored Spaces
+    def play_snuck_life(self) -> None:  # todo8: stop replacing Unwritten Chars w Colored Spaces
         """Play Conway's Game-of-Life"""
 
         sprites = self.sprites
@@ -3965,6 +3971,8 @@ class ProxyTerminal:
         y_height = self.y_height
 
         assert ICH_X == "\033[" "{}" "@"
+        assert IL_Y == "\033[" "{}" "L"
+        assert DL_Y == "\033[" "{}" "M"
         assert DCH_X == "\033[" "{}" "P"
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
@@ -5880,7 +5888,7 @@ if __name__ == "__main__":
     # print("__main__: after main", file=sys.stderr)
 
 
-# todo9: take the two Keyboard Chords ⎋ ← ↑ → ↓ into the Games
+# todo8: take the two Keyboard Chords ⎋ ← ↑ → ↓ into the Games
 
 # todo8: Help people whose /usr/bin/python3 runs better than their /usr/local/bin/python3
 # todo8: TUI for:  rgb = 104 - 0x10; print(rgb // 36, (rgb // 6) % 6, rgb % 6)
