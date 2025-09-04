@@ -949,19 +949,9 @@ class ScreenEditor:
         # and do swap in b'\033[' b'M' Csi ⇧M for b'\033[M' incomplete 6 Char Mouse Report
 
         (pack, n) = self.read_one_pack()
+        pack.close_if_csi_shift_m()
+
         kdata = pack.to_bytes()
-
-        if kdata == b"\033[M":
-            pack = TerminalBytePacket(b"\033[")
-            pack.tail.extend(b"M")
-
-            assert pack.tail == b"M", (pack.tail,)
-            assert not pack.closed, (pack.closed,)
-            pack.closed = True
-
-            assert pack.to_bytes() == kdata, (pack.to_bytes(), kdata)
-
-            tprint(f"{str(pack)=}")
 
         # Quit in several ways
 
@@ -3505,6 +3495,7 @@ class ProxyTerminal:
         # Write one whole Packet into the Mirrors
 
         pack = TerminalBytePacket(sdata)
+        pack.close_if_csi_shift_m()
 
         if self._mirror_leap_bytes_(pack):  # \a \b \t \n \r ⎋7 ⎋8
             return True
@@ -3635,6 +3626,7 @@ class ProxyTerminal:
         row_y = self.row_y
         column_x = self.column_x
         writes_by_y_x = self.writes_by_y_x
+        styles = self.styles
         y_height = self.y_height
         x_width = self.x_width
         was_y = self.was_y
@@ -3673,7 +3665,7 @@ class ProxyTerminal:
             if column_x > last_eraseable_x:
                 if sys_platform_darwin:
                     for x in range(column_x, tab_stop_1):
-                        writes_by_x[x] = list(self.styles) + [" "]
+                        writes_by_x[x] = list(styles) + [" "]
 
             return True
 
@@ -3819,8 +3811,6 @@ class ProxyTerminal:
 
         return False
 
-        # todo10: Mirrors for  ⎋[⇧M rows-delete  ⎋[⇧L rows-insert
-
     def _mirror_erase_csi_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that erase Rows and Columns"""
 
@@ -3941,6 +3931,9 @@ class ProxyTerminal:
 
         writes_by_y_x = self.writes_by_y_x
         fill_styles_by_y = self.fill_styles_by_y
+        styles = self.styles
+
+        #
 
         if sys_platform_darwin:
 
@@ -3951,11 +3944,15 @@ class ProxyTerminal:
 
             writes_by_x = writes_by_y_x[y]
 
+            #
+
             for fx in range(1, x):
                 if fx not in writes_by_x.keys():
                     writes_by_x[fx] = list(y_fill_styles) + [" "]
 
-        fill_styles_by_y[y] = list(self.styles)
+        #
+
+        fill_styles_by_y[y] = list(styles)
 
     def _mirror_delete_insert_csi_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the Csi Esc Byte Sequences that delete or insert Rows and Columns"""
@@ -3964,11 +3961,48 @@ class ProxyTerminal:
         row_y = self.row_y
         styles = self.styles
         writes_by_y_x = self.writes_by_y_x
+        fill_styles_by_y = self.fill_styles_by_y
+        y_height = self.y_height
 
         assert ICH_X == "\033[" "{}" "@"
         assert DCH_X == "\033[" "{}" "P"
 
         csi = pack.head == b"\033["  # takes Csi ⎋[, but not Esc Csi ⎋⎋[
+
+        # Mirror ⇧L Inserts of Rows
+
+        if csi and (pack.tail == b"L"):  # ⎋[⇧L rows-insert
+            if not pack.back:
+                pn_int = int(pack.neck) if pack.neck else PN1
+                pn = pn_int if pn_int else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+
+                ypn = row_y + pn
+
+                # Shift South each Row that follows
+
+                y_list = sorted(_ for _ in writes_by_y_x.keys() if _ >= row_y)
+                for from_y in reversed(y_list):
+                    to_y = from_y + pn
+
+                    writes_by_y_x[to_y] = writes_by_y_x[from_y]
+                    del writes_by_y_x[from_y]
+
+                y_list = sorted(_ for _ in fill_styles_by_y.keys() if _ >= row_y)
+                for from_y in reversed(y_list):
+                    to_y = from_y + pn
+
+                    fill_styles_by_y[to_y] = fill_styles_by_y[from_y]
+                    del fill_styles_by_y[from_y]
+
+                # Insert the Colored Rows themselves
+
+                if sys_platform_darwin:
+                    for y in range(row_y, ypn):
+                        fill_styles_by_y[y] = list(styles)
+
+                # Succeed
+
+                return True
 
         # Mirror ⇧@ Inserts of Pn Chars in the Row
 
@@ -4005,6 +4039,45 @@ class ProxyTerminal:
                 # Succeed
 
                 return True
+
+        # Mirror ⇧M Deletes of Rows
+
+        if csi and (pack.tail == b"M"):  # ⎋[⇧M rows-delete
+            if not pack.back:
+
+                pn = int(pack.neck) if pack.neck else PN1
+                pn = pn if pn else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+
+                ypn = row_y + pn
+
+                # Delete the Rows themselves
+
+                for y in range(row_y, ypn):
+                    if y in writes_by_y_x.keys():
+                        del writes_by_y_x[y]
+                    if y in fill_styles_by_y.keys():
+                        del fill_styles_by_y[y]
+
+                # Shift North each Row that follows
+
+                y_list = sorted(_ for _ in writes_by_y_x.keys() if _ >= ypn)
+                for from_y in y_list:
+                    to_y = from_y - pn
+
+                    writes_by_y_x[to_y] = writes_by_y_x[from_y]
+                    del writes_by_y_x[from_y]
+
+                y_list = sorted(_ for _ in fill_styles_by_y.keys() if _ >= ypn)
+                for from_y in y_list:
+                    to_y = from_y - pn
+
+                    fill_styles_by_y[to_y] = fill_styles_by_y[from_y]
+                    del fill_styles_by_y[from_y]
+
+                # Set the Fill Styles of the new Southmost Rows
+
+                for to_y in range(y_height + 1 - pn, y_height + 1):
+                    fill_styles_by_y[to_y] = list(styles)
 
         # Mirror ⇧P Deletes of Pn Chars in the Row
 
@@ -5268,6 +5341,26 @@ class TerminalBytePacket:
         # splits '⎋[200~' and '⎋[201~' away from enclosed Bracketed Paste
 
         # todo: limit the length of a CSI Escape Sequence
+
+    def close_if_csi_shift_m(self) -> None:
+        """Convert to Csi ⎋[⇧M, if standing as an open 6 Char Mouse Report"""
+
+        head = self.head
+        back = self.back
+        neck = self.neck
+        tail = self.tail
+        closed = self.closed
+
+        if (head == b"\033[M") and (not back) and (not neck) and (not tail):
+            if not closed:
+
+                self.head.clear()
+                self.head.extend(b"\033[")
+                self.tail.extend(b"M")
+
+                self.closed = True
+
+                return
 
     # todo: limit rate of input so livelocks go less wild, like in Keyboard/ Screen loopback
 
