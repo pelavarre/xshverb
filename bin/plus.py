@@ -141,7 +141,7 @@ def platforms_fit_if(platforms: list[str] | None) -> None:
 
     if platforms:
         for platform in platforms:
-            if platform not in defined_platforms:
+            if platform.title() not in defined_platforms:
                 (choice, choices) = (platform, defined_platforms)
 
                 s = "plus.py: error:"
@@ -3269,6 +3269,8 @@ class ProxyTerminal:
 
         sdata = b""
         sdata += b"\033[?2004h"  # ⎋[⇧?2004H L for ⌘V in ⎋[200~ ⎋[201~
+        if flags.google:
+            sdata += b"\033[?1000;1006h"  # todo7: more solve Mouse Scroll and Copy/Paste at Google
 
         os.write(fileno, sdata)  # not:  os.write(fileno, b"ProxyTerminal.__exit__" b"\r\n")
 
