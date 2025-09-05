@@ -2679,8 +2679,8 @@ class ScreenEditor:
                 fverb = splits[0]
                 bverb = splits[2]
 
-                fg = self.verb_to_color_sdata_if(fverb, kind="FrontColor")
-                bg = self.verb_to_color_sdata_if(bverb, kind="BackColor")
+                fg = self._verb_to_color_sdata_if_(fverb, kind="FrontColor")
+                bg = self._verb_to_color_sdata_if_(bverb, kind="BackColor")
                 if fg and bg:
                     self.write(bg.decode())
                     self.write(fg.decode())
@@ -2690,25 +2690,37 @@ class ScreenEditor:
             if splits[0].casefold() == "on":
                 bverb = splits[1]
 
-                bg = self.verb_to_color_sdata_if(bverb, kind="BackColor")
+                bg = self._verb_to_color_sdata_if_(bverb, kind="BackColor")
                 if bg:
                     self.write(bg.decode())
                     return True
 
         else:
             fverb = splits[0]
-            fg = self.verb_to_color_sdata_if(fverb, kind="FrontColor")
+            fg = self._verb_to_color_sdata_if_(fverb, kind="FrontColor")
             if fg:
                 self.write(fg.decode())
                 return True
 
         return False
 
-    def verb_to_color_sdata_if(self, verb: str, kind: str) -> bytes:
+    def _verb_to_color_sdata_if_(self, verb: str, kind: str) -> bytes:
         """Eval a Keycap as a FrontColor or a BackColor"""
 
+        neck_end = self._verb_to_sgr_csi_neck_end_str(verb)
+        if neck_end:
+            if kind == "FrontColor":
+                sdata = f"\033[38;{neck_end}m".encode()
+            else:
+                sdata = f"\033[48;{neck_end}m".encode()
+            return sdata
+
+        return b""
+
+    def _verb_to_sgr_csi_neck_end_str(self, verb: str) -> str:
+        """Eval a Keycap as a Color"""
+
         splits = verb.split()
-        assert kind in ("FrontColor", "BackColor"), (kind,)
 
         keycaps = splits[0]
 
@@ -2717,23 +2729,15 @@ class ScreenEditor:
         twenty_five = list(f"#{d}" for d in range(25))
         if keycaps in twenty_five:
             ps = self.twenty_five_gray_color_verb_to_ps(keycaps)
-            if kind == "FrontColor":
-                sdata = f"\033[38;5;{ps}m".encode()
-                return sdata
-            else:
-                sdata = f"\033[48;5;{ps}m".encode()
-                return sdata
+            neck_end = f"5;{ps}"
+            return neck_end
 
         # Eval a 6**3 Color
 
         if re.fullmatch(r"#[0-5][0-5][0-5]", string=keycaps):
             ps = self.six_cubed_color_verb_to_ps(keycaps)
-            if kind == "FrontColor":
-                sdata = f"\033[38;5;{ps}m".encode()
-                return sdata
-            else:
-                sdata = f"\033[48;5;{ps}m".encode()
-                return sdata
+            neck_end = f"5;{ps}"
+            return neck_end
 
         # Eval a 24-Bit Color
 
@@ -2741,12 +2745,8 @@ class ScreenEditor:
             (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
 
             if not flags.apple:  # Apple lacks native 24-Bit RGB Color
-                if kind == "FrontColor":
-                    sdata = f"\033[38;2;{r};{g};{b}m".encode()
-                    return sdata
-                else:
-                    sdata = f"\033[48;2;{r};{g};{b}m".encode()
-                    return sdata
+                neck_end = f"2;{r};{g};{b}"
+                return neck_end
 
             # Else emulate the 24-Bit Color with a 6**3 Color
 
@@ -2756,16 +2756,12 @@ class ScreenEditor:
 
             ps = 0x10 + (r6 * 36 + g6 * 6 + b6)
 
-            if kind == "FrontColor":
-                sdata = f"\033[38;5;{ps}m".encode()
-                return sdata
-            else:
-                sdata = f"\033[48;5;{ps}m".encode()
-                return sdata
+            neck_end = f"5;{ps}"
+            return neck_end
 
         # Else don't succeed
 
-        return b""
+        return ""
 
     def twenty_five_gray_color_verb_to_ps(self, verb: str) -> int:
         """Eval a #n color"""
