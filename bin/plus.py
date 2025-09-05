@@ -620,6 +620,7 @@ class ScreenEditor:
 
     proxy_terminal: ProxyTerminal
     terminal_byte_packets: list[TerminalBytePacket]
+    pasting_x: int
 
     arrows: int  # counts Keyboard Arrow Chords sent faster than people can type them
     arrow_row_y: int  # the Y of Y X after the first Keyboard Arrow Chord
@@ -640,6 +641,7 @@ class ScreenEditor:
 
         self.proxy_terminal = pt
         self.terminal_byte_packets = list()
+        self.pasting_x = -1
 
         self.arrows = 0
         self.arrow_row_y = -1
@@ -1224,6 +1226,11 @@ class ScreenEditor:
         if self._take_csi_pack_n_kdata_if_(pack, n=n):
             return
 
+        # Reply to the Start/ End Marks of Bracketed-Paste
+
+        if self._take_csi_bracketed_paste_if_(pack, n=n):
+            return
+
         # Reply to Mouse Press & Release
 
         if self._take_csi_mouse_press_if_(pack, n=n):
@@ -1266,10 +1273,17 @@ class ScreenEditor:
     def do_write_cr_lf(self) -> None:
         """Write CR LF"""
 
+        pasting_x = self.pasting_x
+
         assert CR == "\r"
         assert LF == "\n"
+        assert CHA_X == "\033[" "{}" "G"
 
-        self.write("\r\n")
+        if pasting_x == -1:
+            self.write("\r\n")
+        else:
+            self.write(f"\033[{pasting_x}G")
+            self.write("\n")
 
         # todo8: Emacs ⌃M and ⌃K need the Rows mirrored, as does Vim I ⌃M
         # todo8: classic Vim ⇧R does define ⇧R ⌃M same as I ⌃M
@@ -1333,11 +1347,41 @@ class ScreenEditor:
         # Vim ⇧Z⇧Q
 
     #
+    # Replace to Paste Marks
+    #
+
+    def _take_csi_bracketed_paste_if_(self, pack: TerminalBytePacket, n: int) -> bool:
+        """Take Pasted Bytes into where the Terminal Cursor was as Paste began"""
+
+        pt = self.proxy_terminal
+        column_x = pt.column_x
+        x_width = pt.x_width
+
+        x = max(X1, min(column_x, x_width))
+        assert x != -1, (x, X1, column_x, x_width)
+
+        kdata = pack.to_bytes()
+
+        if kdata == b"\033[200~":  # ⎋[200~
+            if self.pasting_x != -1:
+                tprint(f"{self.pasting_x=}  # _take_csi_bracketed_paste_if_")
+            self.pasting_x = x
+            return True
+
+        if kdata == b"\033[201~":  # ⎋[201~
+            if self.pasting_x == -1:
+                tprint(f"{self.pasting_x=}  # _take_csi_bracketed_paste_if_")
+            self.pasting_x = -1
+            return True
+
+        return False
+
+    #
     # Reply to Mouse Strokes
     #
 
     def _take_csi_mouse_press_if_(self, pack: TerminalBytePacket, n: int) -> bool:
-        """Shrug off a Mouse Press if quick"""
+        """Recommend do take as a Mouse Press, or don't"""
 
         if (n == 1) and self._match_csi_mouse_(pack) and (pack.tail == b"M"):
             return True  # drops first 1/2 or 2/3 of Sgr Mouse
@@ -1359,7 +1403,7 @@ class ScreenEditor:
         return False
 
     def _take_csi_mouse_release_if_(self, pack: TerminalBytePacket) -> bool:
-        """Reply to a Mouse Release, no matter if slow or quick"""
+        """Recommend do take as a Mouse Release, or don't"""
 
         neck = pack.neck
 
@@ -3022,11 +3066,22 @@ class ProxyTerminal:
         klog = self.keyboard_bytes_log
         slog = self.screen_bytes_log
 
+        fileno = bt.fileno
+
         # Enter each
 
         bt.__enter__()
         klog.__enter__()
         slog.__enter__()
+
+        # Ask for the Start/ End Marks of Bracketed-Paste's
+
+        assert _SM_BRACKETED_PASTE_ == "\033[" "?2004h"
+
+        sdata = b""
+        sdata += b"\033[?2004h"  # ⎋[?2004H L for ⌘V in ⎋[200~ ⎋[201~
+
+        os.write(fileno, sdata)  # not:  os.write(fileno, b"ProxyTerminal.__exit__" b"\r\n")
 
         # Succeed
 
@@ -3046,8 +3101,6 @@ class ProxyTerminal:
 
         fileno = bt.fileno
 
-        sdata = b""
-
         # Guess at Normal after some Terminal Writes bypass our Screen Logs, if need be
         # Compare .slam_enough_stty_bits_to_normal
 
@@ -3055,16 +3108,20 @@ class ProxyTerminal:
         assert DECRC == "\0338"
 
         assert RM_IRM == "\033[" "4l"
+        assert SGR_PS == "\033[" "{}" "m"
         assert _RM_SGR_MOUSE_ == "\033[" "?1000;1006l"
         assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
-        assert SGR_PS == "\033[" "{}" "m"
+        assert _RM_BRACKETED_PASTE_ == "\033[" "?2004l"
 
-        sdata += b"\033[m"
-        sdata += b"\033[4l"
-        sdata += b"\0337"
-        sdata += b"\033[?1049l"  # and implies \033[H at macOS Terminal
-        sdata += b"\0338"
-        sdata += b"\033[?1000;1006l"
+        sdata = b""
+
+        sdata += b"\033[m"  # ⎋[M goes back to plain
+        sdata += b"\033[4l"  # ⎋[4L goes back to replacing
+        sdata += b"\033[?1000;1006l"  # stops the ⎋[?1000;1006H till ⎋[?1000;1006L
+        sdata += b"\0337"  # ⎋7  # lets ⎋8 follow
+        sdata += b"\033[?1049l"  # goes back to main Screen, and implies ⎋[⇧H at macOS
+        sdata += b"\0338"  # ⎋8 to mostly undo the ⎋[⇧H of ⎋[?1049L
+        sdata += b"\033[?2004l"  # ⎋[?2004H L for ⌘V in ⎋[200~ ⎋[201~
 
         # Exit via 1st Column of 1 Row above the Last Row
 
@@ -5405,7 +5462,7 @@ FAMOUS_SDATA_TUPLE = (
     b"\033[?1006h",  # _SGR_MOUSE_
     b"\033[?1015h",
     b"\033[?1049h",  # _SM_XTERM_ALT_
-    # b"\033[?2004h",  # _SM_BRACKETED_PASTE_
+    b"\033[?2004h",  # _SM_BRACKETED_PASTE_
     #
     b"\033[4l",  # RM_IRM
     b"\033[?25l",  # RM_DECTCEM
@@ -5415,7 +5472,7 @@ FAMOUS_SDATA_TUPLE = (
     b"\033[?1006l",  # _SGR_MOUSE_
     b"\033[?1015l",
     b"\033[?1049l",  # _RM_XTERM_MAIN_
-    # b"\033[?2004l",  # _RM_BRACKETED_PASTE_
+    b"\033[?2004l",  # _RM_BRACKETED_PASTE_
     #
     b"\033[5n",
     b"\033[6n",  # DSR_6
