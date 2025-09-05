@@ -2461,7 +2461,7 @@ class ScreenEditor:
         # List the Widgets of the Row
 
         y_text = pt.proxy_read_y_row_text(y, default=" ")
-        widget_by_i = self._split_widgets_(text=y_text)
+        widget_by_wx = self._text_to_widgets_by_wx_(text=y_text)
 
         # Find a Widget beneath the Mouse Release
 
@@ -2469,22 +2469,20 @@ class ScreenEditor:
         x_widget = ""
         x_word = ""
 
-        for i, widget in widget_by_i.items():
+        for wx, widget in widget_by_wx.items():
 
-            left_margin_1 = 1
-            right_margin_1 = 1
+            west_margin = 1
+            east_margin = 1
 
-            if x in range(X1 + i - left_margin_1, X1 + i + len(widget) + right_margin_1):
-
-                wx = X1 + i
+            if x in range(wx - west_margin, wx + len(widget) + east_margin):
                 x_widget = widget
 
-                i_in_widget = (x - X1) - i
-                i_in_widget = min(max(0, i_in_widget), len(widget) - 1)
+                i = x - wx
+                i = min(max(0, i), len(widget) - 1)
 
-                left_widget = widget[: i_in_widget + 1]
+                left_widget = widget[: i + 1]
                 left_words = left_widget.split()
-                assert left_words, (left_words, left_widget, widget, i, x)
+                assert left_words, (left_words, left_widget, widget, i, wx, x)
 
                 widget_splits = widget.split()
                 x_word = widget_splits[len(left_words) - 1]
@@ -2512,35 +2510,35 @@ class ScreenEditor:
 
         self.take_mouse_verb_at_yxf(verb=verb, x_word=x_word, y=y, x=wx, f=f)
 
-    def _split_widgets_(self, text: str) -> dict[int, str]:
+    def _text_to_widgets_by_wx_(self, text: str) -> dict[int, str]:
 
-        widget_by_i = dict()
+        widget_by_wx = dict()
 
-        wi = -1
+        wx = -1
         text_plus = text + "  "
         for i, ich in enumerate(text):
 
-            if wi == -1:
+            if wx == -1:
                 if ich != " ":
-                    wi = i
-                    widget_by_i[wi] = ich
-
-            elif widget_by_i[wi][0] == "<":
-                widget_by_i[wi] += ich
-                if ich == ">":
-                    wi = -1
+                    wx = X1 + i
+                    widget_by_wx[wx] = ich
 
             elif text_plus[i] == "<":
-                wi = i
-                widget_by_i[wi] = ich
+                wx = X1 + i
+                widget_by_wx[wx] = ich
+
+            elif text_plus[i:].startswith("  "):
+                wx = -1
+
+            elif widget_by_wx[wx][0] == "<":
+                widget_by_wx[wx] += ich
+                if ich == ">":  # todo7: '<' inside of '<' and '>'
+                    wx = -1
 
             else:
-                if text_plus[i:].startswith("  "):
-                    wi = -1
-                else:
-                    widget_by_i[wi] += ich
+                widget_by_wx[wx] += ich
 
-        return widget_by_i
+        return widget_by_wx
 
     def _vanish_widget_at_yxf_(self, widget: str, y: int, x: int) -> None:
         """Vanish the Widget at the Mouse"""
@@ -2836,12 +2834,14 @@ class ScreenEditor:
         quads = list()
         for row_y in reversed(range(Y1, y + 1)):
             text = pt.proxy_read_y_row_text(y=row_y, default=" ")
+            tprint(f"{row_y=} {str(text)=} {x=} {text[x:]=}")
 
             # Pick the Westmost Cell per Row
 
-            x_text = text[x:]
+            x_text = text[x - X1 :]
             if row_y == y:
-                x_text = " " + x_text[len(" ") :]
+                assert x_text.startswith("+"), (x_text,)
+                x_text = " " + x_text[len("+") :]
 
             splits = x_text.split()
             if not splits:
@@ -2861,7 +2861,7 @@ class ScreenEditor:
             quad = (row_y, column_x, split, val)
             quads.append(quad)
 
-            tprint(str(quad))
+            tprint(f"{str(quad)=}")
 
         column_x = max(_[1] for _ in quads)
         vals = list(_[-1] for _ in quads)
