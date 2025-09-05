@@ -15,6 +15,7 @@ examples:
 
 from __future__ import annotations  # backports new datatype syntaxes into old Pythons
 
+import ast
 import bdb
 import collections
 import collections.abc as abc
@@ -2513,9 +2514,14 @@ class ScreenEditor:
     def take_mouse_verb_at_yxf(self, verb: str, x_word: str, y: int, x: int, f: int) -> None:
         """Run the Verb at the Mouse Release"""
 
+        tprint(f"{verb=} {x_word=} {y=} {x=} {f=}  # take_mouse_verb_at_yxf")
+
         # Eval our well-known Verbs
 
         if self.mouse_verb_to_write_sdata(verb):
+            return
+
+        if self.mouse_verb_do_tsv_at_yx(verb, y=y, x=x):
             return
 
         if self.mouse_verb_do_jabberwocky(verb):
@@ -2737,6 +2743,116 @@ class ScreenEditor:
 
         return (r, g, b)
 
+    #
+    #
+    #
+
+    def mouse_verb_do_tsv_at_yx(self, verb: str, y: int, x: int) -> bool:
+        """Eval a Formula"""
+
+        pt = self.proxy_terminal
+        x_width = pt.x_width
+        y_height = pt.y_height
+
+        casefold = verb.casefold()
+        if not casefold.startswith("+ "):
+            return False
+
+        # Draw a Rectangle around the Input
+
+        if y > (y_height - 2):
+            return False
+
+        quads = list()
+        for row_y in reversed(range(Y1, y + 1)):
+            text = pt.proxy_read_y_row_text(y=row_y, default=" ")
+
+            # Pick the Westmost Cell per Row
+
+            x_text = text[x:]
+            if row_y == y:
+                x_text = " " + x_text[len(" ") :]
+
+            splits = x_text.split()
+            if not splits:
+                break
+
+            split = splits[0]
+            column_x = x + x_text.index(split) + len(split)
+
+            # Require a Cell Value
+
+            try:
+                val = ast.literal_eval(split)
+            except Exception:
+                tprint(f"{split!r} has no meaning at ast.literal_eval")
+                return False
+
+            quad = (row_y, column_x, split, val)
+            quads.append(quad)
+
+            tprint(str(quad))
+
+        column_x = max(_[1] for _ in quads)
+        vals = list(_[-1] for _ in quads)
+
+        north_y = y - len(quads)
+        south_y = min(y + 3, y_height)
+
+        west_x = max(X1, x - 3)
+        east_x = min(column_x + 3, x_width)
+
+        # Sum the Input
+
+        try:
+            result = sum(vals)
+        except Exception:
+            tprint(f"{vals} has no sum")
+            return False
+
+        # Overwrite the Input with Output
+
+        t = " "
+        tt = t + t
+
+        h = south_y - north_y + 1
+        w = east_x - west_x + 1
+
+        for i in range(h):
+            ri = i - h
+            row_y = north_y + i
+
+            if (i == 0) or (ri == -1):
+                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=w * t)
+
+            elif ri == -3:
+                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=tt + ((w - 4) * "=") + tt)
+
+            elif ri == -2:
+                split = str(result)
+                rjust = (split + (3 * t)).rjust(w, t)
+                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=rjust)
+
+            else:
+                q = abs(ri) - 4
+                split = quads[q][-2]
+                rjust = (split + (3 * t)).rjust(w, t)
+
+                text = rjust
+                if ri == -4:
+                    assert rjust.startswith(5 * t), (rjust,)
+                    text = rjust[:3] + "+" + rjust[4:]
+
+                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=text)
+
+        # Succeed
+
+        return True
+
+    #
+    #
+    #
+
     def mouse_verb_do_jabberwocky(self, verb: str) -> bool:
         """Write out a Random Word of Jabberwocky"""
 
@@ -2746,7 +2862,6 @@ class ScreenEditor:
         writes_by_y_x = pt.writes_by_y_x
 
         casefold = verb.casefold()
-
         if casefold != "jabberwocky":
             return False
 
@@ -4358,7 +4473,7 @@ class ProxyTerminal:
 
 #
 
-# todo9: paste/ sum a column of ints, floats - not so \r between  ⎋[200~ and ⎋[201~
+# todo8: sum more than ints, such as fixed-point Decimal's
 
 # todo8: Press Return inside a Button to click it
 #
