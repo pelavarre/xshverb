@@ -5777,22 +5777,6 @@ class ArgDocParser:
         return diffs
 
 
-def argv_parse_if(parser: ArgDocParser, argv: list[str]) -> argparse.Namespace:
-    """Parse the Shell Args, else print Help and exit zero or nonzero"""
-
-    args = ["--"]  # for when I'm feeling lucky
-    if argv[1:]:
-        args = list()  # for when I need examples
-        if argv[1:] != ["--"]:
-            args = argv[1:]  # for when I've got specifics
-
-    ns = parser.parse_args_if(args)  # often prints help & exits zero
-
-    return ns
-
-    # often prints help & exits zero
-
-
 #
 # Amp up Import BuiltsIns Bytes
 #

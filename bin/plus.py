@@ -1,25 +1,36 @@
 #!/usr/bin/env python3
 
 r"""
-usage: plus.py --
+usage: plus.py [-h] [--yolo] [--platform PLATFORM]
 
-do what's popular now
+directly manipulate your Terminal Window Screen Pane
+
+options:
+  -h, --help           show this help message and exit
+  --yolo               do what's popular now
+  --platform PLATFORM  run tweaked to fit a platform (default: local guess)
 
 examples:
   bin/+
+  bin/plus.py --
   bin/plus.py --yolo
+  bin/plus.py --platform=Apple
+  bin/plus.py --platform=Google
 """
 
-# code reviewed by People, Black, Flake8, MyPy-Strict, & PyLance-Standard
+# code reviewed by People, Black, Flake8, Mypy-Strict, & Pylance-Standard
 
 
 from __future__ import annotations  # backports new datatype syntaxes into old Pythons
 
+import __main__
+import argparse
 import ast
 import bdb
 import collections
 import collections.abc as abc
 import datetime as dt
+import difflib
 import math
 import os
 import pathlib
@@ -41,8 +52,7 @@ import unicodedata
 if not __debug__:
     raise NotImplementedError([__debug__])  # refuses to run without live Asserts
 
-env_cloud_shell = os.environ.get("CLOUD_SHELL") == "true"  # Google
-sys_platform_darwin = sys.platform == "darwin"  # Apple
+default_eq_None = None
 
 _: object
 
@@ -52,6 +62,12 @@ _: object
 #
 
 
+flags = argparse.Namespace(apple=None, google=None)
+
+flags_apple = sys.platform == "darwin"
+flags_google = bool(os.environ.get("CLOUD_SHELL", default_eq_None))
+
+
 def main() -> None:
     """Run from the Shell Command Line, and exit into the Py Repl"""
 
@@ -59,9 +75,26 @@ def main() -> None:
 
     # Take in the Shell Command-Line Args
 
-    if os.path.basename(sys.argv[0]) != "+":
-        assert sys.argv[1:], sys.argv
-        assert "--yolo".startswith(sys.argv[1]) and sys.argv[1].startswith("--"), sys.argv
+    doc = __main__.__doc__
+    assert doc, (doc,)
+
+    parser = ArgDocParser(doc, add_help=True)
+
+    yolo_help = "do what's popular now"
+    platform_help = "run tweaked to fit a platform (default: local guess)"
+
+    parser.add_argument("--yolo", action="count", help=yolo_help)
+    parser.add_argument(
+        "--platform", metavar="PLATFORM", dest="platforms", action="append", help=platform_help
+    )
+
+    argv = sys.argv[1:]
+    if not argv:
+        if os.path.basename(sys.argv[0]) == "+":
+            argv = ["--yolo"]
+
+    ns = parser.parse_args_if(argv)  # todo9: take Mouse into Sgr at Google
+    platforms_fit_if(ns.platforms)
 
     # Emulate having imported the enclosing Module as ./plus.py
 
@@ -97,6 +130,45 @@ def main() -> None:
     # print(">>> ", file=sys.stderr)
     # sys.excepthook = with_excepthook
     # os.environ["PYTHONINSPECT"] = str(True)
+
+
+def platforms_fit_if(platforms: list[str] | None) -> None:
+    """Fit to a platform, else print help and exit nonzero"""
+
+    # Reject meaningless Platform Choices
+
+    defined_platforms = ["Apple", "Google", ""]
+
+    if platforms:
+        for platform in platforms:
+            if platform not in defined_platforms:
+                (choice, choices) = (platform, defined_platforms)
+
+                s = "plus.py: error:"
+                s += f" argument --platform: invalid choice: {choice!r} (choose from {choices})"
+                sys.stderr.write(f"{s}\n")
+                sys.exit(2)  # exits 2 for meaningless --platform choice
+
+    # Default to auto-detect
+
+    apple = flags_apple
+    google = flags_google
+
+    if platforms:
+
+        apple = False
+        google = False
+
+        for platform in platforms:
+            if platform.title() == "Apple":  # Apple and Not Google
+                apple = True
+            elif platform.title() == "Google":  # Google and Not Apple
+                google = True
+            else:
+                assert platform == "", (platform,)
+
+    flags.apple = apple
+    flags.google = google
 
 
 def try_something() -> None:
@@ -576,7 +648,7 @@ class ConwayLife:
 
         return func_by_str
 
-        # why does MyPy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
+        # why does Mypy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
 
 
 _ = """  # The 8 Half-Steps of a 5-Pixel Glider
@@ -675,8 +747,7 @@ class ScreenEditor:
             # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
             "⌃K": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
             "⌃L": pt.write_screen,  # ⌃L for Vim  # not ⌃L for Emacs a la Vim ⇧H ⇧M ⇧L
-            # # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
-            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at gCloud
+            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at Google
             "⌃N": self.do_row_down,  # ⌃N
             "⌃O": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
             "⌃P": self.do_row_up,  # ⌃P
@@ -725,7 +796,7 @@ class ScreenEditor:
             "⎋I": self.do_inserting_start,  # ⎋I for Vim
             "⎋J": self.do_row_down,  # ⎋J for Vim
             "⎋K": self.do_row_up,  # ⎋K for Vim
-            # # b"\033" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            # # b"\033" b"l",  # ⎋L row-column-leap  # not at Google (_ICF_CUP_)
             "⎋L": self.do_column_right,  # ⎋L for Vim
             "⎋O": self.do_row_down_insert_inserting_start,  # ⎋O for Vim
             "⎋R": self.do_replacing_one_kdata,  # ⎋R for Vim
@@ -740,7 +811,7 @@ class ScreenEditor:
             # b"\033[" b"B",  # ⎋[⇧B ↓
             # b"\033[" b"C",  # ⎋[⇧C →
             # b"\033[" b"D",  # ⎋[⇧D ←
-            # # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            # # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at Google
             # b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
             #
             "F5": self.do_kdata_fn_f5,  # FnF5
@@ -786,7 +857,7 @@ class ScreenEditor:
             b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
             b"\x09",  # ⌃I \t Tab
             b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
-            # b"\x0d",  # ⌃M \r Return  # only \r Return at gCloud
+            # b"\x0d",  # ⌃M \r Return  # only \r Return at Google
             #
             # b"\033": self.print_kcaps_plus,  # ⎋
             #
@@ -796,7 +867,7 @@ class ScreenEditor:
             # b"\033" b"E",  # ⎋⇧E \r\n else \r (NEL)
             # b"\033" b"M",  # ⎋⇧M ↑ (RI)
             # b"\033" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
-            # b"\033" b"l",  # ⎋L row-column-leap  # not at gCloud (_ICF_CUP_)
+            # b"\033" b"l",  # ⎋L row-column-leap  # not at Google (_ICF_CUP_)
             #
             # b"\033O": self.print_kcaps_plus,  # ⎋⇧O
             #
@@ -805,11 +876,11 @@ class ScreenEditor:
             b"\033[" b"B",  # ⎋[⇧B ↓
             b"\033[" b"C",  # ⎋[⇧C →
             b"\033[" b"D",  # ⎋[⇧D ←
-            # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at gCloud
+            # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at Google
             b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
         )
 
-        loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please PyLance
+        loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please Pylance
 
         return loopable_kdata_tuple  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
 
@@ -836,7 +907,7 @@ class ScreenEditor:
     ) -> None:
         r"""Start line-buffering Input, start replacing \n Output with \r\n, etc"""
 
-        pt = self.proxy_terminal  # todo7: write up MyPy Strict forbids kwarg [call-arg]
+        pt = self.proxy_terminal  # todo7: write up Mypy Strict forbids kwarg [call-arg]
         pt.__exit__(exc_type, exc_val, exc_tb)
 
         return None
@@ -918,7 +989,7 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
-        self.print("Try BackColor at macOS Terminal after invisible Tabs")
+        self.print("Try BackColor at Apple after invisible Tabs")
         self.write("\033[K")
         self.print("Also try Chars before Tab")
         self.write("\033[K")
@@ -969,7 +1040,7 @@ class ScreenEditor:
         self.reply_to_kdata(pack, n=n)  # may raise SystemExit
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
-        # todo2: Stop taking slow b'\033[' b'L' IL_Y as 1 Whole Packet from gCloud
+        # todo2: Stop taking slow b'\033[' b'L' IL_Y as 1 Whole Packet from Google
 
         # todo2: Quit in many of the Emacs ways, including ⌃X ⌃S ⌃X ⌃C
         # todo2: Quit in many of the Vim ways, including Vim ⇧Z ⇧Q and ⇧Z ⇧Z and ⌃L ⌃C Q ⇧! Return
@@ -1204,7 +1275,7 @@ class ScreenEditor:
 
         kchars = kdata.decode()  # may raise UnicodeDecodeError
         if kchars in kcap_by_kchars.keys():
-            if n == 1:  # especially the '\033[H' of ⇧Fn← at macOS
+            if n == 1:  # especially the '\033[H' of ⇧Fn← at Apple
                 tprint("Sent all at once, like a Keycap, at less than Rapidly = 2 ms/byte")
 
                 self.print_kcaps_plus(pack)
@@ -1303,7 +1374,7 @@ class ScreenEditor:
 
         return True
 
-        # gCloud Shell lacks macOS ⎋L
+        # Google lacks Apple ⎋L
 
     def do_replacing_one_kdata(self) -> None:
         """Start replacing, quote 1 Keyboard Chord, then start inserting"""
@@ -1467,25 +1538,25 @@ class ScreenEditor:
         if not pack.tail:
             return False
 
-        # Emulate the Famous Csi that failed test at platform, for >= 1 platforms
+        # Emulate the Famous Csi found missing at >= 1 Platforms
 
-        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I  # fails at gCloud Shell
+        if self._take_csi_tab_right_leap_if_(pack):  # ⎋[{}⇧I  # not native at Google
             return True
 
-        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S  # fails at gCloud Shell
+        if self._take_csi_rows_up_if_(pack):  # ⎋[{}⇧S  # not native at Google
             return True
 
-        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T  # fails at gCloud Shell
+        if self._take_csi_rows_down_if_(pack):  # ⎋[{}⇧T  # not native at Google
             return True
 
         kdata = pack.to_bytes()
-        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[d  # fails at gCloud Shell
+        if self._take_csi_row_default_leap_if_(kdata):  # ⎋[D  # not native at Google
             return True
 
-        if self._take_csi_cols_insert_if_(pack):  # ⎋[{}'⇧}  # fails at macOS Terminal, gCloud Shell
+        if self._take_csi_cols_insert_if_(pack):  # ⎋[{}'⇧}  # not native at Apple, Google
             return True
 
-        if self._take_csi_cols_delete_if_(pack):  # ⎋[{}'⇧~  # fails at macOS Terminal, gCloud Shell
+        if self._take_csi_cols_delete_if_(pack):  # ⎋[{}'⇧~  # not native at Apple, Google
             return True
 
         # Loopback the famous Csi Sequences, if not taken above
@@ -1493,8 +1564,8 @@ class ScreenEditor:
         if self._match_csi_write_through_(pack):
 
             csi_write = kdata
-            if pack.tail == b"`":  # HPA fails at gCloud Shell
-                if env_cloud_shell:
+            if pack.tail == b"`":
+                if flags.google:  # ⎋[` HPA not native at Google
                     csi_write = kdata[:-1] + b"G"  # CHA
 
             self.do_write_kdata_as_sdata(csi_write)  # for ._take_csi_pack_n_kdata_if_
@@ -1524,9 +1595,7 @@ class ScreenEditor:
                 if re.fullmatch(b"[0-9]*", string=pack.neck):  # Pn >= 0, or Empty Pn
                     pn = int(pack.neck) if pack.neck else PN1
                     if pn >= 1:
-                        return True  # misses b'ST`d' sometimes taken above
-
-                        # trusts caller to write b"`" HPA as b"G" CHA at gCloud Shell
+                        return True  # too late for when ⎋[ ⇧I ⇧S ⇧T D ` taken above
 
         # Accept Ps >= 0 across some famous Csi Final Bytes
 
@@ -1551,7 +1620,7 @@ class ScreenEditor:
 
         return False
 
-        # believes macOS has no ⎋[ ⇧ NOQRUVWY, and no [\]^_ aegijkopsuvwyz {|}~
+        # claims Apple has no native ⎋[ ⇧ NOQRUVWY ^ _ {|}~, and no ⎋[ [\] AEGIJKOPSUVWYZ
 
         # todo2: stop wrong write-through of multibyte Control Chars
 
@@ -1608,7 +1677,7 @@ class ScreenEditor:
 
         # Accept 0x100 (256) Color Codes for R, and for G, and and for B
 
-        if not sys_platform_darwin:
+        if not flags.apple:  # Apple has no native 24-Bit RGB Color
 
             mrgb = re.fullmatch(b"(38|48);(2);([0-9]+);([0-9]+);([0-9]+)", string=pack.neck)
             if mrgb:  # 0x100 (256) Colors for R, G, and B
@@ -1641,7 +1710,7 @@ class ScreenEditor:
         if not (csi and (not pack.back) and (pack.tail == b"I")):
             return False
 
-        if sys_platform_darwin:
+        if not flags.google:  # Google has no native ⎋[⇧I
             return False
 
         # Emulate if taken
@@ -1651,7 +1720,7 @@ class ScreenEditor:
         pn_int = int(pack.neck) if pack.neck else PN1
         pn = pn_int if pn_int else PN1
 
-        if sys_platform_darwin:  # not much tested here
+        if flags.apple:  # not much tested here  # Apple takes Pn 0 to mean do-nothing
             if not pn_int:
                 return True
 
@@ -1661,7 +1730,7 @@ class ScreenEditor:
 
         return True
 
-        # gCloud Shell lacks ⎋[ {}I
+        # Google lacks ⎋[ {}I
 
     def _take_csi_rows_up_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate Scroll Up [Insert South Lines]"""
@@ -1681,7 +1750,7 @@ class ScreenEditor:
         if not (csi and (not pack.back) and (pack.tail == b"S")):
             return False
 
-        if sys_platform_darwin:
+        if not flags.google:  # Google has no native ⎋[⇧S
             return False
 
         # Emulate if taken
@@ -1691,7 +1760,7 @@ class ScreenEditor:
         pn_int = int(pack.neck) if pack.neck else PN1
         pn = pn_int if pn_int else PN1
 
-        if sys_platform_darwin:  # not much tested here
+        if flags.apple:  # not much tested here  # Apple takes Pn 0 to mean do-nothing
             if not pn_int:
                 return True
 
@@ -1702,7 +1771,7 @@ class ScreenEditor:
 
         return True
 
-        # gCloud Shell lacks macOS ⎋[{}⇧S
+        # Google lacks Apple ⎋[{}⇧S
 
     def _take_csi_rows_down_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate Scroll Down [Insert North Lines]"""
@@ -1720,7 +1789,7 @@ class ScreenEditor:
         if not (csi and (not pack.back) and (pack.tail == b"T")):
             return False
 
-        if sys_platform_darwin:
+        if not flags.google:  # Google has no native ⎋[⇧T
             return False
 
         # Emulate if taken
@@ -1730,7 +1799,7 @@ class ScreenEditor:
         pn_int = int(pack.neck) if pack.neck else PN1
         pn = pn_int if pn_int else PN1
 
-        if sys_platform_darwin:  # not much tested here
+        if flags.apple:  # not much tested here  # Apple takes Pn 0 to mean do-nothing
             if not pn_int:
                 return True
 
@@ -1741,7 +1810,7 @@ class ScreenEditor:
 
         return True
 
-        # gCloud Shell lacks macOS ⎋[{}⇧T
+        # Google lacks Apple ⎋[{}⇧T
 
     def _take_csi_row_default_leap_if_(self, kdata: bytes) -> bool:
         """Emulate Line Position Absolute (VPA_Y) but only for an implicit ΔY = 1"""
@@ -1753,7 +1822,7 @@ class ScreenEditor:
         if kdata != b"\033[d":
             return False
 
-        if sys_platform_darwin:
+        if not flags.google:  # Google has no native ⎋[D without Pn
             return False
 
         # Emulate if taken
@@ -1764,7 +1833,7 @@ class ScreenEditor:
 
         return True
 
-        # gCloud Shell needs ⎋[1D for ⎋[D
+        # Google needs ⎋[1D for ⎋[D
 
     def _take_csi_cols_insert_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧} cols-insert"""
@@ -1801,7 +1870,7 @@ class ScreenEditor:
 
         return True
 
-        # macOS Terminal & gCloud Shell lack ⎋['⇧} cols-insert
+        # Apple & Google lack ⎋['⇧} cols-insert
 
     def _take_csi_cols_delete_if_(self, pack: TerminalBytePacket) -> bool:
         """Emulate ⎋['⇧~ cols-delete"""
@@ -1836,7 +1905,7 @@ class ScreenEditor:
 
         return True
 
-        # macOS Terminal & gCloud Shell lack ⎋['⇧~ cols-delete
+        # Apple & Google lack ⎋['⇧~ cols-delete
 
     #
     # Reply to Emacs & Vim Keyboard Chords
@@ -2342,28 +2411,29 @@ class ScreenEditor:
         for line in help_.splitlines():
             self.print(line)
 
-        if env_cloud_shell:
-            self.print()
-            self.print("gCloud Shell ignores ⌃M (you must press Return)")
-            self.print("gCloud Shell ignores ⎋[3⇧J Scrollback-Erase (you must close Tab)")
-            self.print("gCloud Shell ⌃L between Commands clears Screen (not Scrollback)")
+        if flags.google:  # different notes at Google
             self.print()
 
-            # gCloud Shell has distinct ← ↑ → ↓ and ⌥ ← ↑ → ↓ and ⌃⌥ ← ↑ → ↓
-            # gCloud Shell has ⌥ Esc Delete Return, but ⌥ Esc comes as slow Esc Esc
+            self.print("Google eats ⌃M (you must press Return)")
+            self.print("Google lacks ⎋[3⇧J Scrollback-Erase (you must close Tab)")
+            self.print("Google lacks native ⎋ L and ⎋[ ⇧I ⇧S ⇧T ` and ⎋[D without Pn")
 
-            # todo2: gCloud AltIsMeta has ...
+            # Google has distinct ← ↑ → ↓ and ⌥ ← ↑ → ↓ and ⌃⌥ ← ↑ → ↓
+            # Google has ⌥ Esc Delete Return, but ⌥ Esc comes as slow Esc Esc
+            # todo2: Google AltIsMeta has ...
 
-        if sys_platform_darwin:
+        if flags.apple:  # different notes at Apple
             self.print()
 
-            # self.print("macOS Shell ignores ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
+            self.print("Apple ⌘K clears Screen & Scrollback (but not Top Row)")
 
-            self.print("macOS Shell ⌘K clears Screen & Scrollback (but not Top Row)")
-            self.print()  # each ⌘L at Shell erases the last Input & Output
+            # Apple has distinct ← ↑ → ↓ and ⌥ ← → and ⇧ ← → and ⇧ Fn ← ↑ → ↓
+            # Apple Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
+            # Apple ⌘L erases the last Input & Output
 
-            # macOS Shell has distinct ← ↑ → ↓ and ⌥ ← → and ⇧ ← → and ⇧ Fn ← ↑ → ↓
-            # macOS Option-as-Meta has ⌥⎋ ⌥Delete ⌥Tab ⌥⇧Tab ⌥Return
+        self.print()
+        self.print("Apple & Google lack native ⎋['⇧} and ⎋['⇧~ Cols Insert/Delete")
+        self.print("⌃L between Commands clears Screen (not Scrollback)")
 
         self.print()
 
@@ -2672,7 +2742,7 @@ class ScreenEditor:
         if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
             (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
 
-            if not sys_platform_darwin:
+            if not flags.apple:  # Apple lacks native 24-Bit RGB Color
                 if kind == "FrontColor":
                     sdata = f"\033[38;2;{r};{g};{b}m".encode()
                     return sdata
@@ -2848,6 +2918,10 @@ class ScreenEditor:
         # Succeed
 
         return True
+
+        # todo9: for now we take only a sum of ints
+        # todo9: refactor => is there a verb here, where is it, what is it
+        # todo9: press Return means CR LF is there is no verb here, else means mouse-click it
 
     #
     #
@@ -3194,7 +3268,7 @@ class ProxyTerminal:
         assert _SM_BRACKETED_PASTE_ == "\033[" "?2004h"
 
         sdata = b""
-        sdata += b"\033[?2004h"  # ⎋[?2004H L for ⌘V in ⎋[200~ ⎋[201~
+        sdata += b"\033[?2004h"  # ⎋[⇧?2004H L for ⌘V in ⎋[200~ ⎋[201~
 
         os.write(fileno, sdata)  # not:  os.write(fileno, b"ProxyTerminal.__exit__" b"\r\n")
 
@@ -3228,15 +3302,15 @@ class ProxyTerminal:
         assert _RM_XTERM_MAIN_ == "\033[" "?1049l"
         assert _RM_BRACKETED_PASTE_ == "\033[" "?2004l"
 
-        sdata = b""
+        sdata = b""  # todo9: test ⎋[⇧H  in ⎋[⇧?1049L at Google
 
         sdata += b"\033[m"  # ⎋[M goes back to plain
         sdata += b"\033[4l"  # ⎋[4L goes back to replacing
-        sdata += b"\033[?1000;1006l"  # stops the ⎋[?1000;1006H till ⎋[?1000;1006L
+        sdata += b"\033[?1000;1006l"  # stops the ⎋[⇧?1000;1006H till ⎋[⇧?1000;1006L
         sdata += b"\0337"  # ⎋7  # lets ⎋8 follow
-        sdata += b"\033[?1049l"  # goes back to main Screen, and implies ⎋[⇧H at macOS
-        sdata += b"\0338"  # ⎋8 to mostly undo the ⎋[⇧H of ⎋[?1049L
-        sdata += b"\033[?2004l"  # ⎋[?2004H L for ⌘V in ⎋[200~ ⎋[201~
+        sdata += b"\033[?1049l"  # goes back to main Screen, and implies ⎋[⇧H at Apple
+        sdata += b"\0338"  # ⎋8 to mostly undo the ⎋[⇧H of ⎋[⇧?1049L
+        sdata += b"\033[?2004l"  # ⎋[⇧?2004H L for ⌘V in ⎋[200~ ⎋[201~
 
         # Exit via 1st Column of 1 Row above the Last Row
 
@@ -3341,7 +3415,7 @@ class ProxyTerminal:
                                 boring = True
 
             if last_x < x_width:
-                self.write_out("\033[m")  # SGR_PS before EL_X needed at macOS
+                self.write_out("\033[m")  # SGR_PS before EL_X needed at Apple
                 for style in y_fill_styles:
                     self.write_out(style)
                 self.write_out("\033[K")
@@ -3359,7 +3433,7 @@ class ProxyTerminal:
             self.write_out(style)
 
         # todo4: .write_screen of Csi bypasses our mirrored writes
-        # todo4: .sys_platform_darwin and .env_cloud_shell could emulate one another
+        # todo4: .flags.apple and .google could emulate one another
 
     #
     # Read from the Mirrors
@@ -3841,7 +3915,7 @@ class ProxyTerminal:
                 last_eraseable_x = max(writes_by_x.keys())
 
             if column_x > last_eraseable_x:
-                if sys_platform_darwin:
+                if flags.apple:  # Apple Tab colors Spaces intricately
                     for x in range(column_x, tab_stop_1):
                         writes_by_x[x] = list(styles) + [" "]
 
@@ -3915,7 +3989,7 @@ class ProxyTerminal:
 
         if csi and pack.tail and (pack.tail in b"ABCDGd"):  # ⎋[ "ABCD" Arrows per se, and also "Gd"
             if not pack.back:
-                pn = int(pack.neck) if pack.neck else PN1  # accepts 0, even at .env_cloud_shell
+                pn = int(pack.neck) if pack.neck else PN1  # accepts 0, even at .google
                 if pn:
 
                     if pack.tail == b"A":
@@ -3960,7 +4034,7 @@ class ProxyTerminal:
                 int_pn = int(pack.neck) if pack.neck else PN1  # accepts 0
                 pn = int_pn if int_pn else PN1
 
-                if sys_platform_darwin:
+                if flags.apple:  # Apple takes Pn 0 to mean do-nothing
                     if not int_pn:
                         return True
 
@@ -4010,7 +4084,7 @@ class ProxyTerminal:
         if csi and (pack.tail == b"X"):  # ⎋[⇧X chars-erase
             if not pack.back:
                 ps = int(pack.neck) if pack.neck else 1
-                ps = ps if ps else 1  # at .sys_platform_darwin & at .env_cloud_shell
+                ps = ps if ps else 1  # at .flags.apple & at .google
 
                 self._mirror_text_(ps * " ")
                 self.column_x = column_x
@@ -4093,7 +4167,7 @@ class ProxyTerminal:
 
         elif ps == 1:  # ⎋[1⇧K row-head-erase
 
-            if sys_platform_darwin:
+            if flags.apple:  # Apple ⎋[⇧K colors Spaces intricately
                 for x in range(1, column_x + 1):
                     writes_by_x[x] = list(styles) + [" "]  # erases beneath and to the West
             else:
@@ -4116,7 +4190,7 @@ class ProxyTerminal:
 
         #
 
-        if sys_platform_darwin:
+        if flags.apple:  # Apple ⎋[⇧K colors Spaces intricately
 
             y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
 
@@ -4154,7 +4228,7 @@ class ProxyTerminal:
         if csi and (pack.tail == b"L"):  # ⎋[⇧L rows-insert
             if not pack.back:
                 pn_int = int(pack.neck) if pack.neck else PN1
-                pn = pn_int if pn_int else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+                pn = pn_int if pn_int else PN1  # at .flags.apple & at .google
 
                 ypn = row_y + pn
 
@@ -4176,7 +4250,7 @@ class ProxyTerminal:
 
                 # Insert the Colored Rows themselves
 
-                if sys_platform_darwin:
+                if flags.apple:  # Apple ⎋[⇧K colors Spaces intricately
                     for y in range(row_y, ypn):
                         fill_styles_by_y[y] = list(styles)
 
@@ -4189,7 +4263,7 @@ class ProxyTerminal:
         if csi and (pack.tail == b"@"):  # ⎋[⇧@ chars-insert
             if not pack.back:
                 pn_int = int(pack.neck) if pack.neck else PN1
-                pn = pn_int if pn_int else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+                pn = pn_int if pn_int else PN1  # at .flags.apple & at .google
 
                 xpn = column_x + pn
 
@@ -4212,7 +4286,7 @@ class ProxyTerminal:
 
                 # Insert the Colored Space Chars themselves
 
-                if sys_platform_darwin:
+                if flags.apple:  # Apple ⎋[⇧K colors Spaces intricately
                     for x in range(column_x, xpn):
                         writes_by_x[x] = list(styles) + [" "]
 
@@ -4243,7 +4317,7 @@ class ProxyTerminal:
             if not pack.back:
 
                 pn = int(pack.neck) if pack.neck else PN1
-                pn = pn if pn else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+                pn = pn if pn else PN1  # at .flags.apple & at .google
 
                 ypn = row_y + pn
 
@@ -4282,7 +4356,7 @@ class ProxyTerminal:
             if not pack.back:
 
                 pn = int(pack.neck) if pack.neck else PN1
-                pn = pn if pn else PN1  # at .sys_platform_darwin & at .env_cloud_shell
+                pn = pn if pn else PN1  # at .flags.apple & at .google
 
                 xpn = column_x + pn
 
@@ -4473,6 +4547,12 @@ class ProxyTerminal:
 
 #
 
+# todo9: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
+
+# todo9: play with invisible ink
+
+#
+
 # todo8: sum more than ints, such as fixed-point Decimal's
 
 # todo8: Press Return inside a Button to click it
@@ -4500,10 +4580,6 @@ class ProxyTerminal:
 
 #
 
-# todo8: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
-
-#
-
 # todo8: open up |d |e |f |l |m |p |q |v |y |z- gateways do gateway only at left
 # todo8: keep |a |c |g |h |i |j |k |n |o |r |s |t |u |w |x
 # todo8: |g pattern pattern - we're saying patterns can't be single letters
@@ -4517,7 +4593,7 @@ class ProxyTerminal:
 
 # todo8: do we now want fill with Color or not, and do we get it natively, and squelch insert mode
 # todo8: fix up all the fills, including \n
-# todo8: bin/+: Tease out macOS v gCloud Shell @ BG + EL
+# todo8: bin/+: Tease out Apple v Google @ BG + EL
 
 # todo8: look to resize the Terminal to grow, vs such large F9 Help as ours
 
@@ -4700,30 +4776,295 @@ SCREEN_WRITER_HELP = r"""
         ⎋[⇧T rows-down  ⎋[⇧S rows-up  ⎋['⇧} cols-insert  ⎋['⇧~ cols-delete
 
         ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
-        ⎋[?1049H screen-alt  ⎋[?1049L screen-main  ⎋[?25L cursor-hide  ⎋[?25H cursor-show
+        ⎋[⇧?1049H screen-alt  ⎋[⇧?1049L screen-main  ⎋[⇧?25L cursor-hide  ⎋[⇧?25H cursor-show
 
         ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m grayscale-max
         red green bright-blue  ⎋[31M  ⎋[32M  ⎋[94M  on  ⎋[41M  ⎋[42M  ⎋[104M
         ⎋[M plain  <Jabberwocky>  #24 on #005  #003366 on #FFCC99   ⎋[30M  ⎋[97M
 
         ⎋[5N call for reply ⎋[0N   ⎋[6N call for reply ⎋[{y};{x}⇧R
-        ⎋[18T call for reply ⎋[8;{rows};{columns}T   ⎋[?2004H L for ⌘V in ⎋[200~ ⎋[201~
+        ⎋[18T call for reply ⎋[8;{rows};{columns}T   ⎋[⇧?2004H L for ⌘V in ⎋[200~ ⎋[201~
 
-        ⎋[?1000;1006H till ⎋[?1000;1006L for mouse ⎋[< {f};{x};{y} ⇧M to M of f = 0b⌃⌥⇧00
-        or ⎋[?1000 H L by itself, or 1005, 1006, or 1015
+        ⎋[⇧?1000;1006H till ⎋[⇧?1000;1006L for mouse ⎋[< {f};{x};{y} ⇧M to M of f = 0b⌃⌥⇧00
+        or ⎋[⇧?1000 H L by itself, or 1005, 1006, or 1015
 
-"""  # todo4: ⎋[B char-repeat, with an emulation for gCloud Shell
+"""  # todo4: ⎋[B char-repeat, with an emulation for Google
 
-# Don't help with ⎋[C call for reply ⎋[?1;2C  # 'Send Device Attributes (Primary DA)'
-# Don't help with ⎋[=C call for reply ⎋[?1;2C  # macOS
-# Don't help with ⎋[>C call for reply ⎋[>1;95;0C macOS or ⎋[>84;0;0C gCloud Shell
+# Don't help with ⎋[C call for reply ⎋[⇧?1;2C  # 'Send Device Attributes (Primary DA)'
+# Don't help with ⎋[=C call for reply ⎋[⇧?1;2C  # Apple
+# Don't help with ⎋[⇧>C call for reply ⎋[⇧>1;95;0⇧C Apple or ⎋[⇧>84;0;0⇧C Google
 
-# Don't help with ⎋[X call for reply ⎋[2;1;1;112;112;1;0X  # macOS
+# Don't help with ⎋[X call for reply ⎋[2;1;1;112;112;1;0⇧X  # Apple
 # Request Terminal Parameters (DECREQTPARM).
 
 
-# todo5: Sgr Mouse at Google Cloud Shell where no Option Mouse Arrows, but Esc Arrows
-# todo2: more gCloud Shell test @ or ⎋[?1000 H L by itself, or 1005, or 1015
+# todo5: Esc Arrows
+# todo2: more Google test @ or ⎋[⇧?1000 H L by itself, or 1005, or 1015
+
+
+#
+# Quote some words to choose at random
+#
+
+Jabberwocky = """
+
+    ’Twas brillig, and the slithy toves
+        Did gyre and gimble in the wabe:
+    All mimsy were the borogoves,
+        And the mome raths outgrabe.
+
+    “Beware the Jabberwock, my son!
+        The jaws that bite, the claws that catch!
+    Beware the Jubjub bird, and shun
+        The frumious Bandersnatch!”
+
+    He took his vorpal sword in hand;
+        Long time the manxome foe he sought—
+    So rested he by the Tumtum tree
+        And stood awhile in thought.
+
+    And, as in uffish thought he stood,
+        The Jabberwock, with eyes of flame,
+    Came whiffling through the tulgey wood,
+        And burbled as it came!
+
+    One, two! One, two! And through and through
+        The vorpal blade went snicker-snack!
+    He left it dead, and with its head
+        He went galumphing back.
+
+    “And hast thou slain the Jabberwock?
+        Come to my arms, my beamish boy!
+    O frabjous day! Callooh! Callay!”
+        He chortled in his joy.
+
+    ’Twas brillig, and the slithy toves
+        Did gyre and gimble in the wabe:
+    All mimsy were the borogoves,
+        And the mome raths outgrabe.
+
+"""
+
+
+#
+# Amp up Import ArgParse
+#
+
+
+_ARGPARSE_3_10_ = (3, 10)  # Ubuntu 2022 Oct/2021 Python 3.10
+
+
+class ArgDocParser:
+    """Scrape out Prog & Description & Epilog from Doc to form an Argument Parser"""
+
+    doc: str  # a copy of parser.format_help()
+    add_help: bool  # truthy to define '-h, --help', else not
+
+    parser: argparse.ArgumentParser  # the inner standard ArgumentParser
+    text: str  # something like the __main__.__doc__, but dedented and stripped
+    closing: str  # the last Graf of the Epilog, minus its Top Line
+
+    add_argument: typing.Callable[..., object]
+
+    def __init__(self, doc: str, add_help: bool) -> None:
+
+        self.doc = doc
+        self.add_help = add_help
+
+        text = textwrap.dedent(doc).strip()
+
+        prog = self._scrape_prog_(text)
+        description = self._scrape_description_(text)
+        epilog = self._scrape_epilog_(text, description=description)
+        closing = self._scrape_closing_(epilog)
+
+        parser = argparse.ArgumentParser(  # doesn't distinguish Closing from Epilog
+            prog=prog,
+            description=description,
+            add_help=add_help,
+            formatter_class=argparse.RawTextHelpFormatter,  # lets Lines be wide
+            epilog=epilog,
+        )
+
+        self.parser = parser
+        self.text = text
+        self.closing = closing
+
+        self.add_argument = parser.add_argument
+
+        # callers who need Options & Positional Arguments have to add them
+
+        # 'add_help=False' for needs like 'cal -h', 'df -h', 'du -h', 'ls -h', etc
+
+    #
+    # Take in the Shell Args, else print Help and exit zero or nonzero
+    #
+
+    def parse_args_if(self, args: list[str]) -> argparse.Namespace:
+        """Take in the Shell Args, else print Help and exit zero or nonzero"""
+
+        parser = self.parser
+        closing = self.closing
+
+        # Drop the "--" Shell Args Separator, if present,
+        # because 'ArgumentParser.parse_args()' without Pos Args wrongly rejects it
+
+        shargs = args
+        if args == ["--"]:  # ArgParse chokes if Sep present without Pos Args
+            shargs = list()
+
+        # Print Diffs & exit nonzero, when Arg Doc wrong
+
+        diffs = self._diff_doc_vs_format_help_()
+        if diffs:
+            if sys.version_info >= _ARGPARSE_3_10_:
+                print("\n".join(diffs))
+
+                sys.exit(2)  # exits 2 for wrong Args in Help Doc
+
+            # takes 'usage: ... [HINT ...]', rejects 'usage: ... HINT [HINT ...]'
+            # takes 'options:', rejects 'optional arguments:'
+            # takes '-F, --isep ISEP', rejects '-F ISEP, --isep ISEP'
+
+        # Print Closing & exit zero, if no Shell Args
+
+        if not args:
+            print()
+            print(closing)
+            print()
+
+            sys.exit(0)  # exits 0 after printing Closing
+
+        # Print help lines & exit zero, else return Parsed Args
+
+        ns = parser.parse_args(shargs)
+
+        return ns
+
+        # often prints help & exits zero
+
+    #
+    # Scrape out Parser, Prog, Description, Epilog, & Closing from Doc Text
+    #
+
+    def _scrape_prog_(self, text: str) -> str:
+        """Pick the Prog out of the Usage Graf that starts the Doc"""
+
+        lines = text.splitlines()
+        prog = lines[0].split()[1]  # second Word of first Line  # 'prog' from 'usage: prog'
+
+        return prog
+
+    def _scrape_description_(self, text: str) -> str:
+        """Take the first Line of the Graf after the Usage Graf as the Description"""
+
+        lines = text.splitlines()
+
+        firstlines = list(_ for _ in lines if _ and (_ == _.lstrip()))
+        docline = firstlines[1]  # first Line of second Graf
+
+        description = docline
+        if self._docline_is_skippable_(docline):
+            description = "just do it"
+
+        return description
+
+    def _scrape_epilog_(self, text: str, description: str) -> str:
+        """Take up the Lines past Usage, Positional Arguments, & Options, as the Epilog"""
+
+        lines = text.splitlines()
+
+        epilog = ""
+        for index, line in enumerate(lines):
+            if self._docline_is_skippable_(line) or (line == description):
+                continue
+
+            epilog = "\n".join(lines[index:])
+            break
+
+        return epilog  # maybe empty
+
+    def _docline_is_skippable_(self, docline: str) -> bool:
+        """Guess when a Doc Line can't be the first Line of the Epilog"""
+
+        strip = docline.rstrip()
+
+        skippable = not strip
+        skippable = skippable or strip.startswith(" ")  # includes .startswith("  ")
+        skippable = skippable or strip.startswith("usage")
+        skippable = skippable or strip.startswith("positional arguments")
+        skippable = skippable or strip.startswith("options")  # ignores "optional arguments"
+
+        return skippable
+
+    def _scrape_closing_(self, epilog: str) -> str:
+        """Pick out the last Graf of the Epilog, minus its Top Line"""
+
+        lines = epilog.splitlines()
+
+        indices = list(_ for _ in range(len(lines)) if lines[_])  # drops empty Lines
+        indices = list(_ for _ in indices if not lines[_].startswith(" "))  # finds top Lines
+
+        closing = ""
+        if indices:
+            index = indices[-1] + 1
+
+            join = "\n".join(lines[index:])  # last Graf, minus its Top Line
+            dedent = textwrap.dedent(join)
+            closing = dedent.strip()
+
+        return closing  # maybe empty
+
+    #
+    # Form Diffs from Help Doc to Parser Format_Help
+    #
+
+    def _diff_doc_vs_format_help_(self) -> list[str]:
+        """Form Diffs from Help Doc to Parser Format_Help"""
+
+        text = self.text
+        parser = self.parser
+
+        # Say where the Help Doc came from
+
+        a = text.splitlines()
+
+        basename = os.path.split(__file__)[-1]
+        fromfile = "{} --help".format(basename)
+
+        # Fetch the Parser Doc from a fitting virtual Terminal
+        # Fetch from a Black Terminal of 89 columns, not from the current Terminal width
+        # Fetch from later Python of "options:", not earlier Python of "optional arguments:"
+
+        if "COLUMNS" not in os.environ:
+
+            os.environ["COLUMNS"] = str(89)  # adds
+            try:
+                b_text = parser.format_help()
+            finally:
+                del os.environ["COLUMNS"]  # removes
+
+        else:
+
+            with_columns = os.environ["COLUMNS"]  # backs up
+            os.environ["COLUMNS"] = str(89)  # replaces
+            try:
+                b_text = parser.format_help()
+            finally:
+                os.environ["COLUMNS"] = with_columns  # restores
+
+        b = b_text.splitlines()
+
+        tofile = "ArgumentParser(...)"
+
+        # Form >= 0 Diffs from Help Doc to Parser Format_Help,
+        # but ask for lineterm="", for else the '---' '+++' '@@' Diff Control Lines end with '\n'
+
+        diffs = list(difflib.unified_diff(a=a, b=b, fromfile=fromfile, tofile=tofile, lineterm=""))
+
+        # Succeed
+
+        return diffs
 
 
 #
@@ -4737,8 +5078,8 @@ HT = "\t"  # 00/09 ⌃I Character Tabulation
 LF = "\n"  # 00/10 ⌃J Line Feed  # akin to ⌃K and CUD "\033[" "B"
 CR = "\r"  # 00/13 ⌃M Carriage Return  # akin to CHA "\033[" "G"
 
-ESC = "\033"  # 01/11  ⌃[ Escape  # often known as Shell printf '\e', but Python doesn't define \e
-SS3 = "\033O"  # ESC 04/15 Single Shift Three  # ⎋⇧O in macOS F1 F2 F3 F4
+ESC = "\033"  # 01/11  ⌃[ Escape  # often known as printf '\e', but Python doesn't define \e
+SS3 = "\033O"  # ESC 04/15 Single Shift Three  # ⎋⇧O in Apple F1 F2 F3 F4
 CSI = "\033["  # ESC 05/11 Control Sequence Introducer
 
 DECSC = "\033" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
@@ -4880,7 +5221,7 @@ class BytesTerminal:
 
         # Wait for first Byte, add in already available Bytes. and declare victory
 
-        Immediately = 0.000_001  # 0.000 Instantaneously works at macOS
+        Immediately = 0.000_001  # 0.000 Instantaneously works at Apple
         Rapidly = 0.002
 
         os_read_millis = list()
@@ -4939,8 +5280,8 @@ class BytesTerminal:
         fileno = self.fileno
         size = os.get_terminal_size(fileno)
 
-        assert 20 <= size.columns <= _PN_MAX_32100_, (size,)  # 20 <= macOS Terminal Width
-        assert 5 <= size.lines <= _PN_MAX_32100_, (size,)  # 5 <= macOS Terminal Height
+        assert 20 <= size.columns <= _PN_MAX_32100_, (size,)  # 20 <= Apple Width
+        assert 5 <= size.lines <= _PN_MAX_32100_, (size,)  # 5 <= Apple Height
 
         y_height = size.lines
         x_width = size.columns
@@ -5614,8 +5955,8 @@ Shift = unicodedata.lookup("Upwards White Arrow")  # ⇧
 Command = unicodedata.lookup("Place of Interest Sign")  # ⌘  # Super  # Windows
 # 'Fn'
 
-# note: Meta hides inside macOS Terminal > Settings > Keyboard > Use Option as Meta Key
-# note: Meta hides inside gloud Shell > Settings > Keyboard > Alt is Meta
+# note: Meta hides inside Apple > Settings > Keyboard > Use Option as Meta Key
+# note: Meta hides inside Google > Settings > Keyboard > Alt is Meta
 
 
 # Encode each Key Chord as a Str without a " " Space in it
@@ -5635,15 +5976,15 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\033" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
     "\033" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of FnF1..FnF12  # not ⌥⇧Fn  # coded with ⌃P
     "\033" "\033": "⎋⎋",  # Meta Esc  # not ⌥⎋
-    "\033" "\033O" "A": "⌃⌥↑",  # ESC SS3 ⇧A  # gCloud Shell
-    "\033" "\033O" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # gCloud Shell
-    "\033" "\033O" "C": "⌃⌥→",  # ESC SS3 ⇧C  # gCloud Shell
-    "\033" "\033O" "D": "⌃⌥←",  # ESC SS3 ⇧D  # gCloud Shell
+    "\033" "\033O" "A": "⌃⌥↑",  # ESC SS3 ⇧A  # Google
+    "\033" "\033O" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # Google
+    "\033" "\033O" "C": "⌃⌥→",  # ESC SS3 ⇧C  # Google
+    "\033" "\033O" "D": "⌃⌥←",  # ESC SS3 ⇧D  # Google
     "\033" "\033[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
-    "\033" "\033[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # gCloud Shell
-    "\033" "\033[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # gCloud Shell
-    "\033" "\033[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # gCloud Shell
-    "\033" "\033[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # gCloud Shell
+    "\033" "\033[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # Google
+    "\033" "\033[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # Google
+    "\033" "\033[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # Google
+    "\033" "\033[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # Google
     "\033" "\033[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
     "\033" "\x28": "⎋FnDelete",  # not ⌥FnDelete
     "\033O" "P": "F1",  # SS3 ⇧P
@@ -5654,11 +5995,11 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\033[" "17~": "F6",  # ⌥F1  # ⎋F1
     "\033[" "18~": "F7",  # ⌥F2  # ⎋F2
     "\033[" "19~": "F8",  # ⌥F3  # ⎋F3
-    "\033[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # macOS
-    "\033[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # macOS
+    "\033[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # Apple
+    "\033[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # Apple
     "\033[" "20~": "F9",  # ⌥F4  # ⎋F4
     "\033[" "21~": "F10",  # ⌥F5  # ⎋F5
-    "\033[" "23~": "F11",  # ⌥F6  # ⎋F6  # macOS takes F11
+    "\033[" "23~": "F11",  # ⌥F6  # ⎋F6  # Apple takes F11
     "\033[" "24~": "F12",  # ⌥F7  # ⎋F7
     "\033[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
     "\033[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
@@ -5671,17 +6012,17 @@ KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on and on
     "\033[" "3;2~": "⇧FnDelete",
     "\033[" "3;5~": "⌃FnDelete",
     "\033[" "3~": "FnDelete",
-    "\033[" "5~": "⇧Fn↑",  # macOS
-    "\033[" "6~": "⇧Fn↓",  # macOS
-    "\033[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ macOS
-    "\033[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ macOS
-    "\033[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ macOS
-    "\033[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← macOS
-    "\033[" "F": "⇧Fn→",  # macOS  # CSI 04/06 Cursor Preceding Line (CPL)
-    "\033[" "H": "⇧Fn←",  # macOS  # CSI 04/08 Cursor Position (CUP)
+    "\033[" "5~": "⇧Fn↑",  # Apple
+    "\033[" "6~": "⇧Fn↓",  # Apple
+    "\033[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ Apple
+    "\033[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ Apple
+    "\033[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ Apple
+    "\033[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← Apple
+    "\033[" "F": "⇧Fn→",  # Apple  # CSI 04/06 Cursor Preceding Line (CPL)
+    "\033[" "H": "⇧Fn←",  # Apple  # CSI 04/08 Cursor Position (CUP)
     "\033[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
-    "\033" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # macOS
-    "\033" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # macOS
+    "\033" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # Apple
+    "\033" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # Apple
     "\x20": "Spacebar",  # ' '  # ␠  # ␣  # ␢
     "\x7f": "Delete",  # ␡  # ⌫  # ⌦
     "\xa0": "⌥Spacebar",  # '\N{No-Break Space}'
@@ -5793,7 +6134,7 @@ def kdata_to_kcaps(kdata: bytes) -> str:
     return kcaps
 
     # '⌃L'  # '⇧Z'
-    # '⎋A' from ⌥A while macOS Keyboard > Option as Meta Key
+    # '⎋A' from ⌥A while Apple Keyboard > Option as Meta Key
 
 
 def _kch_to_kcap_(t: str) -> str:  # noqa C901
@@ -5807,7 +6148,10 @@ def _kch_to_kcap_(t: str) -> str:  # noqa C901
 
     # Show more Key Caps than US-Ascii mentions
 
-    if t in kcap_by_kchars.keys():  # Mac US Key Caps for Spacebar, F12, etc
+    if t in '!"#$%&()*+' ":<>?" "@" "^_" "{|}~":
+        s = "⇧" + t
+
+    elif t in kcap_by_kchars.keys():  # Mac US Key Caps for Spacebar, F12, etc
         s = kcap_by_kchars[t]  # '⌃Spacebar', 'Return', 'Delete', etc
 
     elif (t != "`") and (t in option_kstr_by_1_kchar.keys()):  # Mac US Option Accents
@@ -5819,8 +6163,8 @@ def _kch_to_kcap_(t: str) -> str:  # noqa C901
     # Show the Key Caps of US-Ascii, plus the ⌃ ⇧ Control/ Shift Key Caps
 
     elif (o < 0x20) or (o == 0x7F):  # C0 Control Bytes, or \x7F Delete (DEL)
-        if o == 0x1F:  # macOS ⌃- doesn't come through as  (0x2D ^ 0x40)
-            s = "⌃-"  # macOS ⌃-  and ⌃⇧_ do come through as (0x5F ^ 0x40)
+        if o == 0x1F:  # Apple ⌃- doesn't come through as  (0x2D ^ 0x40)
+            s = "⌃-"  # Apple ⌃-  and ⌃⇧_ do come through as (0x5F ^ 0x40)
         else:
             s = "⌃" + chr(o ^ 0x40)  # '^ 0x40' mixes ⌃ into one of @ A..Z [\]^_ ?, such as ⌃^
 
@@ -5951,7 +6295,7 @@ def slam_enough_stty_bits_to_normal() -> None:
     write += "\033[m"
     write += "\033[4l"
     write += "\0337"
-    write += "\033[?1049l"  # and implies \033[H at macOS Terminal
+    write += "\033[?1049l"  # and implies \033[H at Apple
     write += "\0338"
     write += "\033[?1000;1006l"
 
@@ -5962,50 +6306,6 @@ def slam_enough_stty_bits_to_normal() -> None:
     termios.tcsetattr(with_stderr.fileno(), when, attributes)
 
     # compare ProxyTerminal.__exit__
-
-
-#
-# Quote some words to choose at random
-#
-
-Jabberwocky = """
-
-    ’Twas brillig, and the slithy toves
-        Did gyre and gimble in the wabe:
-    All mimsy were the borogoves,
-        And the mome raths outgrabe.
-
-    “Beware the Jabberwock, my son!
-        The jaws that bite, the claws that catch!
-    Beware the Jubjub bird, and shun
-        The frumious Bandersnatch!”
-
-    He took his vorpal sword in hand;
-        Long time the manxome foe he sought—
-    So rested he by the Tumtum tree
-        And stood awhile in thought.
-
-    And, as in uffish thought he stood,
-        The Jabberwock, with eyes of flame,
-    Came whiffling through the tulgey wood,
-        And burbled as it came!
-
-    One, two! One, two! And through and through
-        The vorpal blade went snicker-snack!
-    He left it dead, and with its head
-        He went galumphing back.
-
-    “And hast thou slain the Jabberwock?
-        Come to my arms, my beamish boy!
-    O frabjous day! Callooh! Callay!”
-        He chortled in his joy.
-
-    ’Twas brillig, and the slithy toves
-        Did gyre and gimble in the wabe:
-    All mimsy were the borogoves,
-        And the mome raths outgrabe.
-
-"""
 
 
 #
@@ -6034,7 +6334,8 @@ def tprint(*args: object) -> None:
 
 
 #
-# Mention the unmentioned skidded names defined by this File, to please PyLance
+# Mention the unmentioned skidded names defined by this File, to please Pylance
+# todo: pleasing what level of Pylance? (Off, Basic, Standard, Strict)
 #
 
 
