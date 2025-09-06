@@ -1149,6 +1149,8 @@ class ScreenEditor:
 
         Slowly = 1.000
         MoreSlowly = 3.000
+        SlowCsiKData = b"""0123456789:;<=>?""" b""" !'#$%&'()*+,-./" b'"""
+
         while (not pack.text) and (not pack.closed) and (not bt.extras):
             headbook = TerminalBytePacket.Headbook
 
@@ -1159,8 +1161,12 @@ class ScreenEditor:
                 break
 
             n += 1
+
             bt.close_byte_pack_if(pack, timeout=Slowly)
-            if pack.to_bytes() not in headbook:
+            slow_kdata = pack.to_bytes()
+            assert slow_kdata, (slow_kdata,)
+
+            if slow_kdata[-1:] in SlowCsiKData:
                 bt.close_byte_pack_if(pack, timeout=MoreSlowly)
 
             kdata_after = pack.to_bytes()
@@ -2487,7 +2493,6 @@ class ScreenEditor:
 
         # todo10: Paste should arrive as itself, not as bound Keystroke Chords, especially Space
         # todo10: Add a <Quote> button like to quote ⎋[⇧K without running it
-        # todo10: Stop weirdly delaying ⎋[⇧K till next Keystroke Chord
         # todo10: Implicitly add a \r\n at end of ⌘V Paste
 
     def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> bool:
@@ -5380,8 +5385,8 @@ class TerminalBytePacket:
     text: str  # 0 or more Chars of Printable Text
 
     head: bytearray  # 1 Control Byte, else ⎋[, or ⎋O, or 3..6 Bytes starting with ⎋[M
-    neck: bytearray  # CSI Parameter Bytes, in 0x30..0x3F (16 Codes)
-    back: bytearray  # CSI Intermediate Bytes, in 0x20..0x2F (16 Codes)
+    neck: bytearray  # CSI Parameter Bytes, in 0x30..0x3F (16 Codes)  # ...... 0123456789:;<=>?
+    back: bytearray  # CSI Intermediate Bytes, in 0x20..0x2F (16 Codes)  # .... !"#$%&'()*+,-./
 
     stash: bytearray  # 1..3 Bytes taken for now, in hope of decoding 2..4 Later
     tail: bytearray  # CSI Final Byte, in 0x40..0x7E (63 Codes)
