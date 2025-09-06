@@ -664,41 +664,12 @@ class ConwayLife:
         # why does Mypy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
 
 
-_ = """  # The 8 Half-Steps of a 5-Pixel Glider
-
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
-    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
-    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
-    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
-    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
-    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-"""
-
-
 screen_editors: list[ScreenEditor] = list()
+
+
+Quickly = 0.009  # requires ⌥-Clicks encoded as Arrow Bursts to deliver each Arrow quickly
+Slowly = 1.000  # times out the typist of multibyte Terminal Byte Packets
+MoreSlowly = 3.000  # times out the typist of Parameter and Intermediate Bytes of Csi
 
 
 class ScreenEditor:
@@ -964,20 +935,9 @@ class ScreenEditor:
             pt.proxy_read_row_y_column_x()
             pt.proxy_read_y_height_x_width()
 
-        self.write("\033[K")
-        self.print("Try BackColor at Apple after invisible Tabs")
-        self.write("\033[K")
-        self.print("Also try Chars before Tab")
-        self.write("\033[K")
-        self.print("Also try Chars after Tab")
-
-        self.write("\033[K")
-        self.print()
-
-        self.write("\033[K")
-        self.print("<On #500>  <On #050>  <#24 on #005>  <Jabberwocky>  ⎋[M plain")
-        self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
+        self.write("\033[K")
+        self.print("Or type some Letters and then ⌥-Click of  <Jabberwocky>  <Quote>")
         self.write("\033[K")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
         self.write("\033[K")
@@ -1095,18 +1055,17 @@ class ScreenEditor:
         assert CSI_P_CHARS == """0123456789:;<=>?"""
         assert CSI_I_CHARS == """ !'#$%&'()*+,-./"""
 
-        # Count out a rapid burst of >= 2 Arrows
-
-        arrows_timeout = 0.009
+        # Finish up counting out a quick burst of >= 2 Arrows and then a Delay
 
         n = 1
-
         t0 = time.time()
+
+        assert Quickly == 0.009
 
         if not arrows:
             pack = bt.read_byte_packet(timeout=None)
         else:
-            pack = bt.read_byte_packet(timeout=arrows_timeout)
+            pack = bt.read_byte_packet(timeout=0.009)
             if not pack:
                 self.arrows = 0  # written only by Init & this Def
 
@@ -1120,16 +1079,22 @@ class ScreenEditor:
         kdata = pack.to_bytes()
         t1t0 = t1 - t0
 
+        # Keep on counting out a quick burst of >= 2 Arrows and then a Delay
+
+        assert Quickly == 0.009
+
         arrows_kdata_tuple = (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
 
         if kdata not in arrows_kdata_tuple:
             self.arrows = 0  # written only by Init & this Def
-        elif t1t0 >= arrows_timeout:
+        elif t1t0 >= 0.009:
             self.arrows = 0  # written only by Init & this Def
         elif arrows > 0:
             self.arrows += 1  # written only by Init & this Def
         else:
             assert arrows == 0, (arrows,)
+
+            # Start counting out a quick burst of >= 2 Arrows and then a Delay
 
             was_pack = terminal_byte_packets[-1]
             was_pack_kdata = was_pack.to_bytes()
@@ -1150,8 +1115,10 @@ class ScreenEditor:
                 self.arrow_row_y = y
                 self.arrow_column_x = x
 
-        Slowly = 1.000
-        MoreSlowly = 3.000
+        # Sometimes look to catch more Bytes after the first quick burst
+
+        assert Slowly == 1.000
+        assert MoreSlowly == 3.000
 
         SlowCsiKData = b"""0123456789:;<=>?""" b""" !'#$%&'()*+,-./"""
 
@@ -1165,12 +1132,12 @@ class ScreenEditor:
 
             n += 1
 
-            bt.close_byte_pack_if(pack, timeout=Slowly)
+            bt.close_byte_pack_if(pack, timeout=1.000)
             slow_kdata = pack.to_bytes()
             assert slow_kdata, (slow_kdata,)
 
             if slow_kdata[-1:] in SlowCsiKData:
-                bt.close_byte_pack_if(pack, timeout=MoreSlowly)
+                bt.close_byte_pack_if(pack, timeout=3.000)
 
             kdata_after = pack.to_bytes()
             if kdata_after == kdata:
@@ -1267,7 +1234,7 @@ class ScreenEditor:
         kchars = kdata.decode()  # may raise UnicodeDecodeError
         if kchars in kcap_by_kchars.keys():
             if n == 1:  # especially the '\033[H' of ⇧Fn← at Apple
-                tprint("Sent all at once, like a Keycap, at less than Rapidly = 2 ms/byte")
+                tprint("Keycaps KData in a hurry")
 
                 self.print_kcaps_plus(pack)
                 return
@@ -1306,7 +1273,7 @@ class ScreenEditor:
 
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
-        tprint("Fell back to bounce what delivers no signal")
+        tprint("Keycaps KData without meaning")
         self.print_kcaps_plus(pack)
 
     #
@@ -2415,6 +2382,7 @@ class ScreenEditor:
 
             self.print("Google eats ⌃M (you must press Return)")
             self.print("Google eats ⌃Spacebar (you must press ⌃⇧@)")
+            self.print("Google may put ⇧£ in place of ⇧# on English Keyboards (you must press ⌥3)")
             self.print("Google lacks ⎋[3⇧J Scrollback-Erase (you must close Tab)")
             self.print("Google lacks native ⎋ L and ⎋[ ⇧I ⇧S ⇧T ` and ⎋[D without Pn")
 
@@ -2459,7 +2427,7 @@ class ScreenEditor:
         pt = self.proxy_terminal
         writes_by_y_x = pt.writes_by_y_x
 
-        # Fetch the Write beneath the Cursor
+        # Fetch the Write beneath the Cursor  # todo10: pt.proxy_read_yx
 
         writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
 
@@ -2487,7 +2455,7 @@ class ScreenEditor:
         next_age = conway_life_ages[index]
 
         self.write("\0337")
-        pt.proxy_y_x_text_print(y, x=x, text=next_age)
+        self.y_x_text_print(y, x=x, text=next_age)
         self.write("\0338")
 
         # Succeed
@@ -2495,7 +2463,6 @@ class ScreenEditor:
         return True
 
         # todo10: Paste should arrive as itself, not as bound Keystroke Chords, especially Space
-        # todo10: Add a <Quote> button like to quote ⎋[⇧K without running it
         # todo10: Implicitly add a \r\n at end of ⌘V Paste
 
     def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> bool:
@@ -2508,55 +2475,56 @@ class ScreenEditor:
         y_text = pt.proxy_read_y_row_text(y, default=" ")
         widget_by_wx = self._text_to_widgets_by_wx_(text=y_text)
 
-        # Find a Widget beneath the Mouse Release
+        # Find the Widget beneath the Mouse Release, else fail
 
-        wx = -1
+        x_wx = -1
         x_widget = ""
-        x_word = ""
 
+        west_margin = 1
+        east_margin = 1
         for wx, widget in widget_by_wx.items():
-
-            west_margin = 1
-            east_margin = 1
-
             if x in range(wx - west_margin, wx + len(widget) + east_margin):
+                x_wx = wx
                 x_widget = widget
-
-                i = x - wx
-                i = min(max(0, i), len(widget) - 1)
-
-                left_widget = widget[: i + 1]
-                left_words = left_widget.split()
-                assert left_words, (left_words, left_widget, widget, i, wx, x)
-
-                widget_splits = widget.split()
-                x_word = widget_splits[len(left_words) - 1]
-                x_word = x_word.removeprefix("<").removesuffix(">")
-
                 break
-
-                # todo: accept X
 
         if not x_widget:
             return False
 
-        # todo8: Vanish the Command Verb typed out and then pushed
+        # Speak of the Verb apart from the Decorations of the Widget
 
-        verb = x_widget
+        x_verb = x_widget
         if x_widget.startswith("<") and x_widget.endswith(">") and (len(x_widget) > len("<>")):
-            verb = x_widget[1:-1]
+            x_verb = x_widget[1:-1]
 
-        vanisher = False  # todo8: do vanish each verb run almost at left of cursor
+        # Find the Word of the Widget beneath the Mouse Release
+
+        i = x - x_wx
+        i = min(max(0, i), len(x_widget) - 1)
+
+        left_widget = x_widget[: i + 1]
+        left_words = left_widget.split()
+        assert left_words, (left_words, left_widget, x_widget, i, x_wx, x)
+
+        widget_splits = x_widget.split()
+        x_word = widget_splits[len(left_words) - 1]
+        x_word = x_word.removeprefix("<").removesuffix(">")
+
+        # todo8: do vanish each verb run almost at left of cursor
+
+        vanisher = False
         if vanisher:
-            self._vanish_widget_at_yxf_(x_widget, y=y, x=wx)
+            self._vanish_widget_at_yxf_(x_widget, y=y, x=x_wx)
 
         # Run the Widget at the Mouse Release
 
-        take = self.take_mouse_verb_at_yxf(verb=verb, x_word=x_word, y=y, x=wx, f=f)
+        take = self.take_mouse_verb_at_yxf(verb=x_verb, x_widget=x_widget, x_wx=x_wx, y=y, x=x)
         if not take:
             self.write(x_word + " ")
 
         return True
+
+        # todo8: Vanish the Command Verb typed out and then pushed
 
     def _text_to_widgets_by_wx_(self, text: str) -> dict[int, str]:
 
@@ -2627,18 +2595,21 @@ class ScreenEditor:
 
         self.write("\0338")
 
-    def take_mouse_verb_at_yxf(self, verb: str, x_word: str, y: int, x: int, f: int) -> bool:
+    def take_mouse_verb_at_yxf(self, verb: str, x_widget: str, x_wx: int, y: int, x: int) -> bool:
         """Run the Verb at the Mouse Release"""
 
-        tprint(f"{verb=} {x_word=} {y=} {x=} {f=}  # take_mouse_verb_at_yxf")
+        tprint(f"{verb=} {x_widget=} {x_wx=} {y=} {x=}  # take_mouse_verb_at_yxf")
 
         if self.mouse_verb_to_write_sdata(verb):
             return True
 
-        if self.mouse_verb_do_tsv_at_yx(verb, y=y, x=x):
+        if self.mouse_verb_do_tsv_at_yx(verb, y=y, x_wx=x_wx):
             return True
 
-        if self.mouse_verb_do_jabberwocky(verb):
+        if self.mouse_verb_do_jabberwocky(verb, x_widget=x_widget, y=y, x_wx=x_wx):
+            return True
+
+        if self.mouse_verb_do_quote_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
             return True
 
         return False
@@ -2855,8 +2826,10 @@ class ScreenEditor:
     #
     #
 
-    def mouse_verb_do_tsv_at_yx(self, verb: str, y: int, x: int) -> bool:
+    def mouse_verb_do_tsv_at_yx(self, verb: str, y: int, x_wx: int) -> bool:
         """Eval a Spreadsheet Formula"""
+
+        x = x_wx
 
         pt = self.proxy_terminal
         x_width = pt.x_width
@@ -2933,15 +2906,15 @@ class ScreenEditor:
             row_y = north_y + i
 
             if (i == 0) or (ri == -1):
-                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=w * t)
+                self.y_x_text_print(y=row_y, x=west_x, text=w * t)
 
             elif ri == -3:
-                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=tt + ((w - 4) * "=") + tt)
+                self.y_x_text_print(y=row_y, x=west_x, text=tt + ((w - 4) * "=") + tt)
 
             elif ri == -2:
                 split = str(result)
                 rjust = (split + (3 * t)).rjust(w, t)
-                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=rjust)
+                self.y_x_text_print(y=row_y, x=west_x, text=rjust)
 
             else:
                 q = abs(ri) - 4
@@ -2953,7 +2926,7 @@ class ScreenEditor:
                     assert rjust.startswith(5 * t), (rjust,)
                     text = rjust[:3] + "+" + rjust[4:]
 
-                pt.proxy_y_x_text_print(y=row_y, x=west_x, text=text)
+                self.y_x_text_print(y=row_y, x=west_x, text=text)
 
         # Succeed
 
@@ -2961,19 +2934,19 @@ class ScreenEditor:
 
         # todo9: for now we take only a sum of ints
         # todo9: refactor => is there a verb here, where is it, what is it
-        # todo9: todo10: press Return on a ConwayLife
+        # todo9: press Return on a ConwayLife
         # todo9: press Return means CR LF is there is no verb here, else means mouse-click it
 
         # todo10: Conway button to start ConwayLife without writing examples
 
         # todo10: Cope when Apple Paste from Screen starts with \t
-        # todo10: Are we defaulting to Inserting Mode?
+        # todo7: Help notice how often we fall wrongly into Inserting mode by accident
 
     #
     #
     #
 
-    def mouse_verb_do_jabberwocky(self, verb: str) -> bool:
+    def mouse_verb_do_jabberwocky(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Write out a Random Word of Jabberwocky"""
 
         pt = self.proxy_terminal
@@ -2982,8 +2955,15 @@ class ScreenEditor:
         writes_by_y_x = pt.writes_by_y_x
 
         casefold = verb.casefold()
-        if casefold != "jabberwocky":
+        if casefold != "Jabberwocky".casefold():
             return False
+
+        #
+
+        self.write("\0337")
+        self.write("\033[7m")
+        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\0338")
 
         splits = Jabberwocky.split()
         split = random.choice(splits)
@@ -3000,6 +2980,66 @@ class ScreenEditor:
                 self.write(" ")
 
         self.write(split)
+
+        self.proxy_terminal.bytes_terminal.stdio.flush()
+        time.sleep(0.033)
+
+        self.write("\0337")
+        self.write("\033[27m")
+        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\0338")
+
+        #
+
+        return True
+
+    def mouse_verb_do_quote_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
+        """Print the Keycaps of the next Keystroke Chord, and then quit"""
+
+        pt = self.proxy_terminal
+        bt = pt.bytes_terminal
+
+        casefold = verb.casefold()
+        if casefold != "Quote".casefold():
+            return False
+
+        #
+
+        self.write("\0337")
+        self.write("\033[7m")
+        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\0338")
+
+        (pack1, n1) = self.read_one_pack()
+        kdata1 = pack1.to_bytes()
+
+        if self._match_csi_mouse_(pack1) and (pack1.tail == b"M"):  # drops Mouse Press
+
+            self.print_kcaps_plus(pack1)
+            (pack2, n2) = self.read_one_pack()
+            self.print_kcaps_plus(pack2)
+
+        elif flags.apple:
+
+            Quickly = 0.009
+
+            if kdata1 in (b"\033[A", b"\033[B", b"\033[C", b"\033[D"):
+                if bt.kbhit(0.009):
+                    (pack2, n2) = self.read_one_pack()
+
+                    if self._match_csi_mouse_(pack2) and (pack2.tail == b"m"):  # Mouse Release
+                        self.print_kcaps_plus(pack2)
+                    else:
+
+                        self.print_kcaps_plus(pack1)
+                        self.print_kcaps_plus(pack2)
+
+        self.write("\0337")
+        self.write("\033[27m")
+        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\0338")
+
+        #
 
         return True
 
@@ -4830,9 +4870,9 @@ SCREEN_WRITER_HELP = r"""
         ⎋[4H insert  ⎋[4L replace  ⎋[6␣Q bar  ⎋[4␣Q skid  ⎋[␣Q unstyled
         ⎋[⇧?1049H screen-alt  ⎋[⇧?1049L screen-main  ⎋[⇧?25L cursor-hide  ⎋[⇧?25H cursor-show
 
-        ⎋[1M bold  ⎋[4M underline  ⎋[7M reverse/inverse  ⎋[38;5;231m grayscale-max
-        red green bright-blue  ⎋[31M  ⎋[32M  ⎋[94M  on  ⎋[41M  ⎋[42M  ⎋[104M
-        ⎋[M plain  <Jabberwocky>  #24 on #005  #003366 on #FFCC99   ⎋[30M  ⎋[97M
+        <Jabberwocky>  colored  ⎋[32M  ⎋[94M  on  ⎋[41M  ⎋[103M  ⎋[38;5;244m grayscale
+        ⎋[M plain  ⎋[1M bold till ⎋[22M  ⎋[4M underline till ⎋[24M   ⎋[7M reverse till ⎋[27M
+        #24 on #005  #003366 on #FFCC99
 
         ⎋[5N call for reply ⎋[0N   ⎋[6N call for reply ⎋[{y};{x}⇧R
         ⎋[18T call for reply ⎋[8;{rows};{columns}T   ⎋[⇧?2004H L for ⌘V in ⎋[200~ ⎋[201~
@@ -5144,6 +5184,10 @@ DECRC = "\033" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
 CSI_PIF_REGEX = r"(\033\[)" r"([0-?]*)" r"([ -/]*)" r"(.)"  # Parameter/ Intermediate/ Final Bytes
 
 
+Immediately = 0.000_001  # waits awhile to catch another Byte after one or a few Bytes
+Rapidly = 0.002  # gives up quickly when TerminalBytePacket begun but not completed
+
+
 class BytesTerminal:
     """Write/ Read Bytes at Screen/ Keyboard of the Terminal"""
 
@@ -5275,16 +5319,16 @@ class BytesTerminal:
 
         stdio.flush()
 
-        # Wait for first Byte, add in already available Bytes. and declare victory
+        # Wait for first Byte, add in immediately available Bytes, and declare victory
 
-        Immediately = 0.000_001  # 0.000 Instantaneously works at Apple
-        Rapidly = 0.002
+        assert Immediately == 0.000_001  # 0.000 Instantaneously works at Apple
+        assert Rapidly == 0.002
 
         os_read_millis = list()
         t0 = time.time()
 
         if extras or self.kbhit(timeout=timeout):
-            while extras or self.kbhit(timeout=Immediately):
+            while extras or self.kbhit(timeout=0.000_001):
 
                 if not extras:
 
@@ -5311,7 +5355,7 @@ class BytesTerminal:
                 if not extras:
 
                     if kdata in headbook:
-                        if not self.kbhit(timeout=Rapidly):  # especially ⎋⇧O for Vim
+                        if not self.kbhit(timeout=0.002):  # especially ⎋⇧O for Vim
                             break  # rejects slow SS3 ⎋⇧O P Q R S of FnF1..FnF4
 
         tprint(f"{os_read_millis=}")
@@ -6400,21 +6444,86 @@ def tprint(*args: object) -> None:
 #
 
 
-_ = """
+_ = """  # All 8 Half-Steps of a 5-Cell Glider at Conway Life
 
-    ⚪⚪⚪    ⚪⚪⚪        ⚪⚪⚪          ⚪⚪⚪        ⚪⚪⚪⚪⚪    x
-    ⚪🔴⚪  ⚪⚪⚪⚪⚪    ⚪⚪🔴⚪⚪      ⚪⚪🔴⚪⚪    ⚪⚪🔴🔴🔴⚪⚪  x
-    ⚪🔴⚪  ⚪🔴🔴🔴⚪  ⚪⚪🔴⚪🔴⚪⚪  ⚪⚪🔴🔴🔴⚪⚪  ⚪🔴⚪⚪⚪🔴⚪  x
-    ⚪🔴⚪  ⚪🔴🔴🔴⚪  ⚪🔴⚪⚪⚪🔴⚪  ⚪🔴🔴⚪🔴🔴⚪  ⚪🔴⚪⚪⚪🔴⚪  x
-    ⚪🔴⚪  ⚪🔴🔴🔴⚪  ⚪⚪🔴⚪🔴⚪⚪  ⚪⚪🔴🔴🔴⚪⚪  ⚪🔴⚪⚪⚪🔴⚪  x
-    ⚪🔴⚪  ⚪⚪⚪⚪⚪    ⚪⚪🔴⚪⚪      ⚪⚪🔴⚪⚪    ⚪⚪🔴🔴🔴⚪⚪  x
-    ⚪⚪⚪    ⚪⚪⚪        ⚪⚪⚪          ⚪⚪⚪        ⚪⚪⚪⚪⚪    x
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
+    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
+    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
+    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+"""
+
+_ = """  # The first 5 Full-Steps of a 5-Cell Long Bar at Conway Life
+
+        ⚪⚪⚪
+        ⚪🔴⚪
+        ⚪🔴⚪
+        ⚪🔴⚪
+        ⚪🔴⚪
+        ⚪🔴⚪
+        ⚪⚪⚪
+
+        ⚪⚪⚪
+      ⚪⚪⚪⚪⚪
+      ⚪🔴🔴🔴⚪
+      ⚪🔴🔴🔴⚪
+      ⚪🔴🔴🔴⚪
+      ⚪⚪⚪⚪⚪
+        ⚪⚪⚪
+
+        ⚪⚪⚪
+      ⚪⚪🔴⚪⚪
+    ⚪⚪🔴⚪🔴⚪⚪
+    ⚪🔴⚪⚪⚪🔴⚪
+    ⚪⚪🔴⚪🔴⚪⚪
+      ⚪⚪🔴⚪⚪
+        ⚪⚪⚪
+
+        ⚪⚪⚪
+      ⚪⚪🔴⚪⚪
+    ⚪⚪🔴🔴🔴⚪⚪
+    ⚪🔴🔴⚪🔴🔴⚪
+    ⚪⚪🔴🔴🔴⚪⚪
+      ⚪⚪🔴⚪⚪
+        ⚪⚪⚪
+
+      ⚪⚪⚪⚪⚪
+    ⚪⚪🔴🔴🔴⚪⚪
+    ⚪🔴⚪⚪⚪🔴⚪
+    ⚪🔴⚪⚪⚪🔴⚪
+    ⚪🔴⚪⚪⚪🔴⚪
+    ⚪⚪🔴🔴🔴⚪⚪
+      ⚪⚪⚪⚪⚪
 
 """
 
 # todo10: add the surrounding empty Spots when the Red is born at 5th etc
-# todo10: a repeat key for ⎋['⇧~
-# todo10: multiply by digits for ⎋['⇧~
+# todo9: a repeat key for ⎋['⇧~
+# todo9: multiply by digits for ⎋['⇧~
 
 
 # Give a name to the most classic KData/ SData puns:  '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
