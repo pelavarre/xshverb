@@ -4,6 +4,19 @@ things to do, futures to build
 
     pq dedent should imply expandtab
 
+    ??
+
+        % cd bin/
+        % python3 -c 'import plus; print(plus.__file__)'
+        /Users/plavarre/Public/xshverb/bin/plus.py
+        % p
+        >>> import plus
+        Traceback (most recent call last):
+          File "<python-input-0>", line 1, in <module>
+            import plus
+        ModuleNotFoundError: No module named 'plus'
+        >>>
+
 yah later still
 
     touch.py --mkdirs

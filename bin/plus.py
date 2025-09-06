@@ -713,7 +713,6 @@ class ScreenEditor:
     arrow_column_x: int  # the X of Y X after the first Keyboard Arrow Chord
 
     func_by_str: dict[str, abc.Callable[[], None]] = dict()
-    loopable_kdata_tuple: tuple[bytes, ...] = tuple()
 
     #
     # Init, Enter, Exit, Place, Print, Write
@@ -736,9 +735,6 @@ class ScreenEditor:
         func_by_str = self.form_func_by_str()
         self.func_by_str = func_by_str
 
-        loopable_kdata_tuple = self.form_loopable_kdata_tuple()
-        self.loopable_kdata_tuple = loopable_kdata_tuple
-
     def form_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         """Bind Keycaps to Funcs"""
 
@@ -757,10 +753,10 @@ class ScreenEditor:
             # b"\x07",  # ⌃G \a bell-ring
             # b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
             # b"\x09",  # ⌃I \t Tab
-            # b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
+            # b"\x0a",  # ⌃J \n ↓ on Screen, else Scroll Up and then ↓
             "⌃K": self.do_row_tail_erase,  # ⌃K for Emacs when not rightmost
             "⌃L": pt.write_screen,  # ⌃L for Vim  # not ⌃L for Emacs a la Vim ⇧H ⇧M ⇧L
-            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # only \r Return at Google
+            "Return": self.do_write_cr_lf,  # ⌃M \r Return  # Google eats ⌃M (you must press Return)
             "⌃N": self.do_row_down,  # ⌃N
             "⌃O": self.do_row_insert,  # ⌃O for Emacs when leftmost  # not Vim I ⌃O
             "⌃P": self.do_row_up,  # ⌃P
@@ -850,6 +846,7 @@ class ScreenEditor:
 
         return func_by_str
 
+        #
         # # Take Vim ⌃O Str-Str Pairs same as Vim ⎋ Esc-Byte Pairs  # todo4:
         #
         # items = list(func_by_str.items())
@@ -861,41 +858,7 @@ class ScreenEditor:
         #
         #             assert alt_kstr not in func_by_str.keys()
         #             func_by_str[alt_kstr] = func  # todo4: need Chord Sequences to do Vim I ⌃O
-
-    def form_loopable_kdata_tuple(self) -> tuple[bytes, ...]:
-        """List the few Keyboard Encodings that run especially well when looped back to Screen"""
-
-        d = (
-            b"\x07",  # ⌃G \a bell-ring
-            b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
-            b"\x09",  # ⌃I \t Tab
-            b"\x0a",  # ⌃J \n ↓, else Scroll Up and then ↓
-            # b"\x0d",  # ⌃M \r Return  # only \r Return at Google
-            #
-            # b"\033": self.print_kcaps_plus,  # ⎋
-            #
-            # b"\033" b"7",  # ⎋7 cursor-checkpoint
-            # b"\033" b"8",  # ⎋8 cursor-revert
-            # b"\033" b"D",  # ⎋⇧D ↓ (IND)
-            # b"\033" b"E",  # ⎋⇧E \r\n else \r (NEL)
-            # b"\033" b"M",  # ⎋⇧M ↑ (RI)
-            # b"\033" b"c",  # ⎋C cursor-revert (_ICF_RIS_)
-            # b"\033" b"l",  # ⎋L row-column-leap  # not at Google (_ICF_CUP_)
-            #
-            # b"\033O": self.print_kcaps_plus,  # ⎋⇧O
-            #
-            # b"\033[": self.print_kcaps_plus,  # ⎋ [
-            b"\033[" b"A",  # ⎋[⇧A ↑
-            b"\033[" b"B",  # ⎋[⇧B ↓
-            b"\033[" b"C",  # ⎋[⇧C →
-            b"\033[" b"D",  # ⎋[⇧D ←
-            # b"\033[" b"I",  # ⎋[⇧I ⌃I  # not at Google
-            b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
-        )
-
-        loopable_kdata_tuple = tuple(bytes(_) for _ in d)  # to please Pylance
-
-        return loopable_kdata_tuple  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
+        #
 
         # todo3: bind ⎋ and ⌃U to Vim/Emacs Repeat Counts
 
@@ -1069,6 +1032,8 @@ class ScreenEditor:
         pt = self.proxy_terminal
         klog = pt.keyboard_bytes_log
 
+        loopback_kdata_sdata_puns = _LOOPBACK_KDATA_SDATA_PUNS_
+
         # Fetch and time one Keyboard-Chord Terminal-Byte-Packet
 
         t0 = time.time()
@@ -1104,14 +1069,14 @@ class ScreenEditor:
         if len(kdata) == 1:
             tprint(str(kdata)[2:-1], "in", millis)
         elif (not arrows) and (t1t0 > 0.020):
-            if kdata in self.loopable_kdata_tuple:  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
+            if kdata in loopback_kdata_sdata_puns:  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
                 tprint(str(kdata)[2:-1], "in", millis)
             elif n > 1:
                 tprint(str(kdata)[2:-1], "as", n, "in", millis)
             else:
-                tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_one_pack 1")
+                tprint(f"t1t0={t1t0:.6f} {n=} {pack=}")
         else:
-            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}  # read_one_pack 2")
+            tprint(f"{arrows=} {n=} t1t0={t1t0:.6f} {pack=}")
 
         return (pack, n)
 
@@ -1261,9 +1226,9 @@ class ScreenEditor:
         """Reply to 1 whole TerminalBytePacket, differently if n == 1 quick, or slow"""
 
         func_by_str = self.func_by_str
-        loopable_kdata_tuple = self.loopable_kdata_tuple
 
         kcap_by_kchars = KCAP_BY_KCHARS
+        loopback_kdata_sdata_puns = _LOOPBACK_KDATA_SDATA_PUNS_
 
         # Append to the __pycache__/k.keyboard Keylogger Keylogging File
 
@@ -1282,10 +1247,10 @@ class ScreenEditor:
 
             return
 
-        # Write KData as SData when we say it's especially loopable
+        # Write the most classic KData/ SData puns as SData
 
-        if kdata in loopable_kdata_tuple:  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
-            self.do_write_kdata_as_sdata(kdata)  # for .loopable_kdata_tuple
+        if kdata in loopback_kdata_sdata_puns:  # '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
+            self.do_write_kdata_as_sdata(kdata)  # for .loopback_kdata_tuple
             return
 
         # Write KData as Keycaps when it is Keycaps KData in a hurry
@@ -1309,6 +1274,8 @@ class ScreenEditor:
 
         if self._take_esc_row_1_column_1_leap_if_(kdata):  # ⎋L
             return
+
+            # claims Apple has no native ⎋ KData/ SData Puns other than ⎋7 ⎋8 ⎋C ⎋L
 
         # Emulate or write-through the famous Csi Control Byte Sequences
 
@@ -1601,7 +1568,7 @@ class ScreenEditor:
         return False
 
     def _match_csi_write_through_(self, pack: TerminalBytePacket) -> bool:
-        """Recommend loop back for this Csi Byte Sequence, or don't"""
+        """Recommend Loopback for this Csi Byte Sequence, or don't"""
 
         kdata = pack.to_bytes()
 
@@ -1647,10 +1614,8 @@ class ScreenEditor:
 
         # claims Apple has no native ⎋[ ⇧ NOQRUVWY ^ _ {|}~, and no ⎋[ [\] AEGIJKOPSUVWYZ
 
-        # todo2: stop wrong write-through of multibyte Control Chars
-
     def _match_csi_cup_write_through_(self, pack: TerminalBytePacket) -> bool:
-        """Recommend loop back for this Csi CUP_ Byte Sequence, or don't"""
+        """Recommend Loopback for this Csi CUP_ Byte Sequence, or don't"""
 
         if pack.tail in b"Hf":  # ⎋[⇧H CUP_Y1_X1, CUP_Y_X1, CUP_Y_X
             if not pack.back:
@@ -1666,7 +1631,7 @@ class ScreenEditor:
         return False
 
     def _match_csi_sgr_write_through_(self, pack: TerminalBytePacket) -> bool:
-        """Recommend loop back for this Csi SGR_PS Byte Sequence, or don't"""
+        """Recommend Loopback for this Csi SGR_PS Byte Sequence, or don't"""
 
         if pack.tail != b"m":
             return False
@@ -6415,15 +6380,6 @@ def tprint(*args: object) -> None:
 
 
 #
-# Mention the unmentioned skidded names defined by this File, to please Pylance
-# todo: pleasing what level of Pylance? (Off, Basic, Standard, Strict)
-#
-
-
-_ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
-
-
-#
 # Git-track some Game Play
 #
 
@@ -6443,6 +6399,26 @@ _ = """
 # todo10: add the surrounding empty Spots when the Red is born at 5th etc
 # todo10: a repeat key for ⎋['⇧~
 # todo10: multiply by digits for ⎋['⇧~
+
+
+# Give a name to the most classic KData/ SData puns:  '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
+
+_LOOPBACK_KDATA_SDATA_PUNS_ = (
+    b"\x07",  # ⌃G \a bell-ring
+    b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
+    b"\x09",  # ⌃I \t Tab
+    b"\x0a",  # ⌃J \n ↓ on Screen, else Scroll Up and then ↓
+    b"\x0d",  # ⌃M \r max ← on Screen
+    # b"\033",  # ⎋  # but we do loop back the Headbook of many Esc Sequences when completed
+    b"\033[" b"A",  # ⎋[⇧A ↑
+    b"\033[" b"B",  # ⎋[⇧B ↓
+    b"\033[" b"C",  # ⎋[⇧C →
+    b"\033[" b"D",  # ⎋[⇧D ←
+    b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
+)
+
+# see also:  def _match_csi_write_through_
+
 
 #
 # Cite some Terminal Docs
@@ -6471,6 +6447,14 @@ https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda  <= h/t jvns.
 https://github.com/Alhadis/OSC8-Adoption?tab=readme-ov-file  <= h/t jvns.ca
 
 """
+
+
+#
+# Mention the unmentioned skidded names defined by this File, to calm Pylance
+#
+
+
+_ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
 
 
 #
