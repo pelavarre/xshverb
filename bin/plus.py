@@ -539,6 +539,9 @@ class ConwayLife:
             if text not in ("⚪", "⚫", "⬛", "🔴", "🟥"):
                 continue
 
+            elif text in ("⬛",):
+                continue
+
             # Follow the Plan
 
             if conway_half_steps % 2:
@@ -551,7 +554,7 @@ class ConwayLife:
 
             # Ignore the Plan published one half-step too soon
 
-            elif text in ("⚫", "⬛", "🟥"):
+            elif text in ("⚫", "🟥"):
                 continue
 
             # First make the Plan to follow
