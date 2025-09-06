@@ -536,11 +536,29 @@ class ConwayLife:
             yx_writes = writes_by_y_x[y][x]
             text = yx_writes[-1] if yx_writes else ""
 
-            if text not in ("⚪", "⚫", "🔴", "🟥"):
+            if text not in ("⚪", "⚫", "⬛", "🔴", "🟥"):
                 continue
 
-            if conway_half_steps % 2 == 0:
+            # Follow the Plan
+
+            if conway_half_steps % 2:
+                assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
+
+                if text == "⚫":
+                    self.conway_write_y_x_text(y, x=x, text="🔴")
+                elif text == "🟥":
+                    self.conway_write_y_x_text(y, x=x, text="⚪")
+
+            # Ignore the Plan published one half-step too soon
+
+            elif text in ("⚫", "⬛", "🟥"):
+                continue
+
+            # First make the Plan to follow
+
+            else:
                 assert text in ("⚪", "🔴"), (text,)
+
                 n = self.y_x_count_around(y, x)
 
                 if (n < 2) and (text == "🔴"):
@@ -550,14 +568,6 @@ class ConwayLife:
                     self.y_x_count_around(y, x)  # adds its Next Spots
                 elif (n > 3) and (text == "🔴"):
                     self.conway_write_y_x_text(y, x=x, text="🟥")
-
-            else:
-                assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
-
-                if text == "⚫":
-                    self.conway_write_y_x_text(y, x=x, text="🔴")
-                elif text == "🟥":
-                    self.conway_write_y_x_text(y, x=x, text="⚪")
 
     def y_x_count_around(self, y: int, x: int) -> int:
         """Count the Neighbors of a Cell"""
@@ -1102,7 +1112,7 @@ class ScreenEditor:
 
         return (pack, n)
 
-    def read_arrows_or_one_pack(self) -> tuple[TerminalBytePacket, int]:
+    def read_arrows_or_one_pack(self) -> tuple[TerminalBytePacket, int]:  # noqa C901  # todo9:
         """Fetch 1 Whole TerminalBytePacket, all at once, or as parts"""
 
         terminal_byte_packets = self.terminal_byte_packets
@@ -1170,7 +1180,9 @@ class ScreenEditor:
                 self.arrow_column_x = x
 
         Slowly = 1.000
+        MoreSlowly = 3.000
         while (not pack.text) and (not pack.closed) and (not bt.extras):
+            headbook = TerminalBytePacket.Headbook
 
             kdata = pack.to_bytes()
             if kdata == b"\033[M":  # ⎋⇧M for Csi
@@ -1180,6 +1192,8 @@ class ScreenEditor:
 
             n += 1
             bt.close_byte_pack_if(pack, timeout=Slowly)
+            if pack.to_bytes() not in headbook:
+                bt.close_byte_pack_if(pack, timeout=MoreSlowly)
 
             kdata_after = pack.to_bytes()
             if kdata_after == kdata:
@@ -1503,21 +1517,29 @@ class ScreenEditor:
 
         if f in (Basic_0, Option_8):
 
-            self.take_widget_at_yxf_mouse_release(y, x=x, f=f)
+            if self.take_spot_at_yxf_mouse_release(y, x=x, f=f):
+                return True
 
-            return True
+            if x > X1:
+                if self.take_spot_at_yxf_mouse_release(y, x=x - 1, f=f):
+                    return True
+
+            if self.take_widget_at_yxf_mouse_release(y, x=x, f=f):
+                return True
+
+            return False
 
         # Reply to Shifting or no Shifting at Mouse Release
 
-        if f == 0:
-            self.write("*")  # unreached when f == 0 because Code far above
-
         if f & Control_16:
-            self.write("⌃")
+            # self.write("⌃")
+            return False
         if f & Option_8:
-            self.write("⌥")  # unreached when f == 8 because Code far above
+            # self.write("⌥")  # unreached when f == 8 because Code far above
+            return False
         if f & Shift_4:
-            self.write("⇧")
+            # self.write("⇧")
+            return False
 
         return True
 
@@ -2415,6 +2437,7 @@ class ScreenEditor:
             self.print()
 
             self.print("Google eats ⌃M (you must press Return)")
+            self.print("Google eats ⌃Spacebar (you must press ⌃⇧@)")
             self.print("Google lacks ⎋[3⇧J Scrollback-Erase (you must close Tab)")
             self.print("Google lacks native ⎋ L and ⎋[ ⇧I ⇧S ⇧T ` and ⎋[D without Pn")
 
@@ -2453,8 +2476,54 @@ class ScreenEditor:
     # Take ⌥ Mouse Release as a call for Read-Eval-Print
     #
 
-    def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> None:
-        """Take ⌥ Mouse Release as a call for Read-Eval-Print"""
+    def take_spot_at_yxf_mouse_release(self, y: int, x: int, f: int) -> bool:
+        """Take ⌥ Mouse Release as a call on a Widget of Characters"""
+
+        pt = self.proxy_terminal
+        writes_by_y_x = pt.writes_by_y_x
+
+        # Fetch the Write beneath the Cursor
+
+        writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
+
+        writes = writes_by_x[x] if (x in writes_by_x.keys()) else list()
+        if not writes:
+            return False
+
+        write = writes[-1]
+        if not write:
+            return False
+
+        tprint(f"{y=} {x=} {write=}  # .take_spot_at_yxf_mouse_release")
+
+        # Match with Conway Life, or not
+
+        conway_life_ages = "⚪⚫🔴🟥⬛"
+
+        find = conway_life_ages.find(write)
+        if find < 0:
+            return False
+
+        # Age the Match
+
+        index = (find + 1) % len(conway_life_ages)
+        next_age = conway_life_ages[index]
+
+        self.write("\0337")
+        pt.proxy_y_x_text_print(y, x=x, text=next_age)
+        self.write("\0338")
+
+        # Succeed
+
+        return True
+
+        # todo10: Paste should arrive as itself, not as bound Keystroke Chords, especially Space
+        # todo10: Add a <Quote> button like to quote ⎋[⇧K without running it
+        # todo10: Stop weirdly delaying ⎋[⇧K till next Keystroke Chord
+        # todo10: Implicitly add a \r\n at end of ⌘V Paste
+
+    def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> bool:
+        """Take ⌥ Mouse Release as a call on a Widget between Double-Spaces"""
 
         pt = self.proxy_terminal
 
@@ -2493,8 +2562,7 @@ class ScreenEditor:
                 # todo: accept X
 
         if not x_widget:
-            self.write("\a")  # for .take_widget_at_yxf_mouse_release
-            return
+            return False
 
         # todo8: Vanish the Command Verb typed out and then pushed
 
@@ -2508,7 +2576,11 @@ class ScreenEditor:
 
         # Run the Widget at the Mouse Release
 
-        self.take_mouse_verb_at_yxf(verb=verb, x_word=x_word, y=y, x=wx, f=f)
+        take = self.take_mouse_verb_at_yxf(verb=verb, x_word=x_word, y=y, x=wx, f=f)
+        if not take:
+            self.write(x_word + " ")
+
+        return True
 
     def _text_to_widgets_by_wx_(self, text: str) -> dict[int, str]:
 
@@ -2579,25 +2651,21 @@ class ScreenEditor:
 
         self.write("\0338")
 
-    def take_mouse_verb_at_yxf(self, verb: str, x_word: str, y: int, x: int, f: int) -> None:
+    def take_mouse_verb_at_yxf(self, verb: str, x_word: str, y: int, x: int, f: int) -> bool:
         """Run the Verb at the Mouse Release"""
 
         tprint(f"{verb=} {x_word=} {y=} {x=} {f=}  # take_mouse_verb_at_yxf")
 
-        # Eval our well-known Verbs
-
         if self.mouse_verb_to_write_sdata(verb):
-            return
+            return True
 
         if self.mouse_verb_do_tsv_at_yx(verb, y=y, x=x):
-            return
+            return True
 
         if self.mouse_verb_do_jabberwocky(verb):
-            return
+            return True
 
-        # Fall back to copy the Word beneath the Mouse Release
-
-        self.write(x_word + " ")
+        return False
 
         # todo4: find an Italic that works at ⎋[3M or somewhere
 
@@ -2812,7 +2880,7 @@ class ScreenEditor:
     #
 
     def mouse_verb_do_tsv_at_yx(self, verb: str, y: int, x: int) -> bool:
-        """Eval a Formula"""
+        """Eval a Spreadsheet Formula"""
 
         pt = self.proxy_terminal
         x_width = pt.x_width
@@ -2917,7 +2985,13 @@ class ScreenEditor:
 
         # todo9: for now we take only a sum of ints
         # todo9: refactor => is there a verb here, where is it, what is it
+        # todo9: todo10: press Return on a ConwayLife
         # todo9: press Return means CR LF is there is no verb here, else means mouse-click it
+
+        # todo10: Conway button to start ConwayLife without writing examples
+
+        # todo10: Cope when Apple Paste from Screen starts with \t
+        # todo10: Are we defaulting to Inserting Mode?
 
     #
     #
@@ -4545,6 +4619,8 @@ class ProxyTerminal:
 
 #
 
+# todo9: F Key to relaunch
+
 # todo9: Play Tetris as well as Emacs  ⎋ X  T E T R I S  Return
 
 # todo9: play with invisible ink
@@ -4552,6 +4628,8 @@ class ProxyTerminal:
 #
 
 # todo8: sum more than ints, such as fixed-point Decimal's
+
+# todo8: round up contrast when printing text
 
 # todo8: Press Return inside a Button to click it
 #
@@ -5302,7 +5380,7 @@ class BytesTerminal:
         assert CPR_Y_X_REGEX == r"\033\[([0-9]+);([0-9]+)R"
 
         kbhit = self.kbhit(timeout=0.000)  # flushes output, then polls input
-        assert not kbhit  # todo: cope when Mouse or Paste or Keyboard work disrupts replies to Csi
+        assert not kbhit  # todo7: does happen  # Mouse or Paste or Keyboard disrupts replies to Csi
 
         stdio.write("\033[6n")  # bypass Screen Logs & Screen Mirrors above
         pack = self.read_byte_packet(timeout=None)
@@ -5324,6 +5402,8 @@ class BytesTerminal:
         assert x >= 1, (x, x_bytes, kdata, pack)
 
         return (y, x)
+
+        # todo7: resume operations despite unhandled Exception
 
 
 class TerminalBytePacket:
@@ -6341,29 +6421,53 @@ _ = _ICF_RIS_, _ICF_CUP_, _SM_XTERM_ALT_, _RM_XTERM_MAIN_
 
 
 #
+# Git-track some Game Play
+#
+
+
+_ = """
+
+    ⚪⚪⚪    ⚪⚪⚪        ⚪⚪⚪          ⚪⚪⚪        ⚪⚪⚪⚪⚪    x
+    ⚪🔴⚪  ⚪⚪⚪⚪⚪    ⚪⚪🔴⚪⚪      ⚪⚪🔴⚪⚪    ⚪⚪🔴🔴🔴⚪⚪  x
+    ⚪🔴⚪  ⚪🔴🔴🔴⚪  ⚪⚪🔴⚪🔴⚪⚪  ⚪⚪🔴🔴🔴⚪⚪  ⚪🔴⚪⚪⚪🔴⚪  x
+    ⚪🔴⚪  ⚪🔴🔴🔴⚪  ⚪🔴⚪⚪⚪🔴⚪  ⚪🔴🔴⚪🔴🔴⚪  ⚪🔴⚪⚪⚪🔴⚪  x
+    ⚪🔴⚪  ⚪🔴🔴🔴⚪  ⚪⚪🔴⚪🔴⚪⚪  ⚪⚪🔴🔴🔴⚪⚪  ⚪🔴⚪⚪⚪🔴⚪  x
+    ⚪🔴⚪  ⚪⚪⚪⚪⚪    ⚪⚪🔴⚪⚪      ⚪⚪🔴⚪⚪    ⚪⚪🔴🔴🔴⚪⚪  x
+    ⚪⚪⚪    ⚪⚪⚪        ⚪⚪⚪          ⚪⚪⚪        ⚪⚪⚪⚪⚪    x
+
+"""
+
+# todo10: add the surrounding empty Spots when the Red is born at 5th etc
+# todo10: a repeat key for ⎋['⇧~
+# todo10: multiply by digits for ⎋['⇧~
+
+#
 # Cite some Terminal Docs
 #
 
 
-#   https://unicode.org/charts/PDF/U0000.pdf
-#   https://unicode.org/charts/PDF/U0080.pdf
-#   https://en.wikipedia.org/wiki/ANSI_escape_code
-#
-#   https://www.ecma-international.org/publications-and-standards/standards/ecma-48
-#     /wp-content/uploads/ECMA-48_5th_edition_june_1991.pdf
-#
-#   https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
-#
-#   https://github.com/tmux/tmux/blob/master/tools/ansicode.txt  <= close to h/t jvns.ca
-#   https://jvns.ca/blog/2025/03/07/escape-code-standards  <= h/t jvns.ca
-#   https://man7.org/linux/man-pages/man4/console_codes.4.html  <= h/t jvns.ca
-#   https://sw.kovidgoyal.net/kitty/keyboard-protocol  <= h/t jvns.ca
-#   https://vt100.net/docs/vt100-ug/chapter3.html  <= h/t jvns.ca
-#
-#   https://iterm2.com/feature-reporting  <= h/t jvns.ca
-#   https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda  <= h/t jvns.ca
-#   https://github.com/Alhadis/OSC8-Adoption?tab=readme-ov-file  <= h/t jvns.ca
-#
+_ = """
+
+https://unicode.org/charts/PDF/U0000.pdf
+https://unicode.org/charts/PDF/U0080.pdf
+https://en.wikipedia.org/wiki/ANSI_escape_code
+
+https://www.ecma-international.org/publications-and-standards/standards/ecma-48
+    /wp-content/uploads/ECMA-48_5th_edition_june_1991.pdf
+
+https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+
+https://github.com/tmux/tmux/blob/master/tools/ansicode.txt  <= close to h/t jvns.ca
+https://jvns.ca/blog/2025/03/07/escape-code-standards  <= h/t jvns.ca
+https://man7.org/linux/man-pages/man4/console_codes.4.html  <= h/t jvns.ca
+https://sw.kovidgoyal.net/kitty/keyboard-protocol  <= h/t jvns.ca
+https://vt100.net/docs/vt100-ug/chapter3.html  <= h/t jvns.ca
+
+https://iterm2.com/feature-reporting  <= h/t jvns.ca
+https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda  <= h/t jvns.ca
+https://github.com/Alhadis/OSC8-Adoption?tab=readme-ov-file  <= h/t jvns.ca
+
+"""
 
 
 #

@@ -1,5 +1,9 @@
 things to do, futures to build
 
+6/Sep
+
+    pq dedent should imply expandtab
+
 yah later still
 
     touch.py --mkdirs
