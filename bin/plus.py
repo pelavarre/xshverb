@@ -683,7 +683,9 @@ class ScreenEditor:
     arrow_row_y: int  # the Y of Y X after the first Keyboard Arrow Chord
     arrow_column_x: int  # the X of Y X after the first Keyboard Arrow Chord
 
-    func_by_str: dict[str, abc.Callable[[], None]] = dict()
+    func_by_str: dict[str, abc.Callable[[], None]]
+
+    conwaying: bool  # todo: inelegant
 
     #
     # Init, Enter, Exit, Place, Print, Write
@@ -705,6 +707,8 @@ class ScreenEditor:
 
         func_by_str = self.form_func_by_str()
         self.func_by_str = func_by_str
+
+        self.conwaying = False
 
     def form_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         """Bind Keycaps to Funcs"""
@@ -937,10 +941,13 @@ class ScreenEditor:
 
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.write("\033[K")
-        self.print("Or type some Letters and then ⌥-Click of  <Jabberwocky>  <Quote>")
+        self.print("Or type some Letters and then ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>")
         self.write("\033[K")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
         self.write("\033[K")
+        self.print()
+
+        self.write("\033[K")  # moar vertical separation
         self.print()
 
         # Walk one step after another
@@ -974,6 +981,10 @@ class ScreenEditor:
         # Else reply to the one Keyboard Chord
 
         self.reply_to_kdata(pack, n=n)  # may raise SystemExit
+
+        # todo10: something wrong with the West side of pasted Conway Life?
+
+        # todo7: lose Input to limit delay of Keyboard Chords, such as Tab bursts at Conway Life
 
         # todo2: Read Str not Bytes from Keyboard, and then List[Str]
         # todo2: Stop taking slow b'\033[' b'L' IL_Y as 1 Whole Packet from Google
@@ -2222,7 +2233,10 @@ class ScreenEditor:
         """Play Conway's Game-of-Life for F2"""
 
         pt = self.proxy_terminal
-        with_func_by_str = self.func_by_str
+        func_by_str = self.func_by_str
+
+        assert not self.conwaying, (self.conwaying,)  # todo: inelegant
+        self.conwaying = True
 
         # Default to Replacing, not Inserting
 
@@ -2238,19 +2252,21 @@ class ScreenEditor:
 
         cl = ConwayLife(screen_editor=self)
 
-        func_by_str = dict(with_func_by_str)
+        alt_func_by_str = dict(func_by_str)
         conway_func_by_str = cl.form_conway_func_by_str()
-        func_by_str.update(conway_func_by_str)
+        alt_func_by_str.update(conway_func_by_str)
 
-        self.func_by_str = func_by_str
+        self.func_by_str = alt_func_by_str
 
         try:
             cl.play_conway_life()
         finally:
-            self.func_by_str = with_func_by_str  # replaces
+            self.func_by_str = func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
-        # todo: refactor the callback out of  ScreenEditor forms ConwayLife to call back?
+        self.conwaying = False
+
+        # todo: merge more in with Class ConwayLife and 'def mouse_verb_do_conway_at_yx'
 
     def do_kdata_fn_f3(self) -> None:
         """Play Snuck for F3"""
@@ -2284,7 +2300,7 @@ class ScreenEditor:
             self.func_by_str = with_func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
-        # todo: refactor the callback out of  ScreenEditor forms ConwayLife to call back?
+        # todo: refactor the callback out of ScreenEditor forms ConwayLife to call back?
 
     def do_kdata_fn_f5(self) -> None:
         """Play Puckman"""
@@ -2600,10 +2616,17 @@ class ScreenEditor:
 
         tprint(f"{verb=} {x_widget=} {x_wx=} {y=} {x=}  # take_mouse_verb_at_yxf")
 
+        #
+
         if self.mouse_verb_to_write_sdata(verb):
             return True
 
         if self.mouse_verb_do_tsv_at_yx(verb, y=y, x_wx=x_wx):
+            return True
+
+        #
+
+        if self.mouse_verb_do_conway_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
             return True
 
         if self.mouse_verb_do_jabberwocky(verb, x_widget=x_widget, y=y, x_wx=x_wx):
@@ -2611,6 +2634,8 @@ class ScreenEditor:
 
         if self.mouse_verb_do_quote_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
             return True
+
+        #
 
         return False
 
@@ -2937,14 +2962,83 @@ class ScreenEditor:
         # todo9: press Return on a ConwayLife
         # todo9: press Return means CR LF is there is no verb here, else means mouse-click it
 
-        # todo10: Conway button to start ConwayLife without writing examples
-
         # todo10: Cope when Apple Paste from Screen starts with \t
         # todo7: Help notice how often we fall wrongly into Inserting mode by accident
 
     #
     #
     #
+
+    def mouse_verb_do_conway_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
+        """Toggle Conway Life at the Mouse Release"""
+
+        pt = self.proxy_terminal
+        func_by_str = self.func_by_str
+
+        casefold = verb.casefold()
+        if casefold != "Conway".casefold():
+            return False
+
+        #
+
+        if self.conwaying:
+            self.conwaying = False
+            raise SystemExit()
+
+        self.conwaying = True
+
+        #
+
+        self.write("\0337")
+        self.write("\033[7m")
+        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\0338")
+
+        # Default to Replacing, not Inserting
+
+        assert SM_IRM == "\033[" "4h"
+        assert RM_IRM == "\033[" "4l"
+
+        irm_stext = pt.proxy_read_toggle("\033[4h", stext1="\033[4l")
+        restore_inserting_replacing = irm_stext  # maybe empty
+
+        self.do_replacing_start()  # for Mouse Button <Conway>
+
+        # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
+
+        cl = ConwayLife(screen_editor=self)
+
+        alt_func_by_str = dict(func_by_str)
+        conway_func_by_str = cl.form_conway_func_by_str()
+        alt_func_by_str.update(conway_func_by_str)
+        del alt_func_by_str["F2"]  # todo: inelegant
+
+        self.func_by_str = alt_func_by_str
+
+        try:
+            while True:
+                try:
+                    self.read_eval_print_once()
+                except SystemExit:
+                    break
+        finally:
+            self.func_by_str = func_by_str  # replaces
+            self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
+
+        #
+
+        self.write("\0337")
+        self.write("\033[27m")
+        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\0338")
+
+        #
+
+        self.conwaying = False
+
+        return True
+
+        # todo: merge more in with Class ConwayLife and 'def do_kdata_fn_f2'
 
     def mouse_verb_do_jabberwocky(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Write out a Random Word of Jabberwocky"""
@@ -3021,7 +3115,7 @@ class ScreenEditor:
 
         elif flags.apple:
 
-            Quickly = 0.009
+            assert Quickly == 0.009
 
             if kdata1 in (b"\033[A", b"\033[B", b"\033[C", b"\033[D"):
                 if bt.kbhit(0.009):
