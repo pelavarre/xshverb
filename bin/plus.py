@@ -1092,6 +1092,9 @@ class ScreenEditor:
 
         bt = pt.bytes_terminal
 
+        assert CSI_P_CHARS == """0123456789:;<=>?"""
+        assert CSI_I_CHARS == """ !'#$%&'()*+,-./"""
+
         # Count out a rapid burst of >= 2 Arrows
 
         arrows_timeout = 0.009
@@ -1149,10 +1152,10 @@ class ScreenEditor:
 
         Slowly = 1.000
         MoreSlowly = 3.000
-        SlowCsiKData = b"""0123456789:;<=>?""" b""" !'#$%&'()*+,-./" b'"""
+
+        SlowCsiKData = b"""0123456789:;<=>?""" b""" !'#$%&'()*+,-./"""
 
         while (not pack.text) and (not pack.closed) and (not bt.extras):
-            headbook = TerminalBytePacket.Headbook
 
             kdata = pack.to_bytes()
             if kdata == b"\033[M":  # ⎋⇧M for Csi
@@ -5131,6 +5134,10 @@ ESC = "\033"  # 01/11  ⌃[ Escape  # often known as printf '\e', but Python doe
 SS3 = "\033O"  # ESC 04/15 Single Shift Three  # ⎋⇧O in Apple F1 F2 F3 F4
 CSI = "\033["  # ESC 05/11 Control Sequence Introducer
 
+CSI_P_CHARS = """0123456789:;<=>?"""  # Csi Parameter Bytes
+CSI_I_CHARS = """ !'#$%&'()*+,-./"""  # Csi Intermediate [Penultimate] Bytes
+CSI_F_CHARS = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"  # Csi Final Bytes
+
 DECSC = "\033" "7"  # ESC 03/07 Save Cursor [Checkpoint] (DECSC)
 DECRC = "\033" "8"  # ESC 03/08 Restore Cursor [Rollback] (DECRC)
 
@@ -5907,6 +5914,10 @@ class TerminalBytePacket:
             return byte  # declines 2..4 Bytes of 1 Unprintable or Multi-Byte Char
 
         # Accept 1 Byte into Back, into Neck, or as Tail
+
+        assert CSI_P_CHARS == "0123456789:;<=>?"
+        assert CSI_I_CHARS == """ !'#$%&'()*+,-./"""
+        assert CSI_F_CHARS == "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 
         if not back:
             if 0x30 <= ord_ < 0x40:  # 16 Codes  # 0123456789:;<=>?
