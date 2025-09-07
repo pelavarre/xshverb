@@ -334,14 +334,12 @@ class ConwayLife:
     screen_editor: ScreenEditor  # writes Screen and reads Keyboard
 
     conway_half_steps: int  # counts steps, after -1
-    conway_yx_list: list[tuple[int, int]]  # where Cells written lately
 
     def __init__(self, screen_editor: ScreenEditor) -> None:
 
         self.screen_editor = screen_editor
 
         self.conway_half_steps = -1
-        self.conway_yx_list = list()
 
     def play_conway_life(self) -> None:
         """Play Conway's Game-of-Life"""
@@ -381,19 +379,20 @@ class ConwayLife:
     def restart_conway_life(self) -> None:
         """Start again, with the most famous Conway Life Glider"""
 
-        conway_yx_list = self.conway_yx_list
         se = self.screen_editor
         pt = se.proxy_terminal
 
         bt = pt.bytes_terminal
         writes_by_y_x = pt.writes_by_y_x
 
+        # Checkpoint the Y X place of the Screen Cursor
+
         (ya, xa) = pt.proxy_read_row_y_column_x()
         x_width = bt.read_x_width()
 
         assert CUP_Y_X1 == "\033[" "{}" "H"
 
-        conway_yx_list.clear()
+        # Move us off the Blank Screen, in one way or another
 
         choice = 1
 
@@ -432,20 +431,9 @@ class ConwayLife:
             if yx_writes and yx_writes[-1] == "🔴":
                 self.y_x_count_around(y, x)  # adds its Next Spots
 
-        # Choose the first place of the Cursor
+        # Restore the Y X place of the Screen Cursor
 
-        y_list = list(_[0] for _ in conway_yx_list)
-        x_list = list(_[-1] for _ in conway_yx_list)
-
-        y_min = min(y_list)
-        y_max = max(y_list)
-        x_min = min(x_list)
-        x_max = max(x_list)
-
-        y_mid = (y_min + y_max) // 2
-        x_mid = (x_min + x_max) // 2
-
-        se.write(f"\033[{y_mid};{x_mid}H")  # for .restart_conway_life
+        se.write(f"\033[{ya};{xa}H")  # for .restart_conway_life
 
     def conway_print(self, text: str) -> None:
         """Write Some Text Chars at one Y X Place"""
@@ -460,31 +448,13 @@ class ConwayLife:
             if t == "🔵":
                 se.write("\033[2C")  # todo: Conway Spots always 2 Columns wide?
             else:
-                self.conway_write_y_x_text(y, x=x, text=t)
+                se.y_x_text_write(y, x=x, text=t)
 
             x += 2
 
         y += 1
 
         se.write(f"\033[{y};{xb}H")  # for .conway_print
-
-    def conway_write_y_x_text(self, y: int, x: int, text: str) -> None:
-        """Write Some Text Chars at one Y X Place"""
-
-        se = self.screen_editor
-        conway_yx_list = self.conway_yx_list
-
-        pt = se.proxy_terminal
-
-        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
-
-        se.write(f"\033[{y};{x}H")  # for .conway_write_y_x_text
-        se.write(text)
-
-        g_width = pt.str_guess_print_width(text)
-        for x in range(x, x + g_width):
-            yx = (y, x)
-            conway_yx_list.append(yx)
 
     def do_conway_8x_redo(self) -> None:
         """Step the Game of Life forward at 8X Speed"""
@@ -554,9 +524,9 @@ class ConwayLife:
                 assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
 
                 if text == "⚫":
-                    self.conway_write_y_x_text(y, x=x, text="🔴")
+                    se.y_x_text_write(y, x=x, text="🔴")
                 elif text == "🟥":
-                    self.conway_write_y_x_text(y, x=x, text="⚪")
+                    se.y_x_text_write(y, x=x, text="⚪")
 
             # Ignore the Plan published one half-step too soon
 
@@ -571,12 +541,12 @@ class ConwayLife:
                 n = self.y_x_count_around(y, x)
 
                 if (n < 2) and (text == "🔴"):
-                    self.conway_write_y_x_text(y, x=x, text="🟥")
+                    se.y_x_text_write(y, x=x, text="🟥")
                 elif (n == 3) and (text == "⚪"):
-                    self.conway_write_y_x_text(y, x=x, text="⚫")
+                    se.y_x_text_write(y, x=x, text="⚫")
                     self.y_x_count_around(y, x)  # adds its Next Spots
                 elif (n > 3) and (text == "🔴"):
-                    self.conway_write_y_x_text(y, x=x, text="🟥")
+                    se.y_x_text_write(y, x=x, text="🟥")
 
     def y_x_count_around(self, y: int, x: int) -> int:
         """Count the Neighbors of a Cell"""
@@ -621,7 +591,7 @@ class ConwayLife:
             ybxb_write = ""
             if not ((yb in writes_by_y_x.keys()) and (xb in writes_by_y_x[yb].keys())):
                 ybxb_write = "⚪"
-                se.y_x_text_print(yb, x=xb, text=ybxb_write)
+                se.y_x_text_write(yb, x=xb, text=ybxb_write)
 
                 y_after = yb in writes_by_y_x.keys()
                 x_after = (xb in writes_by_y_x[yb].keys()) if y_after else False
@@ -869,13 +839,13 @@ class ScreenEditor:
 
         return None
 
-    def y_x_text_print(self, y: int, x: int, text: str) -> None:
+    def y_x_text_write(self, y: int, x: int, text: str) -> None:
         """Write Some Text Chars at one Y X Place"""
 
         assert text.isprintable(), (text,)  # doesn't duck typing
 
         pt = self.proxy_terminal
-        pt.proxy_y_x_text_print(y=y, x=x, text=text)
+        pt.proxy_y_x_text_write(y=y, x=x, text=text)
 
     def print(self, *args: object, end: str = "\r\n") -> None:
         """Join the Args by Space, add the End, and write the Encoded Chars"""
@@ -945,9 +915,12 @@ class ScreenEditor:
             pt.proxy_read_row_y_column_x()
             pt.proxy_read_y_height_x_width()
 
+        self.write("\033[K")
         self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
         self.write("\033[K")
-        self.print("Or type some Letters and then ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>")
+        self.print("Type some Letters and then ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>")
+        self.write("\033[K")
+        self.print("Try  #24 on #005 White-on-Blue  #050 on #000 Green-on-Black,  etc")
         self.write("\033[K")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
         self.write("\033[K")
@@ -2507,7 +2480,7 @@ class ScreenEditor:
         next_age = conway_life_ages[index]
 
         self.write("\0337")
-        self.y_x_text_print(y, x=x, text=next_age)
+        self.y_x_text_write(y, x=x, text=next_age)
         self.write("\0338")
 
         # Succeed
@@ -2966,15 +2939,15 @@ class ScreenEditor:
             row_y = north_y + i
 
             if (i == 0) or (ri == -1):
-                self.y_x_text_print(y=row_y, x=west_x, text=w * t)
+                self.y_x_text_write(y=row_y, x=west_x, text=w * t)
 
             elif ri == -3:
-                self.y_x_text_print(y=row_y, x=west_x, text=tt + ((w - 4) * "=") + tt)
+                self.y_x_text_write(y=row_y, x=west_x, text=tt + ((w - 4) * "=") + tt)
 
             elif ri == -2:
                 split = str(result)
                 rjust = (split + (3 * t)).rjust(w, t)
-                self.y_x_text_print(y=row_y, x=west_x, text=rjust)
+                self.y_x_text_write(y=row_y, x=west_x, text=rjust)
 
             else:
                 q = abs(ri) - 4
@@ -2986,7 +2959,7 @@ class ScreenEditor:
                     assert rjust.startswith(5 * t), (rjust,)
                     text = rjust[:3] + "+" + rjust[4:]
 
-                self.y_x_text_print(y=row_y, x=west_x, text=text)
+                self.y_x_text_write(y=row_y, x=west_x, text=text)
 
         # Succeed
 
@@ -3026,7 +2999,7 @@ class ScreenEditor:
 
         self.write("\0337")
         self.write("\033[7m")
-        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
         self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
         self.write("\0338")
 
@@ -3064,7 +3037,7 @@ class ScreenEditor:
         # Show the <Conway> Button as Released
 
         self.write("\0337")
-        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
         self.write("\0338")
 
         # Succeed
@@ -3091,7 +3064,7 @@ class ScreenEditor:
 
         self.write("\0337")
         self.write("\033[7m")
-        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
         self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
         self.write("\0338")
 
@@ -3121,7 +3094,7 @@ class ScreenEditor:
         # Show the <Jabberwocky> Button as Released
 
         self.write("\0337")
-        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
         self.write("\0338")
 
         # Succeed
@@ -3144,7 +3117,7 @@ class ScreenEditor:
 
         self.write("\0337")
         self.write("\033[7m")
-        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
         self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
         self.write("\0338")
 
@@ -3201,7 +3174,7 @@ class ScreenEditor:
         # Show the <Quote> Button as Released
 
         self.write("\0337")
-        self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
         self.write("\0338")
 
         # Succeed
@@ -3641,13 +3614,12 @@ class ProxyTerminal:
         for y in range(Y1, y_height + 1):
             writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
             y_fill_styles = fill_styles_by_y[y] if (y in fill_styles_by_y.keys()) else list()
+            self.write_out(f"\033[{y}H")  # for .write_screen
 
             last_x = X1
             x_sorted = sorted(writes_by_x.keys())
-            if not x_sorted:
-                self.write_out(f"\033[{y}H")  # for .write_screen
-            else:
-                boring = False
+            if x_sorted:
+
                 for x in range(X1, x_sorted[-1] + 1):
                     if x > x_width:
                         continue
@@ -3655,32 +3627,34 @@ class ProxyTerminal:
                     x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else defaults
                     assert x_writes[-1].isprintable(), (y, x, x_writes)  # todo6: check often
 
-                    if not boring:  # todo7: stop redrawing Cursor unnecessarily
-                        self.write_out(f"\033[{y};{x}H")  # for .write_screen
-
                     self.write_out("\033[m")  # todo7: stop redrawing Clear-Style unnecessarily
+                    for index, x_write in enumerate(x_writes):
+                        rindex = len(x_writes) - 1 - index
+
+                        if rindex < -1:
+                            assert x_write, (x_write, rindex, index, x_writes)
+
+                        if x_write:
+                            self.write_out(x_write)  # todo7: stop redrawing Style unnecessarily
+
                     last_x_write = x_writes[-1]
-                    for x_write in x_writes:
-                        self.write_out(x_write)  # todo7: stop redrawing Style unnecessarily
+                    if last_x_write:  # truthy while all .str_guess_print_width <= 1
+                        g_width = self.str_guess_print_width(last_x_write)
+                        last_x = x + g_width - 1
 
-                    g_width = self.str_guess_print_width(last_x_write)
-                    last_x = x + g_width - 1
-
-                    if len(x_writes) == 1:
-                        if len(last_x_write) == 1:
-                            if 0x20 <= ord(last_x_write) <= 0x7E:
-                                boring = True
+                    # our 'for x' agrees with Terminal X after last "" of multi-column Character
 
             if last_x < x_width:
+
                 self.write_out("\033[m")  # SGR_PS before EL_X needed at Apple
                 for style in y_fill_styles:
                     self.write_out(style)
-                self.write_out("\033[K")
 
-        self.write_out("\033[m")
+                self.write_out("\033[K")
 
         # Restore the Terminal Setup
 
+        self.write_out("\033[m")
         self.write_out(f"\033[{row_y};{column_x}H")  # for .write_screen
 
         for toggle in toggles:
@@ -3823,14 +3797,14 @@ class ProxyTerminal:
     #  Write out at Y X Spots on into the Mirrors
     #
 
-    def proxy_y_x_text_print(self, y: int, x: int, text: str) -> None:
+    def proxy_y_x_text_write(self, y: int, x: int, text: str) -> None:
         """Write Some Text Chars at one Y X Place"""
 
         assert text.isprintable(), (text,)  # doesn't duck typing
 
         assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
 
-        self.proxy_write(f"\033[{y};{x}H")  # for .proxy_y_x_text_print
+        self.proxy_write(f"\033[{y};{x}H")  # for .proxy_y_x_text_write
         self.proxy_write(text)
 
     def proxy_print(self, *args: object, end: str = "\r\n") -> None:
