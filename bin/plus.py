@@ -916,9 +916,11 @@ class ScreenEditor:
             pt.proxy_read_y_height_x_width()
 
         self.write("\033[K")
-        self.print("Try ⌥-Clicks at  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
+        self.print("123456789 123456789 123456789 123456789 123456789 123456789 123456789")
         self.write("\033[K")
-        self.print("Type some Letters and then ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>")
+        self.print("Try ⌥-Click of  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
+        self.write("\033[K")
+        self.print("Try ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>  ⚪  ⚫  🔴  🟥  ⬛")
         self.write("\033[K")
         self.print("Try  #24 on #005 White-on-Blue  #050 on #000 Green-on-Black,  etc")
         self.write("\033[K")
@@ -960,8 +962,6 @@ class ScreenEditor:
         # Else reply to the one Keyboard Chord
 
         self.reply_to_kdata(pack, n=n)  # may raise SystemExit
-
-        # todo11: something wrong with the West side of pasted Conway Life?
 
         # todo7: lose Input to limit delay of Keyboard Chords, such as Tab bursts at Conway Life
 
@@ -2275,7 +2275,7 @@ class ScreenEditor:
 
         self.conwaying = False
 
-        # todo: merge more in with Class ConwayLife and 'def mouse_verb_do_conway_at_yx'
+        # todo: merge more in with Class ConwayLife and 'def push_to_age_conway_at_yx'
 
     def do_kdata_fn_f3(self) -> None:
         """Play Snuck for F3"""
@@ -2456,31 +2456,60 @@ class ScreenEditor:
 
         writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
 
-        writes = writes_by_x[x] if (x in writes_by_x.keys()) else list()
-        if not writes:
+        x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else list()
+        if not x_writes:
             return False
 
-        write = writes[-1]
-        if not write:
+        x_write = x_writes[-1]
+        if not x_write:
             return False
-
-        tprint(f"{y=} {x=} {write=}  # .take_spot_at_yxf_mouse_release")
 
         # Match with Conway Life, or not
 
         conway_life_ages = "⚪⚫🔴🟥⬛"
 
-        find = conway_life_ages.find(write)
-        if find < 0:
+        x_find = conway_life_ages.find(x_write)
+        if x_find < 0:
+            return False
+
+        tprint(f"{y=} {x=} {x_write=} {x_find=}  # .take_spot_at_yxf_mouse_release")
+
+        # Require >= 1 Neighbor of Conway Empty/ Aborning/ Living/ Dying/ Void
+
+        nx_find = -1
+        for dy in (-1, 1):
+            ny = y + dy
+
+            writes_by_nx = writes_by_y_x[ny] if (ny in writes_by_y_x.keys()) else dict()
+            for dx in (-2, 2):
+                nx = x + dx
+
+                nx_writes = writes_by_nx[nx] if (nx in writes_by_nx.keys()) else list()
+                if not nx_writes:
+                    continue
+
+                nx_write = nx_writes[-1]
+                if not nx_write:
+                    continue
+
+                nx_find = conway_life_ages.find(nx_write)
+                if nx_find < 0:
+                    continue
+
+                tprint(f"{ny=} {nx=} {nx_write=} {nx_find=}  # .take_spot_at_yxf_mouse_release")
+
+                break
+
+        if nx_find < 0:
             return False
 
         # Age the Match
 
-        index = (find + 1) % len(conway_life_ages)
-        next_age = conway_life_ages[index]
+        index_plus = (x_find + 1) % len(conway_life_ages)
+        age_plus = conway_life_ages[index_plus]
 
         self.write("\0337")
-        self.y_x_text_write(y, x=x, text=next_age)
+        self.y_x_text_write(y, x=x, text=age_plus)
         self.write("\0338")
 
         # Succeed
@@ -2523,10 +2552,12 @@ class ScreenEditor:
 
         # Find the Word of the Widget beneath the Mouse Release
 
-        i = x - x_wx
+        i = x - x_wx - west_margin
         i = min(max(0, i), len(x_widget) - 1)
 
         left_widget = x_widget[: i + 1]
+        tprint(f"{y_text=}")
+        tprint("....... 123456789 123456789 123456789 123456789 123456789 123456789 123456789")
         left_words = left_widget.split()
         assert left_words, (left_words, left_widget, x_widget, i, x_wx, x)
 
@@ -2542,29 +2573,41 @@ class ScreenEditor:
 
         # Run the Widget at the Mouse Release
 
-        take = self.take_mouse_verb_at_yxf(verb=x_verb, x_widget=x_widget, x_wx=x_wx, y=y, x=x)
+        take = self.take_push_at_yxf(verb=x_verb, x_widget=x_widget, x_wx=x_wx, y=y, x=x)
         if not take:
-            self.write(x_word + " ")
+            self.write(x_word)
+            if x_word in ("⚪", "⚫", "🔴", "🟥", "⬛"):
+                self.write("\033[2D")  # as if pasting \r\n
+                self.write("\033[B")
+            else:
+                self.write("\033[2C")  # leaps over Two Columns for more Horizontal Separation
 
         return True
 
         # todo8: Vanish the Command Verb typed out and then pushed
 
     def _text_to_widgets_by_wx_(self, text: str) -> dict[int, str]:
+        """Split the Mirrored Row into Widgets starting at particular Columns"""
+
+        pt = self.proxy_terminal
 
         widget_by_wx = dict()
 
         wx = -1
+
+        x = X1
         text_plus = text + "  "
         for i, ich in enumerate(text):
 
+            #
+
             if wx == -1:
                 if ich != " ":
-                    wx = X1 + i
+                    wx = x
                     widget_by_wx[wx] = ich
 
             elif text_plus[i] == "<":
-                wx = X1 + i
+                wx = x
                 widget_by_wx[wx] = ich
 
             elif text_plus[i:].startswith("  "):
@@ -2577,6 +2620,16 @@ class ScreenEditor:
 
             else:
                 widget_by_wx[wx] += ich
+
+            #
+
+            g_width = pt.str_guess_print_width(ich)
+            assert g_width in (1, 2), (g_width, ich, x)
+
+            x += g_width
+
+        # for (wx, widget) in widget_by_wx.items():
+        #     tprint(f"{wx=} {widget=}")
 
         return widget_by_wx
 
@@ -2619,31 +2672,34 @@ class ScreenEditor:
 
         self.write("\0338")
 
-    def take_mouse_verb_at_yxf(self, verb: str, x_widget: str, x_wx: int, y: int, x: int) -> bool:
+    def take_push_at_yxf(self, verb: str, x_widget: str, x_wx: int, y: int, x: int) -> bool:
         """Run the Verb at the Mouse Release"""
 
-        tprint(f"{verb=} {x_widget=} {x_wx=} {y=} {x=}  # take_mouse_verb_at_yxf")
+        tprint(f"{verb=} {x_widget=} {x_wx=} {y=} {x=}  # take_push_at_yxf")
 
-        #
+        # Push Keyboard, Screen, Tsv Spreadsheet, or Conway Game Board
 
-        if self.mouse_verb_to_write_sdata(verb):
+        if self.push_to_append_kdata(verb):
             return True
 
-        if self.mouse_verb_do_tsv_at_yx(verb, y=y, x_wx=x_wx):
+        if self.push_to_write_sdata(verb):
             return True
 
-        #
-
-        if self.mouse_verb_do_conway_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
+        if self.push_to_tsv_at_yx(verb, y=y, x_wx=x_wx):
             return True
 
-        if self.mouse_verb_do_jabberwocky(verb, x_widget=x_widget, y=y, x_wx=x_wx):
+        if self.push_to_age_conway_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
             return True
 
-        if self.mouse_verb_do_quote_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
+        # Push a Command Word:  Jabberwocky, Quote
+
+        if self.push_to_jabberwocky(verb, x_widget=x_widget, y=y, x_wx=x_wx):
             return True
 
-        #
+        if self.push_to_quote_at_yx(verb, x_widget=x_widget, y=y, x_wx=x_wx):
+            return True
+
+        # Else don't take
 
         return False
 
@@ -2653,21 +2709,18 @@ class ScreenEditor:
     # Eval some Mouse Verbs
     #
 
-    def mouse_verb_to_write_sdata(self, verb: str) -> bool:
+    def push_to_write_sdata(self, verb: str) -> bool:
         """Eval some Mouse Verbs"""
 
-        if self.mouse_verb_to_push_kdata(verb):
+        if self.push_to_write_color_sdata(verb):
             return True
 
-        if self.mouse_verb_to_write_color_sdata(verb):
-            return True
-
-        if self.mouse_verb_to_write_keycaps_sdata(verb):
+        if self.push_to_write_keycaps_sdata(verb):
             return True
 
         return False
 
-    def mouse_verb_to_push_kdata(self, verb: str) -> bool:
+    def push_to_append_kdata(self, verb: str) -> bool:
         """Eval a Keycap as 1 Packet of KData"""
 
         pt = self.proxy_terminal
@@ -2682,7 +2735,7 @@ class ScreenEditor:
 
         return False
 
-    def mouse_verb_to_write_keycaps_sdata(self, verb: str) -> bool:
+    def push_to_write_keycaps_sdata(self, verb: str) -> bool:
         """Eval some Keycaps as FrontColor, as BackColor, or as FrontColor on BackColor"""
 
         splits = verb.split()
@@ -2717,7 +2770,7 @@ class ScreenEditor:
 
         return True
 
-    def mouse_verb_to_write_color_sdata(self, verb: str) -> bool:
+    def push_to_write_color_sdata(self, verb: str) -> bool:
         """Eval some Keycaps as FrontColor, as BackColor, or as FrontColor on BackColor"""
 
         splits = verb.split()
@@ -2859,7 +2912,7 @@ class ScreenEditor:
     #
     #
 
-    def mouse_verb_do_tsv_at_yx(self, verb: str, y: int, x_wx: int) -> bool:
+    def push_to_tsv_at_yx(self, verb: str, y: int, x_wx: int) -> bool:
         """Eval a Spreadsheet Formula"""
 
         x = x_wx
@@ -2977,7 +3030,7 @@ class ScreenEditor:
     #
     #
 
-    def mouse_verb_do_conway_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
+    def push_to_age_conway_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Toggle Conway Life at the Mouse Release"""
 
         pt = self.proxy_terminal
@@ -3048,7 +3101,7 @@ class ScreenEditor:
 
         # todo: merge more in with Class ConwayLife and 'def do_kdata_fn_f2'
 
-    def mouse_verb_do_jabberwocky(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
+    def push_to_jabberwocky(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Write out a Random Word of Jabberwocky"""
 
         pt = self.proxy_terminal
@@ -3103,7 +3156,7 @@ class ScreenEditor:
 
         # todo10: Stop dropping the current Terminal Style onto Reverse Writes of Pressed Buttons
 
-    def mouse_verb_do_quote_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
+    def push_to_quote_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Print the Keycaps of the next Keystroke Chord, and then quit"""
 
         pt = self.proxy_terminal
@@ -3151,7 +3204,7 @@ class ScreenEditor:
                 else:
 
                     # Quote a Mouse ⌥-Release encoded as a Quick Arrow Burst and then a Delay
-                    # todo: merge .mouse_verb_do_quote_at_yx vs .read_one_pack
+                    # todo: merge .push_to_quote_at_yx vs .read_one_pack
 
                     kdata2 = kdata1
                     while True:
@@ -6709,7 +6762,6 @@ _ = """  # The first 5 Full-Steps of a 5-Cell Long Bar at Conway Life
 
 """
 
-# todo11: add the surrounding empty Spots when the Red is born at 5th etc
 # todo9: a repeat key for ⎋['⇧~
 # todo9: multiply by digits for ⎋['⇧~
 
