@@ -466,6 +466,8 @@ class ConwayLife:
 
         # Tab
 
+        # todo7: write only Mirror, not also Screen, for the 1st Half-Step of 8 Full at Tab
+
     def do_conway_full_step(self) -> None:
         """Step the Game of Life forward by 1 Full Step"""
 
@@ -517,7 +519,7 @@ class ConwayLife:
                         yb = y + dy
                         xb = x + dx
 
-                        if yb not in writes_by_y_x.keys():  # todo10: pt.proxy_read_yx
+                        if yb not in writes_by_y_x.keys():  # todo11: pt.proxy_read_yx
                             pass
                         else:
                             writes_by_x = writes_by_y_x[yb]
@@ -622,7 +624,7 @@ class ConwayLife:
                 if yb not in writes_by_y_x.keys():
                     blank = True
                 else:
-                    writes_by_x = writes_by_y_x[yb]  # todo10: pt.proxy_read_yx
+                    writes_by_x = writes_by_y_x[yb]  # todo11: pt.proxy_read_yx
                     if xb not in writes_by_x.keys():
                         blank = True
                     else:
@@ -982,6 +984,10 @@ class ScreenEditor:
 
         self.write("\033[K")  # moar vertical separation
         self.print()
+
+        x_width = pt.proxy_read_x_width()
+        mid_width = (x_width // 2) + (x_width % 2)
+        self.write(f"\033[{mid_width}G")
 
         # Walk one step after another
 
@@ -2504,7 +2510,7 @@ class ScreenEditor:
         pt = self.proxy_terminal
         writes_by_y_x = pt.writes_by_y_x
 
-        # Fetch the Write beneath the Cursor  # todo10: pt.proxy_read_yx
+        # Fetch the Write beneath the Cursor  # todo11: pt.proxy_read_yx
 
         writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
 
@@ -2543,7 +2549,7 @@ class ScreenEditor:
                 if not nx_writes:
                     continue
 
-                nx_write = nx_writes[-1]  # todo10: pt.proxy_read_yx
+                nx_write = nx_writes[-1]  # todo11: pt.proxy_read_yx
                 if not nx_write:
                     continue
 
@@ -4119,22 +4125,82 @@ class ProxyTerminal:
         if not (stext and stext.isprintable()):
             return False
 
-        for ch in stext:
+        for i, t2 in enumerate(stext):
             y = self.row_y
             x = self.column_x
 
+            xp = x - 1
+            xn = x + 1
+            xnn = x + 2
+
+            # Fetch the Mirror
+
             if y not in writes_by_y_x.keys():
                 writes_by_y_x[y] = dict()
-
             writes_by_x = writes_by_y_x[y]
 
-            writes_by_x[x] = list(styles) + [ch]  # replace  # todo6: prefer mutate?
+            xp_writes = writes_by_x[xp] if (xp in writes_by_x.keys()) else list()
+            x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else list()
+            xn_writes = writes_by_x[xn] if (xn in writes_by_x.keys()) else list()
+            xnn_writes = writes_by_x[xnn] if (xnn in writes_by_x.keys()) else list()
 
-            g_width = self.str_guess_print_width(ch)
-            for x_plus in range(x + 1, x + g_width):  # encodes Wider Chars as "" Empty Str's
-                writes_by_x[x_plus] = list(styles) + [""]  # replace
+            # Patch up the West Half before writing the East Half of a Two-Column Character
 
-            self.column_x += g_width
+            tp = xp_writes[-1] if xp_writes else " "  # defaults to write as if after Space
+            wp = self.str_guess_print_width(tp)
+
+            t1 = x_writes[-1] if x_writes else " "  # defaults to write as if over Space
+            w1 = self.str_guess_print_width(t1)
+
+            if not w1:
+                assert i == 0, (i, w1, t1, y, x)
+
+                assert xp_writes, (xp_writes, xp, y, x)
+                assert wp == 2, (wp, tp, xp, y, x)
+
+                writes_by_x[xp] = xp_writes[:-1] + [" "]
+
+                t1 = " "
+                w1 = self.str_guess_print_width(t1)
+                assert w1 == 1, (w1, t1)
+
+            # Write a 1-Column Character, or the West then East Half of a 2-Column Character
+
+            w2 = self.str_guess_print_width(t2)
+
+            tn = xn_writes[-1] if xn_writes else " "  # defaults to write as if before Space
+            wn = self.str_guess_print_width(tn)
+
+            assert w1 in (1, 2), (w1, t1, y, x)
+            assert w2 in (1, 2), (w2, t2, y, x)
+            assert wn in (0, 1, 2), (wn, tn, y, x)
+
+            if w1 == w2:
+
+                writes_by_x[x] = list(styles) + [t2]  # replace  # todo6: prefer mutate?
+
+            elif w1 < w2:
+
+                writes_by_x[x] = list(styles) + [t2]  # replace
+                if wn == 2:
+                    assert xnn_writes, (xnn_writes, xnn, y, x)
+                    writes_by_x[xnn] = xnn_writes[:-1] + [" "]  # replace
+                writes_by_x[xn] = list(styles) + [""]  # replace
+
+            else:
+
+                assert w2 < w1, (w2, w1, t2, t1, y, x)
+                writes_by_x[x] = list(styles) + [t2]  # replace
+                if wn == 2:
+                    assert xnn_writes, (xnn_writes, xnn, y, x)
+                    writes_by_x[xnn] = xnn_writes[:-1] + [" "]  # replace
+                writes_by_x[xn] = list(styles) + [" "]  # replace
+
+            #
+
+            self.column_x += w2
+
+            # encodes East Columns of Wider Chars as "" Empty Str's
 
         return True
 
