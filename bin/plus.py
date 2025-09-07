@@ -429,7 +429,8 @@ class ConwayLife:
         for y, x in yx_pairs:
             yx_writes = writes_by_y_x[y][x]
             if yx_writes and yx_writes[-1] == "🔴":
-                self.y_x_count_around(y, x)  # adds its Next Spots
+                text = "🔴"
+                self.y_x_count_around(y, x=x, text=text)  # adds Next Spots around 🔴
 
         # Restore the Y X place of the Screen Cursor
 
@@ -506,6 +507,36 @@ class ConwayLife:
         for y in writes_by_y_x.keys():
             for x in writes_by_y_x[y].keys():
                 yx = (y, x)
+
+                playing = False  # doesn't take Empty Str as blank
+                for dy in (-1, 0, 1):
+                    for dx in (-2, 0, 2):
+                        if (dy, dx) == (0, 0):
+                            continue  # skips Self
+
+                        yb = y + dy
+                        xb = x + dx
+
+                        if yb not in writes_by_y_x.keys():  # todo10: pt.proxy_read_yx
+                            pass
+                        else:
+                            writes_by_x = writes_by_y_x[yb]
+                            if xb not in writes_by_x.keys():
+                                pass
+                            else:
+                                ybxb_writes = writes_by_x[xb]
+                                if not ybxb_writes:
+                                    pass
+                                else:
+                                    ybxb_write = ybxb_writes[-1]
+                                    if ybxb_write in ("⚪", "⚫", "⬛", "🔴", "🟥"):
+                                        playing = True
+
+                                        break
+
+                if not playing:
+                    continue
+
                 yx_list.append(yx)
 
         for y, x in yx_list:
@@ -538,17 +569,17 @@ class ConwayLife:
             else:
                 assert text in ("⚪", "🔴"), (text,)
 
-                n = self.y_x_count_around(y, x)
+                n = self.y_x_count_around(y, x=x, text=text)  # adds Next Spots around 🔴 but not ⚪
 
                 if (n < 2) and (text == "🔴"):
                     se.y_x_text_write(y, x=x, text="🟥")
                 elif (n == 3) and (text == "⚪"):
                     se.y_x_text_write(y, x=x, text="⚫")
-                    self.y_x_count_around(y, x)  # adds its Next Spots
+                    self.y_x_count_around(y, x=x, text="⚫")  # adds Next Spots around ⚫
                 elif (n > 3) and (text == "🔴"):
                     se.y_x_text_write(y, x=x, text="🟥")
 
-    def y_x_count_around(self, y: int, x: int) -> int:
+    def y_x_count_around(self, y: int, x: int, text: str) -> int:
         """Count the Neighbors of a Cell"""
 
         se = self.screen_editor
@@ -560,13 +591,16 @@ class ConwayLife:
         yx_writes = writes_by_y_x[y][x]
         yx_write = yx_writes[-1] if yx_writes else ""
 
+        assert yx_write == text, (yx_write, text, y, x)
+
         # Walk around the Cell
 
         dydx_list = list()
-        for dy in range(-1, 1 + 1):
-            for dx in range(-2, 2 + 1, 2):
-                if dy == 0 and dx == 0:
-                    continue
+        for dy in (-1, 0, 1):
+            for dx in (-2, 0, 2):
+
+                if (dy, dx) == (0, 0):
+                    continue  # skips Self
 
                 dydx = (dy, dx)
                 dydx_list.append(dydx)
@@ -578,28 +612,46 @@ class ConwayLife:
             yb = y + dy
             xb = x + dx
 
-            # Do nothing more for Blank Cells
-
-            if yx_write == "⚪":
-                if yb not in writes_by_y_x.keys():
-                    continue
-                if xb not in writes_by_y_x[yb].keys():
-                    continue
-
-            # Pop up the Blank Cell found missing next door
+            # Pop up the Empty Cell found missing next door to a Red or Black Circle
 
             ybxb_write = ""
-            if not ((yb in writes_by_y_x.keys()) and (xb in writes_by_y_x[yb].keys())):
-                ybxb_write = "⚪"
-                se.y_x_text_write(yb, x=xb, text=ybxb_write)
+            if yx_write != "⚪":
+                assert yx_write in ("⚫", "🔴"), (yx_write, y, x)
 
-                y_after = yb in writes_by_y_x.keys()
-                x_after = (xb in writes_by_y_x[yb].keys()) if y_after else False
-                assert y_after and x_after, (yb, xb, y_after, x_after)
+                blank = False  # doesn't take Empty Str as blank
+                if yb not in writes_by_y_x.keys():
+                    blank = True
+                else:
+                    writes_by_x = writes_by_y_x[yb]  # todo10: pt.proxy_read_yx
+                    if xb not in writes_by_x.keys():
+                        blank = True
+                    else:
+                        ybxb_writes = writes_by_x[xb]
+                        if not ybxb_writes:
+                            blank = True
+                        else:
+                            ybxb_write = ybxb_writes[-1]
+                            if ybxb_write == " ":  # does take Space as blank, no matter if Colored
+                                blank = True
+
+                if blank:
+                    ybxb_write = "⚪"
+                    se.y_x_text_write(yb, x=xb, text=ybxb_write)
+
+                    y_after = yb in writes_by_y_x.keys()
+                    x_after = (xb in writes_by_y_x[yb].keys()) if y_after else False
+                    assert y_after and x_after, (yb, xb, y_after, x_after)
 
             # Fetch the Cell next door
 
-            ybxb_writes = writes_by_y_x[yb][xb]
+            if yb not in writes_by_y_x.keys():
+                continue
+
+            writes_by_x = writes_by_y_x[yb]
+            if xb not in writes_by_x.keys():
+                continue
+
+            ybxb_writes = writes_by_x[xb]
             ybxb_mirror_write = ybxb_writes[-1] if ybxb_writes else ""
 
             # Require writes mirrored
@@ -2477,18 +2529,21 @@ class ScreenEditor:
         # Require >= 1 Neighbor of Conway Empty/ Aborning/ Living/ Dying/ Void
 
         nx_find = -1
-        for dy in (-1, 1):
+        for dy in (-1, 0, 1):
             ny = y + dy
 
             writes_by_nx = writes_by_y_x[ny] if (ny in writes_by_y_x.keys()) else dict()
-            for dx in (-2, 2):
+            for dx in (-2, 0, 2):
                 nx = x + dx
+
+                if (dy, dx) == (0, 0):
+                    continue  # skips Self
 
                 nx_writes = writes_by_nx[nx] if (nx in writes_by_nx.keys()) else list()
                 if not nx_writes:
                     continue
 
-                nx_write = nx_writes[-1]
+                nx_write = nx_writes[-1]  # todo10: pt.proxy_read_yx
                 if not nx_write:
                     continue
 
