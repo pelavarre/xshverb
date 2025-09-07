@@ -1410,6 +1410,10 @@ class ScreenEditor:
         column_x = pt.column_x
         x_width = pt.x_width
 
+        assert CUD_Y == "\033[" "{}" "B"
+
+        # Start pasting when called for, by ⎋[⇧?2004H Bracketed Paste Bytes
+
         x = max(X1, min(column_x, x_width))
         assert x != -1, (x, X1, column_x, x_width)
 
@@ -1423,9 +1427,13 @@ class ScreenEditor:
 
             return True
 
+        # Stop pasting when called for, by ⎋[⇧?2004H Bracketed Paste Bytes
+
         if kdata == b"\033[201~":  # ⎋[201~
             if self.pasting_x == -1:
                 tprint(f"{self.pasting_x=}  # _take_csi_bracketed_paste_if_")
+
+            # End each ⌘V Paste with \r Return, to complete the Last Line
 
             if len(terminal_byte_packets) >= 2:  # practically always True
                 was_pack = terminal_byte_packets[-2]
@@ -1434,9 +1442,16 @@ class ScreenEditor:
 
                     self.do_write_cr_lf()  # before .pasting_x = -1
 
+                # Add one ↓ after each ⌘V Paste, to give us Vertical Separation by default, like
+                # for when Apple encodes ⌥-Click as Arrow Burst then Delay, but only if separated
+
+                self.write("\033[B")  # todo7: Scrolling \n after ⌘V Paste, no longer just ↓
+
             self.pasting_x = -1
 
             return True
+
+        # Else don't match
 
         return False
 
