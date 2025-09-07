@@ -298,6 +298,12 @@ _RM_BRACKETED_PASTE_ = "\033[" "?2004l"
 
 SGR_PS = "\033[" "{}" "m"  # CSI 06/13 Select Graphic Rendition [Text Style]
 
+# ("\033[" "1m", "\033[" "22m"),  # 22m is irregular, cancels 1m and 2m
+# ("\033[" "2m", "\033[" "22m"),
+# ("\033[" "4m", "\033[" "24m"),
+# ("\033[" "7m", "\033[" "27m"),
+
+
 DSR_6 = "\033[" "6n"  # CSI 06/14 [Request] Device Status Report  # Ps 6 for CPR In
 CPR_Y_X_REGEX = r"\033\[([0-9]+);([0-9]+)R"  # CSI 05/02 Active [Cursor] Pos Rep (CPR)
 
@@ -749,7 +755,7 @@ class ScreenEditor:
             #
             # Esc and Esc Byte Pairs
             #
-            # # b"\033": self.print_kcaps_plus,  # ⎋
+            # # b"\033": self.write_kcaps_plus,  # ⎋
             #
             "⎋$": self.do_column_leap_rightmost,  # ⎋⇧$ for Vim  # todo4: ⎋⇧$ vs ⎋$
             "⎋0": self.do_column_leap_leftmost,  # ⎋0 for Vim
@@ -789,7 +795,7 @@ class ScreenEditor:
             #
             # Csi Esc Byte Sequences without Parameters and without Intermediate Bytes,
             #
-            # # b"\033[": self.print_kcaps_plus,  # ⎋ [
+            # # b"\033[": self.write_kcaps_plus,  # ⎋ [
             #
             # b"\033[" b"A",  # ⎋[⇧A ↑
             # b"\033[" b"B",  # ⎋[⇧B ↓
@@ -804,7 +810,7 @@ class ScreenEditor:
             #
             # Ss3 Esc Byte Sequences
             #
-            # # b"\033O": self.print_kcaps_plus,  # ⎋⇧O
+            # # b"\033O": self.write_kcaps_plus,  # ⎋⇧O
             #
             "F1": self.do_kdata_fn_f1,  # FnF1  # todo4: FnF1 vs F1
             "F2": self.do_kdata_fn_f2,  # FnF2
@@ -982,7 +988,7 @@ class ScreenEditor:
 
         self.reply_to_kdata(pack, n=n)  # may raise SystemExit
 
-        # todo10: something wrong with the West side of pasted Conway Life?
+        # todo11: something wrong with the West side of pasted Conway Life?
 
         # todo7: lose Input to limit delay of Keyboard Chords, such as Tab bursts at Conway Life
 
@@ -1094,9 +1100,10 @@ class ScreenEditor:
 
         assert Quickly == 0.009
 
-        arrows_kdata_tuple = (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
+        assert _UNSHIFTED_ARROW_ENCODES == (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
+        unshifted_arrow_encodes = _UNSHIFTED_ARROW_ENCODES
 
-        if kdata not in arrows_kdata_tuple:
+        if kdata not in unshifted_arrow_encodes:
             self.arrows = 0  # written only by Init & this Def
         elif t1t0 >= 0.009:
             self.arrows = 0  # written only by Init & this Def
@@ -1109,22 +1116,23 @@ class ScreenEditor:
 
             was_pack = terminal_byte_packets[-1]
             was_pack_kdata = was_pack.to_bytes()
-            if was_pack_kdata in arrows_kdata_tuple:  # like not ⎋ [ ↓
+            if flags.apple:
+                if was_pack_kdata in unshifted_arrow_encodes:  # like not ⎋ ↓
 
-                self.arrows += 1  # written only by Init & this Def
+                    self.arrows += 1  # written only by Init & this Def
 
-                (y, x) = (row_y, column_x)
-                if was_pack_kdata == b"\033[A":
-                    y += 1  # goes up, not down
-                elif was_pack_kdata == b"\033[B":
-                    y -= 1  # goes up, not down
-                elif was_pack_kdata == b"\033[C":
-                    x -= 1  # goes left, not right
-                elif was_pack_kdata == b"\033[D":
-                    x += 1  # goes right, not left
+                    (y, x) = (row_y, column_x)
+                    if was_pack_kdata == b"\033[A":
+                        y += 1  # goes up, not down
+                    elif was_pack_kdata == b"\033[B":
+                        y -= 1  # goes up, not down
+                    elif was_pack_kdata == b"\033[C":
+                        x -= 1  # goes left, not right
+                    elif was_pack_kdata == b"\033[D":
+                        x += 1  # goes right, not left
 
-                self.arrow_row_y = y
-                self.arrow_column_x = x
+                    self.arrow_row_y = y
+                    self.arrow_column_x = x
 
         # Sometimes look to catch more Bytes after the first quick burst
 
@@ -1247,7 +1255,7 @@ class ScreenEditor:
             if n == 1:  # especially the '\033[H' of ⇧Fn← at Apple
                 tprint("Keycaps KData in a hurry")
 
-                self.print_kcaps_plus(pack)
+                self.write_kcaps_plus(pack)
                 return
 
         # Write-through Unicode Chars
@@ -1285,7 +1293,7 @@ class ScreenEditor:
         # Fallback to show the Keycaps that send this Terminal Byte Packet slowly from Keyboard
 
         tprint("Keycaps KData without meaning")
-        self.print_kcaps_plus(pack)
+        self.write_kcaps_plus(pack)
 
     #
     # Write simple things and raise Exceptions
@@ -1299,7 +1307,7 @@ class ScreenEditor:
 
         self.write(stext)
 
-    def print_kcaps_plus(self, pack: TerminalBytePacket) -> None:
+    def write_kcaps_plus(self, pack: TerminalBytePacket) -> None:
         """Show the Keycaps that send this Terminal Byte Packet slowly from Keyboard"""
 
         kdata = pack.to_bytes()
@@ -1559,11 +1567,11 @@ class ScreenEditor:
 
         kdata = pack.to_bytes()
 
-        famous_sdata_tuple = FAMOUS_SDATA_TUPLE
+        famous_sdata_writes = _FAMOUS_SDATA_WRITES_
 
-        # Accept some famous Screen Writes
+        # Accept some famous Screen Writes, typed slowly or quickly at Keyboard
 
-        if kdata in famous_sdata_tuple:
+        if kdata in famous_sdata_writes:
             self.do_write_kdata_as_sdata(kdata)  # for ._take_csi_pack_n_kdata_if_
             return True
 
@@ -2479,7 +2487,7 @@ class ScreenEditor:
         return True
 
         # todo10: Paste should arrive as itself, not as bound Keystroke Chords, especially Space
-        # todo10: Implicitly add a \r\n at end of ⌘V Paste
+        # todo11: Implicitly add a \r\n at end of ⌘V Paste
 
     def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> bool:
         """Take ⌥ Mouse Release as a call on a Widget between Double-Spaces"""
@@ -2639,7 +2647,7 @@ class ScreenEditor:
 
         return False
 
-        # todo4: find an Italic that works at ⎋[3M or somewhere
+        # todo10: add a <Help> Button and a <Version> Button
 
     #
     # Eval some Mouse Verbs
@@ -2979,7 +2987,7 @@ class ScreenEditor:
         if casefold != "Conway".casefold():
             return False
 
-        #
+        # Raise SystemExit to toggle Off, else fall through to toggle On
 
         if self.conwaying:
             self.conwaying = False
@@ -2987,11 +2995,12 @@ class ScreenEditor:
 
         self.conwaying = True
 
-        #
+        # Show the <Conway> Button as Pressed
 
         self.write("\0337")
         self.write("\033[7m")
         self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
         self.write("\0338")
 
         # Default to Replacing, not Inserting
@@ -3025,14 +3034,13 @@ class ScreenEditor:
             self.func_by_str = func_by_str  # replaces
             self.write(restore_inserting_replacing)  # doesn't raise UnicodeEncodeError
 
-        #
+        # Show the <Conway> Button as Released
 
         self.write("\0337")
-        self.write("\033[27m")
         self.y_x_text_print(y=y, x=x_wx, text=x_widget)
         self.write("\0338")
 
-        #
+        # Succeed
 
         self.conwaying = False
 
@@ -3052,12 +3060,15 @@ class ScreenEditor:
         if casefold != "Jabberwocky".casefold():
             return False
 
-        #
+        # Show the <Jabberwocky> Button as Pressed
 
         self.write("\0337")
         self.write("\033[7m")
         self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
         self.write("\0338")
+
+        # Write out a Random Word
 
         splits = Jabberwocky.split()
         split = random.choice(splits)
@@ -3075,17 +3086,22 @@ class ScreenEditor:
 
         self.write(split)
 
+        # Halt awhile, to keep the <Jabberwocky> Button shown as Pressed
+
         self.proxy_terminal.bytes_terminal.stdio.flush()
         time.sleep(0.033)
 
+        # Show the <Jabberwocky> Button as Released
+
         self.write("\0337")
-        self.write("\033[27m")
         self.y_x_text_print(y=y, x=x_wx, text=x_widget)
         self.write("\0338")
 
-        #
+        # Succeed
 
         return True
+
+        # todo10: Stop dropping the current Terminal Style onto Reverse Writes of Pressed Buttons
 
     def mouse_verb_do_quote_at_yx(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Print the Keycaps of the next Keystroke Chord, and then quit"""
@@ -3097,45 +3113,75 @@ class ScreenEditor:
         if casefold != "Quote".casefold():
             return False
 
-        #
+        # Show the <Quote> Button as Pressed
 
         self.write("\0337")
         self.write("\033[7m")
         self.y_x_text_print(y=y, x=x_wx, text=x_widget)
+        self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
         self.write("\0338")
+
+        # Block till at least a first Keyboard Chord
 
         (pack1, n1) = self.read_one_pack()
         kdata1 = pack1.to_bytes()
 
+        # Quote together a Mouse Press & Release, encoded as Sgr ⇧M followed by a Keyboard Chord
+
         if self._match_csi_mouse_(pack1) and (pack1.tail == b"M"):  # drops Mouse Press
 
-            self.print_kcaps_plus(pack1)
             (pack2, n2) = self.read_one_pack()
-            self.print_kcaps_plus(pack2)
+            self.write("SQUIRREL1 ")
+            self.write_kcaps_plus(pack2)  # usually prints Mouse Release
+
+        # Quote one Keyboard Chord that isn't a plain Arrow quickly followed by a Chord
 
         elif flags.apple:
 
             assert Quickly == 0.009
 
-            if kdata1 in (b"\033[A", b"\033[B", b"\033[C", b"\033[D"):
-                if bt.kbhit(0.009):
-                    (pack2, n2) = self.read_one_pack()
+            assert _UNSHIFTED_ARROW_ENCODES == (b"\033[A", b"\033[B", b"\033[C", b"\033[D")
+            unshifted_arrow_encodes = _UNSHIFTED_ARROW_ENCODES
+
+            if kdata1 not in unshifted_arrow_encodes:
+                self.write_kcaps_plus(pack1)  # such as Quote ⌃Spacebar
+            else:
+                if not bt.kbhit(0.009):
+                    self.write_kcaps_plus(pack1)  # such as Arrow ↑ and then Delay
+                else:
+
+                    # Quote a Mouse ⌥-Release encoded as a Quick Arrow Burst and then a Delay
+                    # todo: merge .mouse_verb_do_quote_at_yx vs .read_one_pack
+
+                    kdata2 = kdata1
+                    while True:
+                        self.write(kdata2.decode())
+                        (pack2, n2) = self.read_one_pack()
+
+                        kdata2 = pack2.to_bytes()
+                        if kdata2 not in unshifted_arrow_encodes:
+                            break
 
                     if self._match_csi_mouse_(pack2) and (pack2.tail == b"m"):  # Mouse Release
-                        self.print_kcaps_plus(pack2)
+                        self.write_kcaps_plus(pack2)  # such as ⎋[⇧<8;59;2M
                     else:
 
-                        self.print_kcaps_plus(pack1)
-                        self.print_kcaps_plus(pack2)
+                        # Quote a rare (never tested?) Burst of two other Keyboard Chords
+
+                        self.write_kcaps_plus(pack1)
+                        self.write_kcaps_plus(pack2)
+
+        # Show the <Quote> Button as Released
 
         self.write("\0337")
-        self.write("\033[27m")
         self.y_x_text_print(y=y, x=x_wx, text=x_widget)
         self.write("\0338")
 
-        #
+        # Succeed
 
         return True
+
+        # todo: and also do run, as if unquoted, the ⌃L or Button Presses inside <Quote> ?
 
 
 class SnuckLife:
@@ -3536,6 +3582,8 @@ class ProxyTerminal:
 
         os.write(fileno, sdata)
         slog.write(sdata)
+
+        # todo7: politely route our ⎋7 ⎋8 cursor-checkpoint/ restore to Mirror only, not also Screen
 
     def write_screen(self) -> None:
         """Redraw the Screen as mirrored, be that wrong or correct"""
@@ -3940,10 +3988,13 @@ class ProxyTerminal:
         if self._mirror_edit_csi_(pack):  # ⎋[⇧J ⎋[⇧K ⎋[⇧X  # ⎋[⇧M ⎋[⇧L
             return True
 
-        if self._mirror_toggle_(pack):  # a few of ⎋[H and ⎋[L
+        if self._mirror_toggle_(pack):  # some ⎋[H vs ⎋[L, some ⎋[M vs ⎋[M
             return True
 
-        if self._mirror_sgr_style_(pack):  # ⎋[M
+        if self._mirror_sgr_unplain_style_(pack):  # ⎋[M for Reverse/ Underline/ Bold/ etc
+            return True
+
+        if self._mirror_sgr_back_front_style_(pack):  # ⎋[M for FrontColor on BackColor
             return True
 
         # Else ask our caller to .tprint our confusion
@@ -4612,7 +4663,49 @@ class ProxyTerminal:
 
         return False
 
-    def _mirror_sgr_style_(self, pack: TerminalBytePacket) -> bool:
+    def _mirror_sgr_unplain_style_(self, pack: TerminalBytePacket) -> bool:
+        """Mirror the FrontColor on BackColor of the next Text"""
+
+        sdata = pack.to_bytes()
+
+        styles = self.styles
+
+        assert SM_IRM == "\033[" "4h"
+        assert RM_IRM == "\033[" "4l"
+
+        toggle_pairs = [
+            ("\033[" "1m", "\033[" "22m"),  # 22m is irregular, cancels 1m and 2m
+            ("\033[" "2m", "\033[" "22m"),
+            ("\033[" "4m", "\033[" "24m"),
+            ("\033[" "7m", "\033[" "27m"),
+        ]
+
+        # Find the Toggle Pair
+
+        for toggle_pair in toggle_pairs:
+            stext = sdata.decode()  # may raise UnicodeDecodeError
+            if stext in toggle_pair:
+                index = toggle_pair.index(stext)
+                other = toggle_pair[1 - index]
+
+                # Remove the Old Stale if need be, but add the New Fresh always
+
+                if other in styles:
+                    styles.remove(other)
+
+                styles.append(stext)
+
+                # Succeed
+
+                return True
+
+        # Else don't succeed here
+
+        return False
+
+        # todo7: test our Mirrors of mixing ⎋[1M Bold with ⎋[2M Dim till ⎋[22M
+
+    def _mirror_sgr_back_front_style_(self, pack: TerminalBytePacket) -> bool:
         """Mirror the FrontColor on BackColor of the next Text"""
 
         sdata = pack.to_bytes()
@@ -4966,7 +5059,7 @@ SCREEN_WRITER_HELP = r"""
 
         <Jabberwocky>  colored  ⎋[32M  ⎋[94M  on  ⎋[41M  ⎋[103M  ⎋[38;5;244m grayscale
         ⎋[M plain  ⎋[1M bold till ⎋[22M  ⎋[4M underline till ⎋[24M   ⎋[7M reverse till ⎋[27M
-        #24 on #005  #003366 on #FFCC99
+        #24 on #005  #003366 on #FFCC99  ⎋[2M dim till  ⎋[22M
 
         ⎋[5N call for reply ⎋[0N   ⎋[6N call for reply ⎋[{y};{x}⇧R
         ⎋[18T call for reply ⎋[8;{rows};{columns}T   ⎋[⇧?2004H L for ⌘V in ⎋[200~ ⎋[201~
@@ -4980,11 +5073,11 @@ SCREEN_WRITER_HELP = r"""
 # Don't help with ⎋[=C call for reply ⎋[⇧?1;2C  # Apple
 # Don't help with ⎋[⇧>C call for reply ⎋[⇧>1;95;0⇧C Apple or ⎋[⇧>84;0;0⇧C Google
 
-# Don't help with ⎋[X call for reply ⎋[2;1;1;112;112;1;0⇧X  # Apple
-# Request Terminal Parameters (DECREQTPARM).
-
+# Don't help with Apple Request Terminal Parameters (DECREQTPARM)
+#   at the ⎋[X call for reply ⎋[2;1;1;112;112;1;0⇧X
 
 # todo5: Esc Arrows
+# todo4: find an Italic that works at ⎋[3M or somewhere
 # todo2: more Google test @ or ⎋[⇧?1000 H L by itself, or 1005, or 1015
 
 
@@ -6104,11 +6197,11 @@ class TerminalBytePacket:
 
 
 #
-# Name a ton of Screen Things
+# List the famous Screen Writes that we do invite people to type slowly at Keyboard
 #
 
 
-FAMOUS_SDATA_TUPLE = (
+_FAMOUS_SDATA_WRITES_ = (
     #
     b"\033[4h",  # SM_IRM
     b"\033[?25h",  # SM_DECTCEM
@@ -6615,7 +6708,7 @@ _ = """  # The first 5 Full-Steps of a 5-Cell Long Bar at Conway Life
 
 """
 
-# todo10: add the surrounding empty Spots when the Red is born at 5th etc
+# todo11: add the surrounding empty Spots when the Red is born at 5th etc
 # todo9: a repeat key for ⎋['⇧~
 # todo9: multiply by digits for ⎋['⇧~
 
@@ -6639,31 +6732,46 @@ _LOOPBACK_KDATA_SDATA_PUNS_ = (
 # see also:  def _match_csi_write_through_
 
 
+# Give a name to the unshifted Arrow Chords that Apple bursts as an encoding of ⌥-Click
+
+_UNSHIFTED_ARROW_ENCODES = (
+    b"\033[" b"A",  # ⎋[⇧A ↑
+    b"\033[" b"B",  # ⎋[⇧B ↓
+    b"\033[" b"C",  # ⎋[⇧C →
+    b"\033[" b"D",  # ⎋[⇧D ←
+)
+
+
 #
 # Cite some Terminal Docs
 #
 
 
-_ = """
+_ = """  # our top choices
 
 https://unicode.org/charts/PDF/U0000.pdf
 https://unicode.org/charts/PDF/U0080.pdf
+
 https://en.wikipedia.org/wiki/ANSI_escape_code
+https://jvns.ca/blog/2025/03/07/escape-code-standards
+
+https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
 
 https://www.ecma-international.org/publications-and-standards/standards/ecma-48
     /wp-content/uploads/ECMA-48_5th_edition_june_1991.pdf
 
-https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+"""
+
+_ = """  # more breadth found via https://jvns.ca/blog/2025/03/07/escape-code-standards
 
 https://github.com/tmux/tmux/blob/master/tools/ansicode.txt  <= close to h/t jvns.ca
-https://jvns.ca/blog/2025/03/07/escape-code-standards  <= h/t jvns.ca
-https://man7.org/linux/man-pages/man4/console_codes.4.html  <= h/t jvns.ca
-https://sw.kovidgoyal.net/kitty/keyboard-protocol  <= h/t jvns.ca
-https://vt100.net/docs/vt100-ug/chapter3.html  <= h/t jvns.ca
+https://man7.org/linux/man-pages/man4/console_codes.4.html
+https://sw.kovidgoyal.net/kitty/keyboard-protocol
+https://vt100.net/docs/vt100-ug/chapter3.html
 
-https://iterm2.com/feature-reporting  <= h/t jvns.ca
-https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda  <= h/t jvns.ca
-https://github.com/Alhadis/OSC8-Adoption?tab=readme-ov-file  <= h/t jvns.ca
+https://iterm2.com/feature-reporting
+https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+https://github.com/Alhadis/OSC8-Adoption?tab=readme-ov-file
 
 """
 
