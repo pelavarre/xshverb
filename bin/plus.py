@@ -1404,6 +1404,8 @@ class ScreenEditor:
     def _take_csi_bracketed_paste_if_(self, pack: TerminalBytePacket, n: int) -> bool:
         """Take Pasted Bytes into where the Terminal Cursor was as Paste began"""
 
+        terminal_byte_packets = self.terminal_byte_packets
+
         pt = self.proxy_terminal
         column_x = pt.column_x
         x_width = pt.x_width
@@ -1416,13 +1418,24 @@ class ScreenEditor:
         if kdata == b"\033[200~":  # ⎋[200~
             if self.pasting_x != -1:
                 tprint(f"{self.pasting_x=}  # _take_csi_bracketed_paste_if_")
+
             self.pasting_x = x
+
             return True
 
         if kdata == b"\033[201~":  # ⎋[201~
             if self.pasting_x == -1:
                 tprint(f"{self.pasting_x=}  # _take_csi_bracketed_paste_if_")
+
+            if len(terminal_byte_packets) >= 2:  # practically always True
+                was_pack = terminal_byte_packets[-2]
+                was_pack_kdata = was_pack.to_bytes()
+                if was_pack_kdata != b"\r":
+
+                    self.do_write_cr_lf()  # before .pasting_x = -1
+
             self.pasting_x = -1
+
             return True
 
         return False
@@ -2487,7 +2500,6 @@ class ScreenEditor:
         return True
 
         # todo10: Paste should arrive as itself, not as bound Keystroke Chords, especially Space
-        # todo11: Implicitly add a \r\n at end of ⌘V Paste
 
     def take_widget_at_yxf_mouse_release(self, y: int, x: int, f: int) -> bool:
         """Take ⌥ Mouse Release as a call on a Widget between Double-Spaces"""
