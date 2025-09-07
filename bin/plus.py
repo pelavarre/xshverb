@@ -495,7 +495,7 @@ class ConwayLife:
 
         # Spacebar
 
-    def _conway_half_step_(self) -> None:
+    def _conway_half_step_(self) -> None:  # noqa  # C901 too complex  # todo9:
         """Step the Game of Life forward by 1/2 Step"""
 
         se = self.screen_editor
@@ -976,7 +976,7 @@ class ScreenEditor:
         self.write("\033[K")
         self.print("Try ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>  ⚪  ⚫  🔴  🟥  ⬛")
         self.write("\033[K")
-        self.print("Try  #24 on #005 White-on-Blue  #050 on #000 Green-on-Black,  etc")
+        self.print("Try  #24 on #005 White-on-Blue,  #050 on #000 Green-on-Black,  or  ⎋[M Plain")
         self.write("\033[K")
         self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
         self.write("\033[K")
@@ -3111,11 +3111,7 @@ class ScreenEditor:
 
         # Show the <Conway> Button as Pressed
 
-        self.write("\0337")
-        self.write("\033[7m")
-        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
-        self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
-        self.write("\0338")
+        ywx_styles = self.y_x_write_text_pressed(y=y, x=x_wx, text=x_widget)
 
         # Default to Replacing, not Inserting
 
@@ -3150,9 +3146,7 @@ class ScreenEditor:
 
         # Show the <Conway> Button as Released
 
-        self.write("\0337")
-        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
-        self.write("\0338")
+        self.y_x_write_text_released(y=y, x=x_wx, text=x_widget, styles=ywx_styles)
 
         # Succeed
 
@@ -3161,6 +3155,43 @@ class ScreenEditor:
         return True
 
         # todo: merge more in with Class ConwayLife and 'def do_kdata_fn_f2'
+
+    def y_x_write_text_pressed(self, y: int, x: int, text: str) -> list[str]:
+        """Show the Widget as Pressed"""
+
+        pt = self.proxy_terminal
+        styles = list(pt.styles)
+
+        self.write("\0337")
+
+        self.write("\033[m")
+        self.write("\033[7m")  # todo10: Copy-edit Button Style while showing it Pressed
+
+        self.y_x_text_write(y=y, x=x, text=text)
+
+        self.write("\033[m")
+        for style in styles:
+            self.write(style)
+
+        self.write("\0338")
+
+        return styles
+
+    def y_x_write_text_released(self, y: int, x: int, text: str, styles: list[str]) -> None:
+        """Show the Widget as Released"""
+
+        self.write("\0337")
+
+        self.write("\033[m")
+        self.write("\033[27m")  # todo10: Copy-edit Button Style while showing it Pressed
+
+        self.y_x_text_write(y=y, x=x, text=text)
+
+        self.write("\033[m")
+        for style in styles:
+            self.write(style)
+
+        self.write("\0338")
 
     def push_to_jabberwocky(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Write out a Random Word of Jabberwocky"""
@@ -3176,11 +3207,7 @@ class ScreenEditor:
 
         # Show the <Jabberwocky> Button as Pressed
 
-        self.write("\0337")
-        self.write("\033[7m")
-        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
-        self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
-        self.write("\0338")
+        ywx_styles = self.y_x_write_text_pressed(y=y, x=x_wx, text=x_widget)
 
         # Write out a Random Word
 
@@ -3207,9 +3234,7 @@ class ScreenEditor:
 
         # Show the <Jabberwocky> Button as Released
 
-        self.write("\0337")
-        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
-        self.write("\0338")
+        self.y_x_write_text_released(y=y, x=x_wx, text=x_widget, styles=ywx_styles)
 
         # Succeed
 
@@ -3229,11 +3254,7 @@ class ScreenEditor:
 
         # Show the <Quote> Button as Pressed
 
-        self.write("\0337")
-        self.write("\033[7m")
-        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
-        self.write("\033[27m")  # todo10: restore Reverse Terminal Style despite Button Press
-        self.write("\0338")
+        ywx_styles = self.y_x_write_text_pressed(y=y, x=x_wx, text=x_widget)
 
         # Block till at least a first Keyboard Chord
 
@@ -3287,9 +3308,7 @@ class ScreenEditor:
 
         # Show the <Quote> Button as Released
 
-        self.write("\0337")
-        self.y_x_text_write(y=y, x=x_wx, text=x_widget)
-        self.write("\0338")
+        self.y_x_write_text_released(y=y, x=x_wx, text=x_widget, styles=ywx_styles)
 
         # Succeed
 
@@ -3612,7 +3631,11 @@ class ProxyTerminal:
         if flags.google:
             sdata += b"\033[?1000;1006h"  # todo7: more solve Mouse Scroll and Copy/Paste at Google
 
-        os.write(fileno, sdata)  # not:  os.write(fileno, b"ProxyTerminal.__exit__" b"\r\n")
+        # Write last write
+
+        tprint(f"{sdata=}  # ProxyTerminal.__enter__")
+
+        os.write(fileno, sdata)  # almost invisibly
 
         # Succeed
 
@@ -3665,9 +3688,13 @@ class ProxyTerminal:
             sdata += b"\033[32100H"
             sdata += b"\033[A"
 
-        # Write last write, and then exit each, in reverse order of Enter's
+        # Write last write
 
-        os.write(fileno, sdata)  # not:  os.write(fileno, b"ProxyTerminal.__exit__" b"\r\n")
+        tprint(f"{sdata=}  # ProxyTerminal.__exit__")
+
+        os.write(fileno, sdata)  # almost invisibly
+
+        # Exit each, in reverse order of Enter's
 
         slog.flush()
         klog.flush()
@@ -6605,7 +6632,7 @@ def kdata_to_kcaps(kdata: bytes) -> str:
     # '⎋A' from ⌥A while Apple Keyboard > Option as Meta Key
 
 
-def _kch_to_kcap_(t: str) -> str:  # noqa C901
+def _kch_to_kcap_(t: str) -> str:  # noqa C901  # todo9:
     """Choose a Key Cap to speak of 1 Char read from the Keyboard"""
 
     o = ord(t)
@@ -6806,7 +6833,7 @@ def tprint(*args: object) -> None:
 #
 
 
-_ = """  # All 8 Half-Steps of a 5-Cell Glider at Conway Life
+_ = """  # The 8 Half-Steps of a 5-Cell Glider at Conway Life
 
 
     ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
@@ -6839,47 +6866,92 @@ _ = """  # All 8 Half-Steps of a 5-Cell Glider at Conway Life
 
 """
 
-_ = """  # The first 5 Full-Steps of a 5-Cell Long Bar at Conway Life
+_ = """  # The 9 Full-Steps of a 5-Cell Long Bar at Conway Life
 
-        ⚪⚪⚪
-        ⚪🔴⚪
-        ⚪🔴⚪
-        ⚪🔴⚪
-        ⚪🔴⚪
-        ⚪🔴⚪
-        ⚪⚪⚪
+            ⚪⚪⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪⚪⚪
 
-        ⚪⚪⚪
-      ⚪⚪⚪⚪⚪
-      ⚪🔴🔴🔴⚪
-      ⚪🔴🔴🔴⚪
-      ⚪🔴🔴🔴⚪
-      ⚪⚪⚪⚪⚪
-        ⚪⚪⚪
+            ⚪⚪⚪
+          ⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+          ⚪🔴🔴🔴⚪
+          ⚪🔴🔴🔴⚪
+          ⚪⚪⚪⚪⚪
+            ⚪⚪⚪
 
-        ⚪⚪⚪
-      ⚪⚪🔴⚪⚪
-    ⚪⚪🔴⚪🔴⚪⚪
-    ⚪🔴⚪⚪⚪🔴⚪
-    ⚪⚪🔴⚪🔴⚪⚪
-      ⚪⚪🔴⚪⚪
-        ⚪⚪⚪
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+        ⚪⚪🔴⚪🔴⚪⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪⚪🔴⚪🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
 
-        ⚪⚪⚪
-      ⚪⚪🔴⚪⚪
-    ⚪⚪🔴🔴🔴⚪⚪
-    ⚪🔴🔴⚪🔴🔴⚪
-    ⚪⚪🔴🔴🔴⚪⚪
-      ⚪⚪🔴⚪⚪
-        ⚪⚪⚪
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+        ⚪🔴🔴⚪🔴🔴⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
 
-      ⚪⚪⚪⚪⚪
-    ⚪⚪🔴🔴🔴⚪⚪
-    ⚪🔴⚪⚪⚪🔴⚪
-    ⚪🔴⚪⚪⚪🔴⚪
-    ⚪🔴⚪⚪⚪🔴⚪
-    ⚪⚪🔴🔴🔴⚪⚪
-      ⚪⚪⚪⚪⚪
+          ⚪⚪⚪⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+          ⚪⚪⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+      ⚪⚪🔴⚪🔴⚪🔴⚪⚪
+      ⚪🔴🔴🔴⚪🔴🔴🔴⚪
+      ⚪⚪🔴⚪🔴⚪🔴⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
+
+          ⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
+      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
+      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+          ⚪⚪⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+      ⚪⚪⚪⚪🔴⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪
+    ⚪🔴🔴🔴⚪⚪⚪🔴🔴🔴⚪
+    ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪
+      ⚪⚪⚪⚪🔴⚪⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+          ⚪⚪⚪⚪⚪
+            ⚪⚪⚪
+
 
 """
 
