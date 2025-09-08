@@ -1,5 +1,13 @@
 things to do, futures to build
 
+
+8/Sep
+
+    % pq lower
+    72 x 42 Columns-x-Rows needed to play - but you've got 70 x 42
+    Press ⌘ - to choose a smaller Font, so you can resize
+    %
+
 6/Sep
 
     pq dedent should imply expandtab

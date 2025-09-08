@@ -328,6 +328,10 @@ CUP_Y_X_REGEX = r"\033\[((-?[0-9]+)(;(-?[0-9]+))?)?H"  # like CUP_Y_X but accept
 #
 
 
+CONWAY_LIFE_AGES = ("⚪", "⚫", "🔴", "🟥", "⬛")
+CONWAY_LIFE_AGES_JOIN = "⚪⚫⬛🔴🟥"  # = "".join(CONWAY_LIFE_AGES)
+
+
 class ConwayLife:
     """Play Conway's Game-of-Life"""
 
@@ -502,56 +506,43 @@ class ConwayLife:
         pt = se.proxy_terminal
         writes_by_y_x = pt.writes_by_y_x
 
+        assert CONWAY_LIFE_AGES == ("⚪", "⚫", "🔴", "🟥", "⬛")
+        assert CONWAY_LIFE_AGES_JOIN == "⚪⚫⬛🔴🟥"
+
         self.conway_half_steps += 1
         conway_half_steps = self.conway_half_steps
+
+        # Collect Spots that have Conway Neighbors
 
         yx_list = list()
         for y in writes_by_y_x.keys():
             for x in writes_by_y_x[y].keys():
                 yx = (y, x)
 
-                playing = False  # doesn't take Empty Str as blank
-                for dy in (-1, 0, 1):
-                    for dx in (-2, 0, 2):
-                        if (dy, dx) == (0, 0):
-                            continue  # skips Self
+                by_yx = pt.proxy_yx_read_perimeter_write_by_yx(y, x=x, default="")
+                perimeter = "".join(by_yx.values())
 
-                        yb = y + dy
-                        xb = x + dx
-
-                        if yb not in writes_by_y_x.keys():  # todo11: pt.proxy_read_yx
-                            pass
-                        else:
-                            writes_by_x = writes_by_y_x[yb]
-                            if xb not in writes_by_x.keys():
-                                pass
-                            else:
-                                ybxb_writes = writes_by_x[xb]
-                                if not ybxb_writes:
-                                    pass
-                                else:
-                                    ybxb_write = ybxb_writes[-1]
-                                    if ybxb_write in ("⚪", "⚫", "⬛", "🔴", "🟥"):
-                                        playing = True
-
-                                        break
-
+                playing = set(perimeter) & set("⚪⚫⬛🔴🟥")
                 if not playing:
                     continue
 
                 yx_list.append(yx)
 
+                # todo7: test smushing up Conway Age Characters at off-by-one Columns
+
+        # Revisit each Spot
+
         for y, x in yx_list:
             yx_writes = writes_by_y_x[y][x]
             text = yx_writes[-1] if yx_writes else ""
 
-            if text not in ("⚪", "⚫", "⬛", "🔴", "🟥"):
+            if text in ("⬛",):
                 continue
 
-            elif text in ("⬛",):
+            elif text not in ("⚪", "⚫", "🔴", "🟥"):
                 continue
 
-            # Follow the Plan
+            # In the 2nd Half-Step, follow the Plan
 
             if conway_half_steps % 2:
                 assert text in ("⚪", "⚫", "🔴", "🟥"), (text,)
@@ -561,12 +552,10 @@ class ConwayLife:
                 elif text == "🟥":
                     se.y_x_text_write(y, x=x, text="⚪")
 
-            # Ignore the Plan published one half-step too soon
+            # In the 1st Half-Step, make the Plan to follow, mixed into Plans made already
 
             elif text in ("⚫", "🟥"):
                 continue
-
-            # First make the Plan to follow
 
             else:
                 assert text in ("⚪", "🔴"), (text,)
@@ -620,25 +609,10 @@ class ConwayLife:
             if yx_write != "⚪":
                 assert yx_write in ("⚫", "🔴"), (yx_write, y, x)
 
-                blank = False  # doesn't take Empty Str as blank
-                if yb not in writes_by_y_x.keys():
-                    blank = True
-                else:
-                    writes_by_x = writes_by_y_x[yb]  # todo11: pt.proxy_read_yx
-                    if xb not in writes_by_x.keys():
-                        blank = True
-                    else:
-                        ybxb_writes = writes_by_x[xb]
-                        if not ybxb_writes:
-                            blank = True
-                        else:
-                            ybxb_write = ybxb_writes[-1]
-                            if ybxb_write == " ":  # does take Space as blank, no matter if Colored
-                                blank = True
-
-                if blank:
-                    ybxb_write = "⚪"
-                    se.y_x_text_write(yb, x=xb, text=ybxb_write)
+                xb_write = pt.proxy_yx_read_one_x_write(yb, x=xb, default=" ")  # no Mirror as Space
+                if xb_write == " ":  # takes Space as blank (but not ""), no matter if Colored
+                    xb_write = "⚪"
+                    se.y_x_text_write(yb, x=xb, text=xb_write)
 
                     y_after = yb in writes_by_y_x.keys()
                     x_after = (xb in writes_by_y_x[yb].keys()) if y_after else False
@@ -694,7 +668,140 @@ class ConwayLife:
         # why does Mypy Strict need .func_by_str declared as maybe not only indexed by Literal Str ?
 
 
-screen_editors: list[ScreenEditor] = list()
+#
+# Git-track some Conway Life Game Play
+#
+
+
+_ = """  # The 8 Half-Steps of a 5-Cell Glider at Conway Life
+
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
+    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
+    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
+    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
+    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
+    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
+    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
+
+"""
+
+_ = """  # The 9 Full-Steps of a 5-Cell Long Bar at Conway Life
+
+            ⚪⚪⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪🔴⚪
+            ⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+          ⚪🔴🔴🔴⚪
+          ⚪🔴🔴🔴⚪
+          ⚪⚪⚪⚪⚪
+            ⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+        ⚪⚪🔴⚪🔴⚪⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪⚪🔴⚪🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+        ⚪🔴🔴⚪🔴🔴⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
+
+          ⚪⚪⚪⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪🔴⚪⚪⚪🔴⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+          ⚪⚪⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+      ⚪⚪🔴⚪🔴⚪🔴⚪⚪
+      ⚪🔴🔴🔴⚪🔴🔴🔴⚪
+      ⚪⚪🔴⚪🔴⚪🔴⚪⚪
+        ⚪⚪🔴🔴🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
+
+          ⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
+      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
+      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+          ⚪⚪⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+      ⚪⚪⚪⚪🔴⚪⚪⚪⚪
+    ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪
+    ⚪🔴🔴🔴⚪⚪⚪🔴🔴🔴⚪
+    ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪
+      ⚪⚪⚪⚪🔴⚪⚪⚪⚪
+          ⚪⚪🔴⚪⚪
+          ⚪⚪🔴⚪⚪
+            ⚪⚪⚪
+
+            ⚪⚪⚪
+          ⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
+    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
+      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
+          ⚪🔴🔴🔴⚪
+          ⚪⚪⚪⚪⚪
+            ⚪⚪⚪
+
+
+"""
+
+# todo9: a repeat key for ⎋['⇧~
+# todo9: multiply by digits for ⎋['⇧~
+
+
+#
+# Loop Byte Packets to Screen from Keyboard, but emulate bits of Emacs, Vim, and Terminals
+#
 
 
 Quickly = 0.009  # requires ⌥-Clicks encoded as Arrow Bursts to deliver each Arrow quickly
@@ -702,8 +809,11 @@ Slowly = 1.000  # times out the typist of multibyte Terminal Byte Packets
 MoreSlowly = 3.000  # times out the typist of Parameter and Intermediate Bytes of Csi
 
 
+screen_editors: list[ScreenEditor] = list()
+
+
 class ScreenEditor:
-    """Loop Keyboard back to Screen, but as whole Packets, & with some emulations"""
+    """Loop Byte Packets to Screen from Keyboard, but emulate bits of Emacs, Vim, and Terminals"""
 
     proxy_terminal: ProxyTerminal
     terminal_byte_packets: list[TerminalBytePacket]
@@ -2508,25 +2618,17 @@ class ScreenEditor:
         """Take ⌥ Mouse Release as a call on a Widget of Characters"""
 
         pt = self.proxy_terminal
-        writes_by_y_x = pt.writes_by_y_x
 
-        # Fetch the Write beneath the Cursor  # todo11: pt.proxy_read_yx
+        conway_life_ages = ("⚪", "⚫", "🔴", "🟥", "⬛")
+        assert CONWAY_LIFE_AGES == ("⚪", "⚫", "🔴", "🟥", "⬛")
 
-        writes_by_x = writes_by_y_x[y] if (y in writes_by_y_x.keys()) else dict()
+        # Fetch the Write beneath the Cursor
 
-        x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else list()
-        if not x_writes:
-            return False
-
-        x_write = x_writes[-1]
-        if not x_write:
-            return False
+        x_write = pt.proxy_yx_read_one_x_write(y, x=x, default="")
 
         # Match with Conway Life, or not
 
-        conway_life_ages = "⚪⚫🔴🟥⬛"
-
-        x_find = conway_life_ages.find(x_write)
+        x_find = conway_life_ages.index(x_write) if (x_write in conway_life_ages) else -1
         if x_find < 0:
             return False
 
@@ -2534,34 +2636,11 @@ class ScreenEditor:
 
         # Require >= 1 Neighbor of Conway Empty/ Aborning/ Living/ Dying/ Void
 
-        nx_find = -1
-        for dy in (-1, 0, 1):
-            ny = y + dy
+        by_yx = pt.proxy_yx_read_perimeter_write_by_yx(y, x=x, default="")
+        perimeter = "".join(by_yx.values())
 
-            writes_by_nx = writes_by_y_x[ny] if (ny in writes_by_y_x.keys()) else dict()
-            for dx in (-2, 0, 2):
-                nx = x + dx
-
-                if (dy, dx) == (0, 0):
-                    continue  # skips Self
-
-                nx_writes = writes_by_nx[nx] if (nx in writes_by_nx.keys()) else list()
-                if not nx_writes:
-                    continue
-
-                nx_write = nx_writes[-1]  # todo11: pt.proxy_read_yx
-                if not nx_write:
-                    continue
-
-                nx_find = conway_life_ages.find(nx_write)
-                if nx_find < 0:
-                    continue
-
-                tprint(f"{ny=} {nx=} {nx_write=} {nx_find=}  # .take_spot_at_yxf_mouse_release")
-
-                break
-
-        if nx_find < 0:
+        playing = set(perimeter) & set("⚪⚫⬛🔴🟥")
+        if not playing:
             return False
 
         # Age the Match
@@ -2576,6 +2655,8 @@ class ScreenEditor:
         # Succeed
 
         return True
+
+        # todo7: Shuffle the Conway work of Class ScreenEditor into Class ConwayLife
 
         # todo10: Paste should arrive as itself, not as bound Keystroke Chords, especially Space
 
@@ -2634,7 +2715,10 @@ class ScreenEditor:
 
         # Run the Widget at the Mouse Release
 
+        assert CONWAY_LIFE_AGES == ("⚪", "⚫", "🔴", "🟥", "⬛")
+
         take = self.take_push_at_yxf(verb=x_verb, x_widget=x_widget, x_wx=x_wx, y=y, x=x)
+
         if not take:
             self.write(x_word)
             if x_word in ("⚪", "⚫", "🔴", "🟥", "⬛"):
@@ -3317,6 +3401,35 @@ class ScreenEditor:
         # todo: and also do run, as if unquoted, the ⌃L or Button Presses inside <Quote> ?
 
 
+# Give a name to the most classic KData/ SData puns:  '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
+
+_LOOPBACK_KDATA_SDATA_PUNS_ = (
+    b"\x07",  # ⌃G \a bell-ring
+    b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
+    b"\x09",  # ⌃I \t Tab
+    b"\x0a",  # ⌃J \n ↓ on Screen, else Scroll Up and then ↓
+    b"\x0d",  # ⌃M \r max ← on Screen
+    # b"\033",  # ⎋  # but we do loop back the Headbook of many Esc Sequences when completed
+    b"\033[" b"A",  # ⎋[⇧A ↑
+    b"\033[" b"B",  # ⎋[⇧B ↓
+    b"\033[" b"C",  # ⎋[⇧C →
+    b"\033[" b"D",  # ⎋[⇧D ←
+    b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
+)
+
+# see also:  def _match_csi_write_through_
+
+
+# Give a name to the unshifted Arrow Chords that Apple bursts as an encoding of ⌥-Click
+
+_UNSHIFTED_ARROW_ENCODES = (
+    b"\033[" b"A",  # ⎋[⇧A ↑
+    b"\033[" b"B",  # ⎋[⇧B ↓
+    b"\033[" b"C",  # ⎋[⇧C →
+    b"\033[" b"D",  # ⎋[⇧D ←
+)
+
+
 class SnuckLife:
     """Lead with one Sprite, and link more to follow in a chain"""
 
@@ -3519,8 +3632,8 @@ class TerminalSprite:
         # Read there
 
         defaults = (" ",)  # Single Wide Space
-        ycxc_writes = pt.proxy_read_yx_writes(yc, x=xc, defaults=defaults)
-        ydxd_writes = pt.proxy_read_yx_writes(yd, x=xd, defaults=defaults)
+        ycxc_writes = pt.proxy_yx_read_some_writes(yc, x=xc, defaults=defaults)
+        ydxd_writes = pt.proxy_yx_read_some_writes(yd, x=xd, defaults=defaults)
 
         # Write there
 
@@ -3875,7 +3988,43 @@ class ProxyTerminal:
 
         return tuple(yx_list)
 
-    def proxy_read_yx_writes(self, y: int, x: int, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    def proxy_yx_read_perimeter_write_by_yx(  # ) ->
+        self, y: int, x: int, default: str
+    ) -> dict[tuple[int, int], str]:
+        """Read the Writes around the Y X Cell"""
+
+        write_by_yx: dict[tuple[int, int], str]  # calms Mypy
+        write_by_yx = dict()
+
+        for dy in (-1, 0, 1):
+            for dx in (-2, 0, 2):
+                if (dy, dx) == (0, 0):
+                    continue  # skips Self
+
+                yb = y + dy
+                xb = x + dx
+
+                xb_write = self.proxy_yx_read_one_x_write(yb, x=xb, default=default)
+
+                ybxb = (yb, xb)
+                assert ybxb not in write_by_yx.keys(), (ybxb, write_by_yx)
+                write_by_yx[ybxb] = xb_write
+
+        return write_by_yx
+
+    def proxy_yx_read_one_x_write(self, y: int, x: int, default: str) -> str:
+        """Read back the truthy or falsey Text from one Y X Pair, else the Default"""
+
+        yx_writes = self.proxy_yx_read_some_writes(y, x=x, defaults=tuple())
+        yx_text = yx_writes[-1] if yx_writes else default
+
+        return yx_text
+
+        # may be Empty Str '' in each Column East of the Westermost of a multi-Column Character
+
+    def proxy_yx_read_some_writes(
+        self, y: int, x: int, defaults: tuple[str, ...]
+    ) -> tuple[str, ...]:
         """Read back Writes from one Y X Pair, else the Default"""
 
         writes_by_y_x = self.writes_by_y_x
@@ -6826,166 +6975,6 @@ def tprint(*args: object) -> None:
     if tprinting:
         tlog.write(text + "\n")
         tlog.flush()
-
-
-#
-# Git-track some Game Play
-#
-
-
-_ = """  # The 8 Half-Steps of a 5-Cell Glider at Conway Life
-
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚪⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚫🟥🔴⚪⚪
-    ⚪⚪🔴⚪⚪⚪  ⚪⚪🔴⚫⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚫🟥⚪⚪
-    ⚪🔴⚪🔴⚪⚪  ⚪🟥⚪🔴⚫⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪🔴⚪⚪⚪  ⚪⚪🟥⚫⚪⚪
-    ⚪⚪⚪🔴🔴⚪  ⚪⚪⚪🟥🔴⚪
-    ⚪⚪🔴🔴⚪⚪  ⚪⚪🔴🔴⚫⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-    ⚪⚪⚪🔴⚪⚪  ⚪⚪⚪🟥⚪⚪
-    ⚪⚪⚪⚪🔴⚪  ⚪⚪⚫⚪🔴⚪
-    ⚪⚪🔴🔴🔴⚪  ⚪⚪🟥🔴🔴⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚫⚪⚪
-    ⚪⚪⚪⚪⚪⚪  ⚪⚪⚪⚪⚪⚪
-
-"""
-
-_ = """  # The 9 Full-Steps of a 5-Cell Long Bar at Conway Life
-
-            ⚪⚪⚪
-            ⚪🔴⚪
-            ⚪🔴⚪
-            ⚪🔴⚪
-            ⚪🔴⚪
-            ⚪🔴⚪
-            ⚪⚪⚪
-
-            ⚪⚪⚪
-          ⚪⚪⚪⚪⚪
-          ⚪🔴🔴🔴⚪
-          ⚪🔴🔴🔴⚪
-          ⚪🔴🔴🔴⚪
-          ⚪⚪⚪⚪⚪
-            ⚪⚪⚪
-
-            ⚪⚪⚪
-          ⚪⚪🔴⚪⚪
-        ⚪⚪🔴⚪🔴⚪⚪
-        ⚪🔴⚪⚪⚪🔴⚪
-        ⚪⚪🔴⚪🔴⚪⚪
-          ⚪⚪🔴⚪⚪
-            ⚪⚪⚪
-
-            ⚪⚪⚪
-          ⚪⚪🔴⚪⚪
-        ⚪⚪🔴🔴🔴⚪⚪
-        ⚪🔴🔴⚪🔴🔴⚪
-        ⚪⚪🔴🔴🔴⚪⚪
-          ⚪⚪🔴⚪⚪
-            ⚪⚪⚪
-
-          ⚪⚪⚪⚪⚪
-        ⚪⚪🔴🔴🔴⚪⚪
-        ⚪🔴⚪⚪⚪🔴⚪
-        ⚪🔴⚪⚪⚪🔴⚪
-        ⚪🔴⚪⚪⚪🔴⚪
-        ⚪⚪🔴🔴🔴⚪⚪
-          ⚪⚪⚪⚪⚪
-
-            ⚪⚪⚪
-          ⚪⚪🔴⚪⚪
-        ⚪⚪🔴🔴🔴⚪⚪
-      ⚪⚪🔴⚪🔴⚪🔴⚪⚪
-      ⚪🔴🔴🔴⚪🔴🔴🔴⚪
-      ⚪⚪🔴⚪🔴⚪🔴⚪⚪
-        ⚪⚪🔴🔴🔴⚪⚪
-          ⚪⚪🔴⚪⚪
-            ⚪⚪⚪
-
-          ⚪⚪⚪⚪⚪
-          ⚪🔴🔴🔴⚪
-      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
-      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
-      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
-      ⚪🔴⚪⚪⚪⚪⚪🔴⚪
-      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
-          ⚪🔴🔴🔴⚪
-          ⚪⚪⚪⚪⚪
-
-            ⚪⚪⚪
-          ⚪⚪🔴⚪⚪
-          ⚪⚪🔴⚪⚪
-      ⚪⚪⚪⚪🔴⚪⚪⚪⚪
-    ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪
-    ⚪🔴🔴🔴⚪⚪⚪🔴🔴🔴⚪
-    ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪
-      ⚪⚪⚪⚪🔴⚪⚪⚪⚪
-          ⚪⚪🔴⚪⚪
-          ⚪⚪🔴⚪⚪
-            ⚪⚪⚪
-
-            ⚪⚪⚪
-          ⚪⚪⚪⚪⚪
-          ⚪🔴🔴🔴⚪
-      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
-    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
-    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
-    ⚪⚪🔴⚪⚪⚪⚪⚪🔴⚪⚪
-      ⚪⚪⚪⚪⚪⚪⚪⚪⚪
-          ⚪🔴🔴🔴⚪
-          ⚪⚪⚪⚪⚪
-            ⚪⚪⚪
-
-
-"""
-
-# todo9: a repeat key for ⎋['⇧~
-# todo9: multiply by digits for ⎋['⇧~
-
-
-# Give a name to the most classic KData/ SData puns:  '\a\b\t\n\r'  ⎋  ← ↑ → ↓  ⇧Tab
-
-_LOOPBACK_KDATA_SDATA_PUNS_ = (
-    b"\x07",  # ⌃G \a bell-ring
-    b"\x08",  # ⌃H \b ←  # todo: where does Windows Backspace land?
-    b"\x09",  # ⌃I \t Tab
-    b"\x0a",  # ⌃J \n ↓ on Screen, else Scroll Up and then ↓
-    b"\x0d",  # ⌃M \r max ← on Screen
-    # b"\033",  # ⎋  # but we do loop back the Headbook of many Esc Sequences when completed
-    b"\033[" b"A",  # ⎋[⇧A ↑
-    b"\033[" b"B",  # ⎋[⇧B ↓
-    b"\033[" b"C",  # ⎋[⇧C →
-    b"\033[" b"D",  # ⎋[⇧D ←
-    b"\033[" b"Z",  # ⎋[⇧Z ⇧Tab
-)
-
-# see also:  def _match_csi_write_through_
-
-
-# Give a name to the unshifted Arrow Chords that Apple bursts as an encoding of ⌥-Click
-
-_UNSHIFTED_ARROW_ENCODES = (
-    b"\033[" b"A",  # ⎋[⇧A ↑
-    b"\033[" b"B",  # ⎋[⇧B ↓
-    b"\033[" b"C",  # ⎋[⇧C →
-    b"\033[" b"D",  # ⎋[⇧D ←
-)
 
 
 #
