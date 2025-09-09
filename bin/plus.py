@@ -2880,6 +2880,8 @@ class ScreenEditor:
 
         return False
 
+        # todo10: flash more buttons as they go, such as flash the Fn Buttons
+
     def push_to_write_keycaps_sdata(self, verb: str) -> bool:
         """Eval some Keycaps as FrontColor, as BackColor, or as FrontColor on BackColor"""
 
@@ -3168,7 +3170,7 @@ class ScreenEditor:
         # todo9: press Return on a ConwayLife
         # todo9: press Return means CR LF is there is no verb here, else means mouse-click it
 
-        # todo10: Cope when Apple Paste from Screen starts with \t
+        # todo7: Add a Log Entry when Apple Paste from Screen starts with \t
         # todo7: Help notice how often we fall wrongly into Inserting mode by accident
 
     #
@@ -3246,12 +3248,17 @@ class ScreenEditor:
         pt = self.proxy_terminal
         styles = list(pt.styles)
 
+        (west_x, wide_text) = (x, text)
+        if (text[:1] + text[-1:]) != "<>":
+            west_x = (x - 1) if (x > X1) else x
+            wide_text = " " + text + " "
+
         self.write("\0337")
 
         self.write("\033[m")
         self.write("\033[7m")  # todo10: Copy-edit Button Style while showing it Pressed
 
-        self.y_x_text_write(y=y, x=x, text=text)
+        self.y_x_text_write(y=y, x=west_x, text=wide_text)
 
         self.write("\033[m")
         for style in styles:
@@ -3264,12 +3271,17 @@ class ScreenEditor:
     def y_x_write_text_released(self, y: int, x: int, text: str, styles: list[str]) -> None:
         """Show the Widget as Released"""
 
+        (west_x, wide_text) = (x, text)
+        if (text[:1] + text[-1:]) != "<>":
+            west_x = (x - 1) if (x > X1) else x
+            wide_text = " " + text + " "
+
         self.write("\0337")
 
         self.write("\033[m")
         self.write("\033[27m")  # todo10: Copy-edit Button Style while showing it Pressed
 
-        self.y_x_text_write(y=y, x=x, text=text)
+        self.y_x_text_write(y=y, x=west_x, text=wide_text)
 
         self.write("\033[m")
         for style in styles:
@@ -3350,7 +3362,6 @@ class ScreenEditor:
         if self._match_csi_mouse_(pack1) and (pack1.tail == b"M"):  # drops Mouse Press
 
             (pack2, n2) = self.read_one_pack()
-            self.write("SQUIRREL1 ")
             self.write_kcaps_plus(pack2)  # usually prints Mouse Release
 
         # Quote one Keyboard Chord that isn't a plain Arrow quickly followed by a Chord
@@ -3430,6 +3441,11 @@ _UNSHIFTED_ARROW_ENCODES = (
 )
 
 
+#
+# Play a game in the Terminal Snake genre
+#
+
+
 class SnuckLife:
     """Lead with one Sprite, and link more to follow in a chain"""
 
@@ -3480,6 +3496,11 @@ class SnuckLife:
         self.do_snuck_step_ahead()
         self.do_snuck_step_ahead()
 
+        se.write("\r")  # todo11: Snuck setup should leave us at X1 ?
+        se.write("\t")  # todo11: Place the Y X Cursor to say beyond the first Snuck ?
+        # se.write("🔴  🔵  🟠  🟡  🟢  🟣  🟤")  # todo11: initial Snuck Food and later Snuck Food ?
+        se.write("⚪  ⚪  ⚪")
+
         # Walk one step after another
 
         while True:
@@ -3492,6 +3513,10 @@ class SnuckLife:
 
         se.print()
         se.print("Goodbye from Snuck")
+
+        # todo12: find & eat misaligned Food, don't just fly over it
+
+        # todo11: option for a fully legible Snuck, with ⬆️ ⬇️ ⬅️ ➡️  as its Head
 
     def do_snuck_step_left(self) -> None:
         """Turn Left"""
@@ -3525,21 +3550,54 @@ class SnuckLife:
         """Move the Head Sprite ahead, and have the rest follow"""
 
         se = self.screen_editor
+        pt = se.proxy_terminal
+
         dy = self.dy
         dx = self.dx
         sprites = self.sprites
+
+        snuck_by_food = SNUCK_BY_FOOD
 
         assert DECSC == "\033" "7"  # DECSC 7 Cursor Save
         assert DECRC == "\033" "8"  # DECRC 8 Cursor Restore
 
         # Take in the next Move
 
-        yx_list = list((_.row_ya, _.column_xa) for _ in sprites)
+        yaxa_list = list((_.row_ya, _.column_xa) for _ in sprites)
 
-        (y, x) = yx_list[0]
-        yx = (y + dy, x + dx)
+        (ya, xa) = yaxa_list[0]
+        (yb, xb) = (ya + dy, xa + dx)
 
-        yx_list = [yx] + yx_list[:-1]
+        ybxb = (yb, xb)
+        yx_list = [ybxb] + yaxa_list[:-1]
+
+        # Visibly collide with Snuck Tiles when found beneath Front Tile
+
+        sprite0 = sprites[0]
+
+        ahead = pt.proxy_yx_read_one_x_write(yb, x=xb, default=" ")
+        tprint(f"{yb=} {xb=} {ahead=}")
+        if ahead in snuck_by_food.values():
+
+            se.write("\0337")
+            se.y_x_text_write(ya, x=xa, text="🟪")
+            se.write("\0338")
+
+            return
+
+        # Eat Food when found beneath Front Tile
+
+        food = sprite0.a_writes[-1] if sprite0.a_writes else " "
+        tprint(f"{ya=} {xa=} {food=}")
+        if food in snuck_by_food.keys():
+            snuck = snuck_by_food[food]
+
+            sprite = TerminalSprite(self, z_writes=(snuck,))
+            sprites.append(sprite)
+            yx_list.append(yaxa_list[-1])
+
+            sprite0.a_writes = sprite0.a_writes[:-1] + (" ",)
+            sprite0.b_writes = sprite0.b_writes[:-1] + (" ",)
 
         # Move the Sprites
 
@@ -3583,17 +3641,37 @@ class SnuckLife:
     #
 
 
+SNUCK_BY_FOOD = {
+    "⚪": "⬜",  # White Dot for White Square
+    "⚫": "⬛",  # Black Dot for White
+    "🔴": "🟥",  # Red Dot for Blue Square
+    "🔵": "🟦",  # Blue Dot for Green Square
+    "🟠": "🟧",  # Orange Dot for Brown Sq
+    "🟡": "🟨",  # Yellow Dot for Purple Squa
+    "🟢": "🟩",  # Green Dot for Yellow Square
+    "🟣": "🟪",  # Purple Dot for White S
+    "🟤": "🟫",  # Brown Dot for Black
+}
+
+# above are Medium White Circle, Medium Black Circle, else Large Circle/ Square
+
+
+#
+# Move 2 Characters about the Y X of the Screen as if on their own Z Layer above
+#
+
+
 class TerminalSprite:
     """Move across the Screen in its own Z Layer"""
 
     proxy_terminal: ProxyTerminal
-    z_writes: tuple[str]
+    z_writes: tuple[str]  # the Z Layer of this Sprite
 
-    a_writes: tuple[str, ...] = tuple()
+    a_writes: tuple[str, ...] = tuple()  # 1st of 2 Columns of the Z Layer below
     row_ya: int = -1
     column_xa: int = -1
 
-    b_writes: tuple[str, ...] = tuple()
+    b_writes: tuple[str, ...] = tuple()  # 2nd of 2 Columns of the Z Layer below
     row_yb: int = -1
     column_xb: int = -1
 
@@ -3662,6 +3740,8 @@ class TerminalSprite:
         self.b_writes = ydxd_writes  # replace
         self.row_yb = yd
         self.column_xb = xd
+
+    # todo12: Snuck eats Comic Color Circles, translates to Squares added onto end of Snuck
 
 
 class ProxyTerminal:
@@ -3916,6 +3996,8 @@ class ProxyTerminal:
 
         for style in styles:
             self.write_out(style)
+
+        # todo10: stop always intentionally distorting blank to off-white backcolor for tests
 
         # todo4: .write_screen of Csi bypasses our mirrored writes
         # todo4: .flags.apple and .google could emulate one another
@@ -5246,7 +5328,7 @@ class ProxyTerminal:
 # todo8: glider, sw glider, ne nw se gliders
 # todo8: circle triangle square rectangle polygon
 # todo8: click on emoji to copy-paste them
-# todo8: Unicode Medium & Large Circles ⚪ ⚫ 🔴 🔵 🟠 🟡 🟢 🟣 🟤
+# todo8: Unicode Medium Circles ⚪ ⚫ & Large Circles 🔴 🔵 🟠 🟡 🟢 🟣 🟤
 # todo8: Unicode Large Squares ⬛ ⬜ 🟥 🟦 🟧 🟨 🟩 🟪 🟫
 # todo8: \e notation
 
