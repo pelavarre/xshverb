@@ -1049,7 +1049,9 @@ class ScreenEditor:
         # Prompt at Launch  # todo4: 'with' Context Handlers to undo Autolaunchers
 
         autolaunchers = [11, 21, 99]
-        autolaunchers = [11, 21, 32, 99]  # last wins
+        autolaunchers = [11, 21, 32, 66, 99]
+        # autolaunchers = [11, 21, 32, 77, 99]
+        # autolaunchers = [11, 32, 77, 99]  # last wins
 
         if 11 in autolaunchers:
             pt.proxy_read_row_y_column_x()
@@ -1075,29 +1077,38 @@ class ScreenEditor:
         if 55 in autolaunchers:
             pt.write_screen()
 
+        if 66 in autolaunchers:
+
+            self.write("\033[K")
+            self.print("123456789 123456789 123456789 123456789 123456789 123456789 123456789")
+            self.write("\033[K")
+            self.print("Try ⌥-Click of  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
+            self.write("\033[K")
+            self.print("Try ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>  ⚪  ⚫  🔴  🟥  ⬛")
+            self.write("\033[K")
+            self.print(
+                "Try  #24 on #005 White-on-Blue,  #050 on #000 Green-on-Black,  or  ⎋[M Plain"
+            )
+            self.write("\033[K")
+            self.print(
+                "Press ⌃D to quit, else F1 for help, else see what happens"
+            )  # todo: FnF1 vs F1
+            self.write("\033[K")
+            self.print()
+
+            self.write("\033[K")  # moar vertical separation
+            self.print()
+
+            x_width = pt.proxy_read_x_width()
+            mid_width = (x_width // 2) + (x_width % 2)
+            self.write(f"\033[{mid_width}G")
+
+        if 77 in autolaunchers:
+            self.do_kdata_fn_f3()
+
         if 99 in autolaunchers:
             pt.proxy_read_row_y_column_x()
             pt.proxy_read_y_height_x_width()
-
-        self.write("\033[K")
-        self.print("123456789 123456789 123456789 123456789 123456789 123456789 123456789")
-        self.write("\033[K")
-        self.print("Try ⌥-Click of  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
-        self.write("\033[K")
-        self.print("Try ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>  ⚪  ⚫  🔴  🟥  ⬛")
-        self.write("\033[K")
-        self.print("Try  #24 on #005 White-on-Blue,  #050 on #000 Green-on-Black,  or  ⎋[M Plain")
-        self.write("\033[K")
-        self.print("Press ⌃D to quit, else F1 for help, else see what happens")  # todo: FnF1 vs F1
-        self.write("\033[K")
-        self.print()
-
-        self.write("\033[K")  # moar vertical separation
-        self.print()
-
-        x_width = pt.proxy_read_x_width()
-        mid_width = (x_width // 2) + (x_width % 2)
-        self.write(f"\033[{mid_width}G")
 
         # Walk one step after another
 
@@ -2463,7 +2474,7 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        sl = SnuckLife(screen_editor=self, dy=0, dx=2)
+        sl = SnuckLife(screen_editor=self)
 
         func_by_str = dict(with_func_by_str)
         snuck_func_by_str = sl.form_snuck_func_by_str()
@@ -3451,55 +3462,143 @@ class SnuckLife:
 
     screen_editor: ScreenEditor
 
-    dy: int
+    yx: tuple[int, int]
+    terminal_sprite: TerminalSprite
+    writes_by_dy_dx: dict[int, dict[int, tuple[str, ...]]]
+    dy: int  # defines Up Down Right Left
     dx: int
-    sprites: list[TerminalSprite]
 
-    def __init__(self, screen_editor: ScreenEditor, dy: int, dx: int) -> None:
+    def __init__(self, screen_editor: ScreenEditor) -> None:
 
-        self.screen_editor = screen_editor
+        se = screen_editor
+        pt = se.proxy_terminal
 
-        sprite0 = TerminalSprite(self, z_writes=("🟦",))
-        sprite1 = TerminalSprite(self, z_writes=("⬜",))
-        sprite2 = TerminalSprite(self, z_writes=("⬜",))
-        sprites = [sprite0, sprite1, sprite2]
+        # draws the Snuck as ⬜⬜🟦
 
+        writes_by_dy_dx: dict[int, dict[int, tuple[str, ...]]]
+
+        writes_by_dy_dx = {
+            0: {0: ("🟦",)},  # Head
+            -2: {0: ("⬜",)},  # Body
+            -4: {0: ("⬜",)},  # Body
+        }
+
+        (dy, dx) = (1, 0)
+
+        #
+
+        writes_by_dy_dx = {
+            0: {
+                0: ("🟦",),  # Head
+                -2: ("⬜",),  # Body
+                -4: ("⬜",),  # Body
+            }
+        }
+
+        (dy, dx) = (0, 2)  # todo12: pick .dy .dx out of .writes_by_dy_dx
+
+        #
+
+        tprint(f"{writes_by_dy_dx=}  # SnuckLife.__init__")
+
+        ts = TerminalSprite(pt)
+
+        self.screen_editor = se
+
+        self.yx = (-1, -1)
+        self.terminal_sprite = ts
+        self.writes_by_dy_dx = writes_by_dy_dx
         self.dy = dy
         self.dx = dx
-        self.sprites = sprites
 
     def play_snuck_life(self) -> None:  # todo8: stop replacing Unwritten Chars w Colored Spaces
         """Play Conway's Game-of-Life"""
 
-        sprites = self.sprites
-
         se = self.screen_editor
         pt = se.proxy_terminal
 
+        ts = self.terminal_sprite
+        writes_by_dy_dx = self.writes_by_dy_dx
+
         # Say Hello
 
-        se.print()
-        se.print("Hello from Snuck")
-        se.print()
-        se.print("← ↑ → Arrows to move ahead or turn")
-        se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
-        se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
-        se.print()
-        se.print()
-        se.print()
+        autolaunchers = [81]
 
-        # Move enough to draw the whole Initial Snake
+        if 81 in autolaunchers:
 
-        (row_y, column_x) = pt.proxy_read_row_y_column_x()
+            se.print()
+            se.print("Hello from Snuck")
+            se.print()
+            se.print("← ↑ → Arrows to move ahead or turn")
+            se.print("Spacebar to step, ⌃Spacebar to make a half step, ⌥← to undo")
+            se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
+            se.print()
+            se.print()
+            se.print()
 
-        sprites[0].yx_leap_to(y=row_y, x=column_x)
-        self.do_snuck_step_ahead()
-        self.do_snuck_step_ahead()
+            (y, x) = (pt.row_y, pt.column_x)
+            x4 = x + 2 * 2
 
-        se.write("\r")  # todo11: Snuck setup should leave us at X1 ?
-        se.write("\t")  # todo11: Place the Y X Cursor to say beyond the first Snuck ?
-        # se.write("🔴  🔵  🟠  🟡  🟢  🟣  🟤")  # todo11: initial Snuck Food and later Snuck Food ?
-        se.write("⚪  ⚪  ⚪")
+            ts.y_x_leap_to(y=y, x=x4, writes_by_dy_dx=dict(writes_by_dy_dx))
+            self.yx = (y, x4)
+
+        # Draw the first Screen
+
+        if 82 in autolaunchers:
+
+            se.print("123456789 123456789 123456789 123456789 123456789 ")
+            for index in range(2, 30):
+                se.print(index)
+
+            se.write(3 * 2 * " ")
+            se.write(3 * 2 * "\b")
+
+            (y, x) = (pt.row_y, pt.column_x)
+            (y, x) = (5, 15)  # last wins
+
+            ts.y_x_leap_to(y=y, x=x, writes_by_dy_dx=dict(writes_by_dy_dx))
+            self.yx = (y, x)
+
+            yn = pt.row_y + 4
+            xn = pt.column_x - 1
+            se.write(f"\033[{yn};{xn}H")
+            se.write("⚪")
+
+            # se.write("\r")  # todo11: Snuck setup should leave us at X1 ?
+            # se.write("\t")  # todo11: Place the Y X Cursor to say beyond the first Snuck ?
+
+            se.print()
+            se.print()
+
+            se.write("\033[C")
+            se.write("\033[C")
+            se.print("⚫🔴🟠🟡🟢🟤")  # ⚪ 🔵 🟣
+
+            se.print()
+            se.print()
+            se.print()
+
+            se.write("\033[C")
+            se.write("\033[C")
+            se.print(" ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪")
+            se.print(" ⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪")
+
+            se.write("\033[C")
+            se.write("\033[C")
+            se.print(" " + (12 * "x "))
+            se.print()
+
+            se.write("\033[C")
+            se.write("\033[C")
+            se.print("⚪  ⚪  ⚪")
+
+            se.write("\033[C")
+            se.write("\033[C")
+            se.print("x   x   x")
+            se.print()
+
+            for _ in Jabberwocky.splitlines()[:6]:  # todo12: no need to split  # and why 6?
+                se.print(_)
 
         # Walk one step after another
 
@@ -3509,14 +3608,17 @@ class SnuckLife:
             except SystemExit:
                 break
 
+            # todo13: stop losing the BackColor sometimes
+            # todo13: test with ⌃L after every step
+
         # Say Goodbye
 
         se.print()
         se.print("Goodbye from Snuck")
 
-        # todo12: find & eat misaligned Food, don't just fly over it
-
+        # todo7: find & eat misaligned Food, don't just fly over it
         # todo11: option for a fully legible Snuck, with ⬆️ ⬇️ ⬅️ ➡️  as its Head
+        # todo11: initial Snuck Food and later Snuck Food ?  # 🔴  🔵  🟠  🟡  🟢  🟣  🟤
 
     def do_snuck_step_left(self) -> None:
         """Turn Left"""
@@ -3554,63 +3656,81 @@ class SnuckLife:
 
         dy = self.dy
         dx = self.dx
-        sprites = self.sprites
 
-        snuck_by_food = SNUCK_BY_FOOD
+        ts = self.terminal_sprite
+        yx = self.yx
+        writes_by_dy_dx = self.writes_by_dy_dx
+
+        tile_by_food = TILE_BY_FOOD
 
         assert DECSC == "\033" "7"  # DECSC 7 Cursor Save
         assert DECRC == "\033" "8"  # DECRC 8 Cursor Restore
 
-        # Take in the next Move
+        # Visibly collide with Snuck Tiles when found beneath Head Tile
 
-        yaxa_list = list((_.row_ya, _.column_xa) for _ in sprites)
+        (y, x) = yx
 
-        (ya, xa) = yaxa_list[0]
-        (yb, xb) = (ya + dy, xa + dx)
+        ydxd = (yd, xd) = (y + dy, x + dx)
+        ahead = pt.proxy_yx_read_one_x_write(yd, x=xd, default=" ")
 
-        ybxb = (yb, xb)
-        yx_list = [ybxb] + yaxa_list[:-1]
-
-        # Visibly collide with Snuck Tiles when found beneath Front Tile
-
-        sprite0 = sprites[0]
-
-        ahead = pt.proxy_yx_read_one_x_write(yb, x=xb, default=" ")
-        tprint(f"{yb=} {xb=} {ahead=}")
-        if ahead in snuck_by_food.values():
+        if ahead in tile_by_food.values():
 
             se.write("\0337")
-            se.y_x_text_write(ya, x=xa, text="🟪")
+            se.y_x_text_write(y, x=x, text="🟪")
             se.write("\0338")
 
             return
 
-        # Eat Food when found beneath Front Tile
+        # Reshape the Sprite  # todo12: factor out as a method
 
-        food = sprite0.a_writes[-1] if sprite0.a_writes else " "
-        tprint(f"{ya=} {xa=} {food=}")
-        if food in snuck_by_food.keys():
-            snuck = snuck_by_food[food]
+        dy_list = tuple(writes_by_dy_dx.keys())
+        dydx_pairs = tuple((dy, dx) for dy in dy_list for dx in writes_by_dy_dx[dy].keys())
+        dydx_pairs_writes = tuple(writes_by_dy_dx[dy][dx] for dy, dx in dydx_pairs)
 
-            sprite = TerminalSprite(self, z_writes=(snuck,))
-            sprites.append(sprite)
-            yx_list.append(yaxa_list[-1])
+        tprint(f"{dydx_pairs=}  # .do_snuck_step_ahead")
+        tprint(f"{dydx_pairs_writes=}  # .do_snuck_step_ahead")
 
-            sprite0.a_writes = sprite0.a_writes[:-1] + (" ",)
-            sprite0.b_writes = sprite0.b_writes[:-1] + (" ",)
+        yzxz_pairs = list((y + dy, x + dx) for dy, dx in dydx_pairs)
 
-        # Move the Sprites
+        yzxy_pairs_tail = yzxz_pairs[-1]
+        yexe_pairs = [ydxd] + yzxz_pairs[:-1]
+
+        foods = ts.reads_by_yx[yx]
+        if foods and (foods[-1] in tile_by_food.keys()):
+            food = foods[-1]
+
+            tile = tile_by_food[food]
+            yexe_pairs.append(yzxy_pairs_tail)
+            dydx_pairs_writes = dydx_pairs_writes + ((tile,),)
+
+            ts.reads_by_yx[yx] = foods[:-1] + (" ",)  # todo12: eaten food fabricated Space
+
+        tprint(f"{yexe_pairs=}  # .do_snuck_step_ahead")
+
+        d: dict[int, dict[int, tuple[str, ...]]] = dict()
+        for yexe, yexe_writes in zip(yexe_pairs, dydx_pairs_writes):
+            (ye, xe) = yexe
+            (dy, dx) = (ye - yd, xe - xd)
+
+            dy_d = d[dy] if (dy in d.keys()) else dict()
+            d[dy] = dy_d
+
+            assert dx not in dy_d.keys(), (dx, dy_d.keys())
+            dy_d[dx] = yexe_writes
+
+        self.writes_by_dy_dx = d  # replace
+
+        tprint(f"{d=}  # .do_snuck_step_ahead")
+
+        # Move the Sprite
+
+        tprint(f"{yd=} {xd=}  # .do_snuck_step_ahead")
 
         se.write("\0337")
-
-        for sprite, yx in zip(sprites, yx_list):
-            (y, x) = yx
-            if (y, x) != (-1, -1):
-                sprite.yx_leap_to(y, x=x)
-
-            # todo: When should we not-rewrite the Z Layer below?
-
+        ts.y_x_leap_to(yd, x=xd, writes_by_dy_dx=d)
         se.write("\0338")
+
+        self.yx = ydxd
 
     def form_snuck_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
@@ -3629,6 +3749,8 @@ class SnuckLife:
 
     # riffing off the tradition of Emacs ⎋ X  S N A K E Return
 
+    # todo12: .write_str(s) .write_control(control) .write_text(text)
+
     #
     # Halt at collision or edges - You lose if you give up, if you're cornered
     # Eat a Circle to grow a Square of the same Color
@@ -3641,7 +3763,7 @@ class SnuckLife:
     #
 
 
-SNUCK_BY_FOOD = {
+TILE_BY_FOOD = {
     "⚪": "⬜",  # White Dot for White Square
     "⚫": "⬛",  # Black Dot for White
     "🔴": "🟥",  # Red Dot for Blue Square
@@ -3657,95 +3779,189 @@ SNUCK_BY_FOOD = {
 
 
 #
-# Move 2 Characters about the Y X of the Screen as if on their own Z Layer above
+# Move Characters across the Screen in their own Z Layer
 #
 
 
 class TerminalSprite:
-    """Move across the Screen in its own Z Layer"""
+    """Move Characters across the Screen in their own Z Layer"""
 
-    proxy_terminal: ProxyTerminal
-    z_writes: tuple[str]  # the Z Layer of this Sprite
+    proxy_terminal: ProxyTerminal  # todo: proxy_terminal: TextLayer | ProxyTerminal
 
-    a_writes: tuple[str, ...] = tuple()  # 1st of 2 Columns of the Z Layer below
-    row_ya: int = -1
-    column_xa: int = -1
+    yx_write_pairs: tuple[tuple[int, int], ...]
+    reads_by_yx: dict[tuple[int, int], tuple[str, ...]]
 
-    b_writes: tuple[str, ...] = tuple()  # 2nd of 2 Columns of the Z Layer below
-    row_yb: int = -1
-    column_xb: int = -1
+    def __init__(self, proxy_terminal: ProxyTerminal) -> None:
 
-    def __init__(self, snuck_life: SnuckLife, z_writes: tuple[str]) -> None:
+        self.proxy_terminal = proxy_terminal
 
-        sl = snuck_life
-        se = sl.screen_editor
-        pt = se.proxy_terminal
+        self.yx_write_pairs = tuple()
+        self.reads_by_yx = dict()
 
-        self.proxy_terminal = pt
-        self.z_writes = z_writes
+    def y_x_leap_to(  # ) -> ...:
+        self, y: int, x: int, writes_by_dy_dx: dict[int, dict[int, tuple[str, ...]]]
+    ) -> None:
 
-    def yx_leap_to(self, y: int, x: int) -> None:
-        """Draw the Sprite at its new Y X Place"""
+        reads_by_yx = self.reads_by_yx
+        yx_write_pairs = self.yx_write_pairs
+
+        tprint(f"{reads_by_yx=}  # .y_x_leap_to before stamp")
+
+        tprint(f"{writes_by_dy_dx=}  # .y_x_leap_to")
+        stamped_yx_write_pairs = self.y_x_stamp_at(y, x=x, writes_by_dy_dx=writes_by_dy_dx)
+        tprint(f"{stamped_yx_write_pairs=}  # .y_x_leap_to")
+
+        tprint(f"{reads_by_yx=}  # .y_x_leap_to after stamp")
+
+        yx_uncovered_pairs = list()
+        for yx in sorted(yx_write_pairs):  # 'better ordered than muddled'
+            (y, x) = yx
+            if yx not in stamped_yx_write_pairs:
+                yx_uncovered_pairs.append(yx)
+
+                tprint(f"{y=} {x=}  # y_x_uncover_at")
+                self.y_x_uncover_at(y, x=x)
+
+        for yx in yx_uncovered_pairs:
+            (y, x) = yx
+            del reads_by_yx[yx]
+
+        self.yx_write_pairs = stamped_yx_write_pairs
+
+    def y_x_uncover_at(self, y: int, x: int) -> None:
+        """Write again what was overwitten, on the way towards dropping this memory"""
 
         pt = self.proxy_terminal
 
-        z_writes = self.z_writes
+        assert CUP_Y_X == "\033[" "{};{}" "H"
 
-        ya = self.row_ya
-        xa = self.column_xa
-        a_writes = self.a_writes
+        yx = (y, x)
+        yx_reads = self.reads_by_yx[yx]
 
-        yb = self.row_yb
-        xb = self.column_xb
-        b_writes = self.b_writes
+        defaults: tuple[str, ...]
+        defaults = ("\033[48;5;255m", " ")  # todo12: name fabricated blank color
+        defaults = (" ",)  # last wins
 
-        # Skip if already here
+        reads = yx_reads if yx_reads else defaults
 
-        if (ya, xa) == (y, x):
-            return
+        pt.proxy_write(f"\033[{y};{x}H")  # for .y_x_uncover_at
 
-        (yc, xc) = (y, x)
-        (yd, xd) = (y, x + 1)
+        for read in reads[:-1]:
+            pt.proxy_write(read)
 
-        # Read there
+        read = reads[-1]
+        pt.proxy_write(read)
 
-        defaults = (" ",)  # Single Wide Space
-        ycxc_writes = pt.proxy_yx_read_some_writes(yc, x=xc, defaults=defaults)
-        ydxd_writes = pt.proxy_yx_read_some_writes(yd, x=xd, defaults=defaults)
+    def y_x_stamp_at(  # ) -> ...:
+        self, y: int, x: int, writes_by_dy_dx: dict[int, dict[int, tuple[str, ...]]]
+    ) -> tuple[tuple[int, int], ...]:
+        """Move the Text from one Y X to another Y X"""
 
-        # Write there
+        pt = self.proxy_terminal
 
-        pt.proxy_write(f"\033[{yc};{xc}H")  # for .yx_leap_to
-        for write in z_writes:
-            pt.proxy_write(write)
+        yx_list: list[tuple[int, int]] = list()
+        for dy in writes_by_dy_dx.keys():
+            yd = y + dy
+            for dx in writes_by_dy_dx[dy].keys():
+                xd = x + dx
 
-        # Erase here
+                ydxd_writes = writes_by_dy_dx[dy][dx]
+                if ydxd_writes:
+                    for ydxd_write in ydxd_writes[:-1]:
+                        pt.proxy_write(ydxd_write)
 
-        if (ya, xa) != (-1, -1):
-            pt.proxy_write(f"\033[{ya};{xa}H")  # for .yx_leap_to
-            for a_write in a_writes:
-                pt.proxy_write(a_write)
+                    yx_pairs = self.add_y_x_text_write(yd, x=xd, text=ydxd_writes[-1])
+                    yx_list.extend(yx_pairs)
 
-        if (yb, xb) != (-1, -1):
-            pt.proxy_write(f"\033[{yb};{xb}H")  # for .yx_leap_to
-            for b_write in b_writes:
-                pt.proxy_write(b_write)
+        yx_pairs = tuple(sorted(set(yx_list)))
 
-        # Remember new
+        return yx_pairs
 
-        self.a_writes = ycxc_writes  # replace
-        self.row_ya = yc
-        self.column_xa = xc
+    def add_y_x_text_write(self, y: int, x: int, text: str) -> tuple[tuple[int, int], ...]:
+        """Add some Text at one Y X Place"""
 
-        self.b_writes = ydxd_writes  # replace
-        self.row_yb = yd
-        self.column_xb = xd
+        pt = self.proxy_terminal
 
-    # todo12: Snuck eats Comic Color Circles, translates to Squares added onto end of Snuck
+        assert text.isprintable(), (text,)  # doesn't duck typing
+        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
+        pt.proxy_write(f"\033[{y};{x}H")  # for .proxy_y_x_text_write
+
+        yx_pairs = self.read_before_add(text)
+        pt.proxy_write_printable(text)
+
+        return yx_pairs
+
+    def read_before_add(self, text: str) -> tuple[tuple[int, int], ...]:
+        """Read & keep what was written beneath the Text to be added"""
+
+        pt = self.proxy_terminal
+
+        yx_list = list()
+        for index, t in enumerate(text):
+            rindex = index - len(text)
+
+            (y, x) = yx = (pt.row_y, pt.column_x)
+
+            xb = x - 1  # at West of the Text, may add 0 Columns or 1 Column
+            xf = x + 1  # at East of the Text, may add 0 or 1 or 2 Columns
+            xff = x + 2
+
+            # Keep the East of an West-East Pair colliding beneath the Westmost
+
+            if index == 0:
+                xb_writes = pt.proxy_yx_read_some_writes(y, x=xb, defaults=())
+                tb = xb_writes[-1] if xb_writes else " "
+                wb = pt.str_guess_print_width(tb)
+                if wb == 2:
+                    yxb = (y, xb)
+                    yx_list.append(yxb)
+
+                    self.add_y_x_reads_if(y, x=xb, reads=xb_writes)
+
+            # Keep the 1 or 2 Columns beneath
+
+            yx_list.append(yx)
+
+            x_writes = pt.proxy_yx_read_some_writes(y, x=x, defaults=())
+            self.add_y_x_reads_if(y, x=x, reads=x_writes)
+
+            w = pt.str_guess_print_width(t)
+            if w == 2:
+                yxf = (y, xf)
+                yx_list.append(yxf)
+
+                xf_writes = pt.proxy_yx_read_some_writes(y, x=xf, defaults=())
+                tf = xf_writes[-1] if xf_writes else " "
+                wf = pt.str_guess_print_width(tf)
+
+                self.add_y_x_reads_if(y, x=xf, reads=xf_writes)
+
+                # Keep the West of a West-East Pair colliding beneath the Eastmost
+
+                if wf == 2:
+                    if rindex == -1:
+                        yxff = (y, xff)
+                        yx_list.append(yxff)
+
+                        xff_writes = pt.proxy_yx_read_some_writes(y, x=xff, defaults=())
+                        self.add_y_x_reads_if(y, x=xff, reads=xff_writes)
+
+        yx_pairs = tuple(yx_list)
+
+        return yx_pairs
+
+    def add_y_x_reads_if(self, y: int, x: int, reads: tuple[str, ...]) -> None:
+        """Add the Reads of one Y X Place, if that Y X not already added"""
+
+        reads_by_yx = self.reads_by_yx
+
+        yx = (y, x)
+        if yx not in reads_by_yx.keys():
+            reads_by_yx[yx] = reads
 
 
 class ProxyTerminal:
-    """Take in Writes to guess what the Screen looks like"""
+    """Write through to a ByteTerminal, or read back what was written"""
 
     bytes_terminal: BytesTerminal  # .bt  # no Line Buffer on Input  # no implicit CR's in Output
     keyboard_bytes_log: typing.BinaryIO  # .klog  # logs Keyboard Delays & Bytes
@@ -3759,10 +3975,10 @@ class ProxyTerminal:
     toggles: list[str]  # Replacing/ Inserting/ etc
     styles: list[str]  # FrontColor on BackColor, and Colorless choices, etc
 
-    y_height: int
+    y_height: int  # last sample of Screen Rows x Columns
     x_width: int
 
-    was_y: int
+    was_y: int  # last saved Row x Column place of the Cursor
     was_x: int
 
     def __init__(self) -> None:
@@ -3940,7 +4156,7 @@ class ProxyTerminal:
 
         # Redraw the Screen per se
 
-        defaults = ["\033[48;5;255m", " "]
+        defaults = ["\033[48;5;255m", " "]  # todo12: name fabricated blank color
 
         self.write_out("\033[4l")
         self.write_out("\033[m")
@@ -4169,6 +4385,16 @@ class ProxyTerminal:
     #  Write out at Y X Spots on into the Mirrors
     #
 
+    def proxy_y_x_write_some_reads(self, y: int, x: int, reads: tuple[str, ...]) -> None:
+        """Write out the Reads at one Y X Place"""
+
+        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
+
+        self.proxy_write(f"\033[{y};{x}H")  # for .proxy_y_x_text_write
+
+        for read in reads:
+            self.proxy_write(text=read)
+
     def proxy_y_x_text_write(self, y: int, x: int, text: str) -> None:
         """Write Some Text Chars at one Y X Place"""
 
@@ -4300,6 +4526,9 @@ class ProxyTerminal:
             if eaw in ("F", "W"):
                 g_width += 1
 
+        if len(text) <= 1:
+            assert g_width in (0, 1, 2), (g_width, text)
+
         return g_width
 
     #
@@ -4387,7 +4616,7 @@ class ProxyTerminal:
             y = self.row_y
             x = self.column_x
 
-            xp = x - 1
+            xp = x - 1  # todo13: rename to .xb .xf .xff
             xn = x + 1
             xnn = x + 2
 
@@ -4429,29 +4658,31 @@ class ProxyTerminal:
             tn = xn_writes[-1] if xn_writes else " "  # defaults to write as if before Space
             wn = self.str_guess_print_width(tn)
 
+            tnn = xnn_writes[-1] if xnn_writes else " "  # defaults to write as if before Space
+
             assert w1 in (1, 2), (w1, t1, y, x)
             assert w2 in (1, 2), (w2, t2, y, x)
             assert wn in (0, 1, 2), (wn, tn, y, x)
 
-            if w1 == w2:
+            if w1 == w2:  # writes 1-Column as 1-Column, or 2-Columns as 2-Columns
 
                 writes_by_x[x] = list(styles) + [t2]  # replace  # todo6: prefer mutate?
 
-            elif w1 < w2:
+            elif w1 < w2:  # writes 2-Column over 1-Column and over 1 or 2 East of 1-Column
 
                 writes_by_x[x] = list(styles) + [t2]  # replace
-                if wn == 2:
-                    assert xnn_writes, (xnn_writes, xnn, y, x)
-                    writes_by_x[xnn] = xnn_writes[:-1] + [" "]  # replace
                 writes_by_x[xn] = list(styles) + [""]  # replace
 
-            else:
+                if wn == 2:  # 2-Column over 1-Column just West of 2-Column
+                    assert tnn == "", (tnn, y, x)
+                    writes_by_x[xnn] = xnn_writes[:-1] + [" "]  # replace
+
+            else:  # writes 1-Column over 2-Column
 
                 assert w2 < w1, (w2, w1, t2, t1, y, x)
                 writes_by_x[x] = list(styles) + [t2]  # replace
-                if wn == 2:
-                    assert xnn_writes, (xnn_writes, xnn, y, x)
-                    writes_by_x[xnn] = xnn_writes[:-1] + [" "]  # replace
+
+                assert (tn == "") and (wn == 0), (tn, wn, y, x)
                 writes_by_x[xn] = list(styles) + [" "]  # replace
 
             #
@@ -4471,7 +4702,7 @@ class ProxyTerminal:
             head = sdata[:1]
             if sdata == (pn * head):
 
-                if sdata and (head in (b"\t", b"\n")):
+                if sdata and (head in (b"\b", b"\t", b"\n")):
                     sdata_pack = TerminalBytePacket(head)
 
                     mirrored = 0
@@ -6953,6 +7184,8 @@ def _spaceless_ch_to_option_kstr_(t: str) -> str:
 
 #
 # Amp up Import Traceback
+#
+# Especially when installed via:  sys.excepthook = excepthook
 #
 
 
