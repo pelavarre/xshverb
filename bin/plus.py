@@ -391,7 +391,7 @@ class ConwayLife:
 
         # Checkpoint the Y X place of the Screen Cursor
 
-        (ya, xa) = pt.proxy_read_row_y_column_x()
+        (ya, xa) = (pt.row_y, pt.column_x)  # = pt.proxy_read_row_y_column_x()
         x_width = bt.read_x_width()
 
         assert CUP_Y_X1 == "\033[" "{}" "H"
@@ -1257,7 +1257,7 @@ class ScreenEditor:
 
         if kdata not in unshifted_arrow_encodes:
             self.arrows = 0  # written only by Init & this Def
-        elif t1t0 >= 0.009:
+        elif t1t0 >= 0.033:
             self.arrows = 0  # written only by Init & this Def
         elif arrows > 0:
             self.arrows += 1  # written only by Init & this Def
@@ -1335,8 +1335,7 @@ class ScreenEditor:
 
         assert CUP_Y_X == "\033[" "{};{}" "H"
 
-        yx = pt.proxy_read_row_y_column_x()
-        (row_y, column_x) = yx
+        (row_y, column_x) = yx = (pt.row_y, pt.column_x)  # = pt.proxy_read_row_y_column_x()
 
         cup = f"\033[{arrow_row_y};{arrow_column_x}H"
         self.write(f"\033[{arrow_row_y};{arrow_column_x}H")  # for .read_arrows_as_byte_packet
