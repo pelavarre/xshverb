@@ -3732,6 +3732,8 @@ class SnuckLife:
 
         self.yx = ydxd
 
+        # todo12: stop the Snake from losing Tiles when it walks around off of Screen
+
     def form_snuck_func_by_str(self) -> dict[str, abc.Callable[[], None]]:
         "Bind Keycaps to Funcs"
 
@@ -4616,9 +4618,9 @@ class ProxyTerminal:
             y = self.row_y
             x = self.column_x
 
-            xp = x - 1  # todo13: rename to .xb .xf .xff
-            xn = x + 1
-            xnn = x + 2
+            xb = x - 1
+            xf = x + 1
+            xff = x + 2
 
             # Fetch the Mirror
 
@@ -4626,15 +4628,15 @@ class ProxyTerminal:
                 writes_by_y_x[y] = dict()
             writes_by_x = writes_by_y_x[y]
 
-            xp_writes = writes_by_x[xp] if (xp in writes_by_x.keys()) else list()
+            xb_writes = writes_by_x[xb] if (xb in writes_by_x.keys()) else list()
             x_writes = writes_by_x[x] if (x in writes_by_x.keys()) else list()
-            xn_writes = writes_by_x[xn] if (xn in writes_by_x.keys()) else list()
-            xnn_writes = writes_by_x[xnn] if (xnn in writes_by_x.keys()) else list()
+            xf_writes = writes_by_x[xf] if (xf in writes_by_x.keys()) else list()
+            xff_writes = writes_by_x[xff] if (xff in writes_by_x.keys()) else list()
 
             # Patch up the West Half before writing the East Half of a Two-Column Character
 
-            tp = xp_writes[-1] if xp_writes else " "  # defaults to write as if after Space
-            wp = self.str_guess_print_width(tp)
+            tb = xb_writes[-1] if xb_writes else " "  # defaults to write as if after Space
+            wb = self.str_guess_print_width(tb)
 
             t1 = x_writes[-1] if x_writes else " "  # defaults to write as if over Space
             w1 = self.str_guess_print_width(t1)
@@ -4642,10 +4644,10 @@ class ProxyTerminal:
             if not w1:
                 assert i == 0, (i, w1, t1, y, x)
 
-                assert xp_writes, (xp_writes, xp, y, x)
-                assert wp == 2, (wp, tp, xp, y, x)
+                assert xb_writes, (xb_writes, xb, y, x)
+                assert wb == 2, (wb, tb, xb, y, x)
 
-                writes_by_x[xp] = xp_writes[:-1] + [" "]
+                writes_by_x[xb] = xb_writes[:-1] + [" "]
 
                 t1 = " "
                 w1 = self.str_guess_print_width(t1)
@@ -4655,14 +4657,14 @@ class ProxyTerminal:
 
             w2 = self.str_guess_print_width(t2)
 
-            tn = xn_writes[-1] if xn_writes else " "  # defaults to write as if before Space
-            wn = self.str_guess_print_width(tn)
+            tf = xf_writes[-1] if xf_writes else " "  # defaults to write as if before Space
+            wf = self.str_guess_print_width(tf)
 
-            tnn = xnn_writes[-1] if xnn_writes else " "  # defaults to write as if before Space
+            tff = xff_writes[-1] if xff_writes else " "  # defaults to write as if before Space
 
             assert w1 in (1, 2), (w1, t1, y, x)
             assert w2 in (1, 2), (w2, t2, y, x)
-            assert wn in (0, 1, 2), (wn, tn, y, x)
+            assert wf in (0, 1, 2), (wf, tf, y, x)
 
             if w1 == w2:  # writes 1-Column as 1-Column, or 2-Columns as 2-Columns
 
@@ -4671,19 +4673,19 @@ class ProxyTerminal:
             elif w1 < w2:  # writes 2-Column over 1-Column and over 1 or 2 East of 1-Column
 
                 writes_by_x[x] = list(styles) + [t2]  # replace
-                writes_by_x[xn] = list(styles) + [""]  # replace
+                writes_by_x[xf] = list(styles) + [""]  # replace
 
-                if wn == 2:  # 2-Column over 1-Column just West of 2-Column
-                    assert tnn == "", (tnn, y, x)
-                    writes_by_x[xnn] = xnn_writes[:-1] + [" "]  # replace
+                if wf == 2:  # 2-Column over 1-Column just West of 2-Column
+                    assert tff == "", (tff, y, x)
+                    writes_by_x[xff] = xff_writes[:-1] + [" "]  # replace
 
             else:  # writes 1-Column over 2-Column
 
                 assert w2 < w1, (w2, w1, t2, t1, y, x)
                 writes_by_x[x] = list(styles) + [t2]  # replace
 
-                assert (tn == "") and (wn == 0), (tn, wn, y, x)
-                writes_by_x[xn] = list(styles) + [" "]  # replace
+                assert (tf == "") and (wf == 0), (tf, wf, y, x)
+                writes_by_x[xf] = list(styles) + [" "]  # replace
 
             #
 
