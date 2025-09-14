@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 
 r"""
-usage: plus.py [-h] [--yolo] [--platform PLATFORM]
+usage: plus.py [-h] [--yolo] [--platform PLATFORM] [--theme THEME]
 
 directly manipulate your Terminal Window Screen Pane
 
 options:
   -h, --help           show this help message and exit
   --yolo               do what's popular now
-  --platform PLATFORM  run tweaked to fit a platform (default: local guess)
+  --platform PLATFORM  tweak into a platform ('apple' or 'google' or both or 'auto')
+  --theme THEME        tweak into a theme ('dark' or 'light' or 'auto')
 
 examples:
   bin/+
-  bin/plus.py --
-  bin/plus.py --yolo
-  bin/plus.py --platform=Apple
-  bin/plus.py --platform=Google
+  bin/plus.py --  # implies --yolo
+  bin/plus.py --platform=Apple --theme=light
+  bin/plus.py --platform=Google --theme=dark
 """
 
 # code reviewed by People, Black, Flake8, Mypy-Strict, & Pylance-Standard
@@ -68,6 +68,9 @@ flags_apple = sys.platform == "darwin"
 flags_google = bool(os.environ.get("CLOUD_SHELL", default_eq_None))
 
 
+themes = list()
+
+
 def main() -> None:
     """Run from the Shell Command Line, and exit into the Py Repl"""
 
@@ -81,12 +84,16 @@ def main() -> None:
     parser = ArgDocParser(doc, add_help=True)
 
     yolo_help = "do what's popular now"
-    platform_help = "run tweaked to fit a platform (default: local guess)"
+    platform_help = "tweak into a platform ('apple' or 'google' or both or 'auto')"
+    theme_help = "tweak into a theme ('dark' or 'light' or 'auto')"
 
     parser.add_argument("--yolo", action="count", help=yolo_help)
+
     parser.add_argument(
         "--platform", metavar="PLATFORM", dest="platforms", action="append", help=platform_help
     )
+
+    parser.add_argument("--theme", help=theme_help)
 
     argv = sys.argv[1:]
     if not argv:
@@ -95,6 +102,7 @@ def main() -> None:
 
     ns = parser.parse_args_if(argv)  # todo9: take Mouse into Sgr at Google
     platforms_fit_if(ns.platforms)
+    theme_fit_in(ns.theme)
 
     # Emulate having imported the enclosing Module as ./plus.py
 
@@ -137,7 +145,7 @@ def platforms_fit_if(platforms: list[str] | None) -> None:
 
     # Reject meaningless Platform Choices
 
-    defined_platforms = ["Apple", "Google", ""]
+    defined_platforms = ["Apple", "Auto", "Google"]
 
     if platforms:
         for platform in platforms:
@@ -169,6 +177,23 @@ def platforms_fit_if(platforms: list[str] | None) -> None:
 
     flags.apple = apple
     flags.google = google
+
+
+def theme_fit_in(theme: str | None) -> None:
+    """Fit to a theme, else print help and exit nonzero"""
+
+    defined_themes = ["Auto", "Dark", "Light"]
+
+    if theme is not None:
+        if theme.title() not in defined_themes:
+            (choice, choices) = (theme, defined_themes)
+
+            s = "plus.py: error:"
+            s += f" argument --theme: invalid choice: {choice!r} (choose from {choices})"
+            sys.stderr.write(f"{s}\n")
+            sys.exit(2)  # exits 2 for meaningless --theme choice
+
+    themes.append(theme)
 
 
 def try_something() -> None:
@@ -1077,6 +1102,13 @@ class ScreenEditor:
         if 55 in autolaunchers:
             pt.write_screen()
 
+        if 65 in autolaunchers:
+
+            self.write("\033[48;5;233m")
+            self.write("\033[38;5;46m")
+
+            self.write("\033[2J")
+
         if 66 in autolaunchers:
 
             self.write("\033[K")
@@ -1084,7 +1116,9 @@ class ScreenEditor:
             self.write("\033[K")
             self.print("Try ⌥-Click of  F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12")
             self.write("\033[K")
-            self.print("Try ⌥-Click of  <Jabberwocky>  <Quote>  <Conway>  ⚪  ⚫  🔴  🟥  ⬛")
+            self.print(
+                "Try ⌥-Click of  <Jabberwocky>  <7-Segment> <Quote>  <Conway>  ⚪  ⚫  🔴  🟥  ⬛"
+            )
             self.write("\033[K")
             self.print(
                 "Try  #24 on #005 White-on-Blue,  #050 on #000 Green-on-Black,  or  ⎋[M Plain"
@@ -1099,9 +1133,13 @@ class ScreenEditor:
             self.write("\033[K")  # moar vertical separation
             self.print()
 
-            x_width = pt.proxy_read_x_width()
-            mid_width = (x_width // 2) + (x_width % 2)
-            self.write(f"\033[{mid_width}G")
+            # x_width = pt.proxy_read_x_width()
+            # mid_width = (x_width // 2) + (x_width % 2)
+            # self.write(f"\033[{mid_width}G")
+
+            # self.write("\t")
+            # self.write("\033[4C")
+            self.write("\033[C")
 
         if 77 in autolaunchers:
             self.do_kdata_fn_f3()
@@ -1119,6 +1157,8 @@ class ScreenEditor:
                 break
 
         # self.print("Goodbye from Screen Editor")
+
+        # todo13: <??> <!!> <Clear> Button
 
     def read_eval_print_once(self) -> None:
         """Fetch & time & log 1 whole TerminalBytePacket, and then quit, else reply to it"""
@@ -2848,6 +2888,9 @@ class ScreenEditor:
 
         # Push a Command Word:  Jabberwocky, Quote
 
+        if self.push_to_7_segment(verb, x_widget=x_widget, y=y, x_wx=x_wx):
+            return True
+
         if self.push_to_jabberwocky(verb, x_widget=x_widget, y=y, x_wx=x_wx):
             return True
 
@@ -3299,6 +3342,179 @@ class ScreenEditor:
 
         self.write("\0338")
 
+    #
+    #
+    #
+
+    def push_to_7_segment(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
+        """Type out instances of TerminalSprite as Glyphs of a Huge Ascii-Art Font"""
+
+        casefold = verb.casefold()
+        if casefold != "7-Segment".casefold():
+            return False
+
+        ywx_styles = self.y_x_write_text_pressed(y=y, x=x_wx, text=x_widget)
+        self.run_7_segment_awhile()
+        self.y_x_write_text_released(y=y, x=x_wx, text=x_widget, styles=ywx_styles)
+
+        return True
+
+    def run_7_segment_awhile(self) -> None:
+        """Play with 7-Segment TerminalSprite's till quit"""
+
+        pt = self.proxy_terminal
+
+        self.print()
+        self.print()
+
+        row_y = pt.row_y
+        column_x = pt.column_x
+
+        dy_dx_by_digit = {
+            7: (0, 0),
+            8: (0, 1),
+            9: (0, 2),
+            4: (1, 0),
+            5: (1, 1),
+            6: (1, 2),
+            1: (2, 0),
+            2: (2, 1),
+            3: (2, 2),
+            0: (3, 0),
+        }
+
+        digit = -1
+        (y, x) = (-1, -1)
+
+        def digit_next() -> None:
+            nonlocal digit, y, x
+            digit += 1
+            (dy, dx) = dy_dx_by_digit[digit]
+            (y, x) = (row_y + dy * 9, column_x + 10 + dx * 10)
+
+        def self_y_x_text_write(text: str) -> None:
+            nonlocal y
+            themed = to_themed_text(text)
+            self.y_x_text_write(y, x=x, text=themed)
+            y += 1
+
+        def to_themed_text(text: str) -> str:
+            if "dark" in themes:  # todo14: 'if not flags.light:'  # todo14: Dark/ Light Button
+                return text
+            trans = str.maketrans("🔴🟥⚫⬛", "⚫⬛⚪⬜")
+            translate = text.translate(trans)
+            return translate
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴⬛⬛🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        digit_next()
+
+        self_y_x_text_write("⚫⬛⬛🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⚫⬛⬛🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⚫⬛⬛🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    ⬛")
+        self_y_x_text_write("🟥    ⬛")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴⬛⬛🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⚫⬛⬛🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    ⬛")
+        self_y_x_text_write("🟥    ⬛")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    ⬛")
+        self_y_x_text_write("🟥    ⬛")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⚫⬛⬛🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⚫⬛⬛🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        digit_next()
+
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🟥    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("⬛    🟥")
+        self_y_x_text_write("🔴🟥🟥🔴")
+
+        #
+
+        (y, x) = (row_y, column_x)
+        self.write(f"\033[{y};{x}H")  # todo14: call to move Y X without writing [H from caller
+
+        # todo14: macOS of is the Os theme light/ dark, is the Terminal theme light/ dark
+        # todo14: calculator buttons
+        # make it a Sprite, move by Arrows or Tab or Spacebar, drop it to make the next one
+        # backspace them
+
     def push_to_jabberwocky(self, verb: str, x_widget: str, y: int, x_wx: int) -> bool:
         """Write out a Random Word of Jabberwocky"""
 
@@ -3311,7 +3527,7 @@ class ScreenEditor:
         if casefold != "Jabberwocky".casefold():
             return False
 
-        # Show the <Jabberwocky> Button as Pressed
+        # Show the Button Press
 
         ywx_styles = self.y_x_write_text_pressed(y=y, x=x_wx, text=x_widget)
 
@@ -3333,12 +3549,12 @@ class ScreenEditor:
 
         self.write(split)
 
-        # Halt awhile, to keep the <Jabberwocky> Button shown as Pressed
+        # Halt awhile, to keep the Button shown as Pressed
 
         self.proxy_terminal.bytes_terminal.stdio.flush()
         time.sleep(0.033)
 
-        # Show the <Jabberwocky> Button as Released
+        # Show the Button Release
 
         self.y_x_write_text_released(y=y, x=x_wx, text=x_widget, styles=ywx_styles)
 
@@ -5731,7 +5947,7 @@ SCREEN_WRITER_HELP = r"""
 
         ⎋[⇧?1000;1006H till ⎋[⇧?1000;1006L for mouse ⎋[< {f};{x};{y} ⇧M to M of f = 0b⌃⌥⇧00
         or ⎋[⇧?1000 H L by itself, or 1005, 1006, or 1015
-
+æ
 """  # todo4: ⎋[B char-repeat, with an emulation for Google
 
 # Don't help with ⎋[C call for reply ⎋[⇧?1;2C  # 'Send Device Attributes (Primary DA)'
