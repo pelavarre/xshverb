@@ -3082,6 +3082,8 @@ def do_turtling(argv: list[str]) -> None:
     pcp = puck_color_picker
     ts = turtle_screen
 
+    ts.require_width_height(ts.min_width, height=ts.min_height)
+
     # Form Shell Args Parser
 
     doc = TURTLING_DOC
@@ -3774,6 +3776,11 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
     #
 
+    min_width: int = -1
+    min_height: int = -1
+
+    #
+
     def __init__(self) -> None:
 
         assert PuckWidth == 2  # needed above
@@ -3816,10 +3823,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert FrameHeight == 2
         assert FrameWidth == 4
 
-        min_width = FrameWidth + GameboardWidth + FrameWidth
-        min_height = 3 + GameboardHeight + SouthPanelHeight
+        self.min_width = FrameWidth + GameboardWidth + FrameWidth
+        self.min_height = 3 + GameboardHeight + SouthPanelHeight
 
-        self.require_width_height(min_width, height=min_height)
+        # self.require_width_height(min_width, height=min_height)
 
     def require_width_height(self, width: int, height: int) -> None:
         """Require the Terminal Screen Pane to be as wide and tall as the Game"""
