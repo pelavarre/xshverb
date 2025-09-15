@@ -650,11 +650,9 @@ Building out Shell Pipes as if people matter now, this is a good thing?
 
 ## Up online
 
-Built by:&nbsp;  VsCode ⇧⌘V Markdown: Open Preview
+Tested at VsCode ⇧⌘V Markdown: Open Preview
 <br>
-Questioned by:&nbsp;  https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
+Questioned by https://twitter.com/intent/tweet?text=/@PELaVarre+XShVerb
 <br>
-Posted as:&nbsp;  https://github.com/pelavarre/xshverb/blob/main/README.md
-<br>
-Copied from:&nbsp;  git clone https&ZeroWidthSpace;://github.com/pelavarre/xshverb.git
-<!-- git clone https://github.com/pelavarre/xshverb.git -->
+Posted as https://github.com/pelavarre/xshverb/blob/main/README.md
+<!-- Copied from:&nbsp;  git clone https://github.com/pelavarre/xshverb.git -->
