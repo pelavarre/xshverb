@@ -1,5 +1,11 @@
 things to do, futures to build
 
+16/Sep
+
+    |pq yaml should pretty-print it
+
+    |pq watch should work to show a date/time-stamp'ed log of changes
+
 6/Sep
 
     pq dedent should imply expandtab

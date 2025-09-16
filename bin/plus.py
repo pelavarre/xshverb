@@ -3672,6 +3672,11 @@ _UNSHIFTED_ARROW_ENCODES = (
 #
 
 
+BackBlue = "\033[48;5;21m"  # rgb #005
+BackGreen = "\033[48;5;46m"  # rgb #050
+BackRed = "\033[48;5;196m"  # rgb #500
+
+
 class SnuckLife:
     """Lead with one Sprite, and link more to follow in a chain"""
 
@@ -3710,6 +3715,14 @@ class SnuckLife:
             }
         }
 
+        writes_by_dy_dx = {
+            0: {
+                0: ("🟦",),  # Head
+                -2: ("🟩",),  # Body
+                -4: ("🟨",),  # Body
+            }
+        }
+
         (dy, dx) = (0, 2)  # todo12: pick .dy .dx out of .writes_by_dy_dx
 
         #
@@ -3731,9 +3744,14 @@ class SnuckLife:
 
         se = self.screen_editor
         pt = se.proxy_terminal
+        styles = pt.styles
 
         ts = self.terminal_sprite
         writes_by_dy_dx = self.writes_by_dy_dx
+
+        #
+
+        with_styles = list(styles)
 
         # Say Hello
 
@@ -3749,13 +3767,61 @@ class SnuckLife:
             se.print("Tab to step 8x Faster, ⇧Tab undo 8x Faster, ⌃D to quit")
             se.print()
             se.print()
+
+            se.print("    ⚪⚪⚪")
+            se.print("    ⚪⚪⚪")
+            se.print("    ⚪⚪⚪")
+            se.print()
+            se.print()
+            se.print()
+
+            se.print("   ⚪⚪⚪")
+            se.print("   ⚪⚪⚪")
+            se.print("   ⚪⚪⚪")
+            se.print()
+            se.print()
             se.print()
 
             (y, x) = (pt.row_y, pt.column_x)
             x4 = x + 2 * 2
+            x6 = x4 + 2  # starts a Snuck of 3 double-wide Tiles at X = 3
 
-            ts.y_x_leap_to(y=y, x=x4, writes_by_dy_dx=dict(writes_by_dy_dx))
-            self.yx = (y, x4)
+            # pt.__exit__(*sys.exc_info())  # todo13: pt.__exit__ shouldn't move the Cursor, se. can
+            # time.sleep(3)
+            # pt.__enter__()
+
+            self.snuck_head_point_ahead("")
+            ts.y_x_leap_to(y=y, x=x6, writes_by_dy_dx=dict(writes_by_dy_dx))
+            self.yx = (y, x6)
+
+            se.write("\033[4C")  # leaps across 6-Column Snake after writing Westmost 2 Columns
+
+            se.write("\033[m")
+            for style in with_styles:  # todo13: .y_x_leap_to should keep the Terminal Style still
+                se.write(style)
+            assert pt.styles == with_styles, (pt.styles, styles)
+
+            # se.print("⚪")
+
+            se.write("\033[6C")
+            se.print("⚪⚪")
+
+            # todo15: Moving 5 to the right, then ← ↑ repeated 3x
+            # todo15: Grow one step faster
+            # todo15: Hide the Terminal Cursor while moving
+            # todo15: Escape from folded onto self, by losing a tail tile
+
+            # todo15: Add a Button to warp the Snuck home
+
+            # todo14: Stop so often printing unbound Mouse Strokes from intense Keyboard
+            # todo14: ⎋[⇧<8;1;29M  ⎋[⇧<8;14;29M  ⎋[⇧<8;28;29M
+
+            # todo14: Grow wider if you keep eating when old, not longer
+
+            # todo13: Run with Arrows on the Head for debug, when moving and when colliding
+            # todo13: Run with Base-36 Upper Digits in the Tiles for debug
+
+            # todo12: Add snapshots, before a step-by-step Undo
 
         # Draw the first Screen
 
@@ -3771,8 +3837,14 @@ class SnuckLife:
             (y, x) = (pt.row_y, pt.column_x)
             (y, x) = (5, 15)  # last wins
 
+            self.snuck_head_point_ahead("")
             ts.y_x_leap_to(y=y, x=x, writes_by_dy_dx=dict(writes_by_dy_dx))
             self.yx = (y, x)
+
+            se.write("\033[m")
+            for style in with_styles:
+                se.write(style)
+            assert pt.styles == with_styles, (pt.styles, styles)
 
             yn = pt.row_y + 4
             xn = pt.column_x - 1
@@ -3826,6 +3898,15 @@ class SnuckLife:
             # todo13: stop losing the BackColor sometimes
             # todo13: test with ⌃L after every step
 
+        with_exit_styles = list(pt.styles)  # todo13: more elegantly remove Snake at exit
+
+        ts.y_x_leap_to(y=32100 - 1000, x=32100 - 1000, writes_by_dy_dx=dict(writes_by_dy_dx))
+
+        se.write("\033[m")
+        for style in with_exit_styles:
+            se.write(style)
+        assert pt.styles == with_exit_styles, (pt.styles, styles)
+
         # Say Goodbye
 
         se.print()
@@ -3834,6 +3915,67 @@ class SnuckLife:
         # todo7: find & eat misaligned Food, don't just fly over it
         # todo11: option for a fully legible Snuck, with ⬆️ ⬇️ ⬅️ ➡️  as its Head
         # todo11: initial Snuck Food and later Snuck Food ?  # 🔴  🔵  🟠  🟡  🟢  🟣  🟤
+
+    def snuck_head_point_ahead(self, backcolor: str) -> None:
+
+        writes_by_dy_dx = self.writes_by_dy_dx
+        dy = self.dy
+        dx = self.dx
+
+        w = writes_by_dy_dx[0][0]
+        assert w, (w,)
+
+        wn = w[-1]
+
+        # assert wn in ("🟦", "⬆️", "⬇️", "⬅️", "➡️"), (w,)
+        assert wn in ("⬅", "⬆", "⬇", "⮕", "🟦"), (w,)
+
+        down: tuple[str, ...]
+        left: tuple[str, ...]
+        right: tuple[str, ...]
+        up: tuple[str, ...]
+
+        down = ("⬇️",)  # todo14: make these 'Variation Selector-16' Arrows count as 2 not 3 Columns
+        left = ("➡️",)
+        right = ("⬅️",)  # ["⬇️", "➡️", "⬅️", "⬆️"]
+        up = ("⬆️",)
+
+        down = ("  ", "\b\b", "⬇️")
+        left = ("  ", "\b\b", "⬅️")
+        right = ("  ", "\b\b", "➡️")
+        up = ("  ", "\b\b", "⬆️")
+
+        down = (BackBlue, "⬇")  # todo13: Give Backcolor to East-half of Head, not only West-half
+        left = (BackBlue, "⬅")  # todo13: Eat aligned without leaving behind East-half Backcolor
+        right = (BackBlue, "⮕")
+        up = (BackBlue, "⬆")
+
+        down = (BackBlue, "  ", "\b\b", BackBlue, "⬇")  # todo13: don't leave Backcolor track behind
+        left = (BackBlue, "  ", "\b\b", BackBlue, "⬅")
+        right = (BackBlue, "  ", "\b\b", BackBlue, "⮕")
+        up = (BackBlue, "  ", "\b\b", BackBlue, "⬆")
+
+        down = (BackBlue, "  ", "\b\b", "⬇")
+        left = (BackBlue, "  ", "\b\b", "⬅")
+        right = (BackBlue, "  ", "\b\b", "⮕")
+        up = (BackBlue, "  ", "\b\b", "⬆")
+
+        down = (backcolor, "  ", "\b\b", "⬇")
+        left = (backcolor, "  ", "\b\b", "⬅")
+        right = (backcolor, "  ", "\b\b", "⮕")
+        up = (backcolor, "  ", "\b\b", "⬆")
+
+        if dy:
+            assert not dx, (dx, dy)
+
+            w = down if (dy > 0) else up
+
+        else:
+            assert dx, (dx, dy)
+
+            w = right if (dx > 0) else left
+
+        writes_by_dy_dx[0][0] = w
 
     def do_snuck_step_left(self) -> None:
         """Turn Left"""
@@ -3868,6 +4010,7 @@ class SnuckLife:
 
         se = self.screen_editor
         pt = se.proxy_terminal
+        styles = pt.styles
 
         dy = self.dy
         dx = self.dx
@@ -3881,18 +4024,30 @@ class SnuckLife:
         assert DECSC == "\033" "7"  # DECSC 7 Cursor Save
         assert DECRC == "\033" "8"  # DECRC 8 Cursor Restore
 
+        with_styles = list(styles)
+
         # Visibly collide with Snuck Tiles when found beneath Head Tile
 
         (y, x) = yx
+
+        x1 = x + 1
+        yx1 = (y, x1)
 
         ydxd = (yd, xd) = (y + dy, x + dx)
         ahead = pt.proxy_yx_read_one_x_write(yd, x=xd, default=" ")
 
         if ahead in tile_by_food.values():
 
+            self.snuck_head_point_ahead(BackRed)
+
             se.write("\0337")
-            se.y_x_text_write(y, x=x, text="🟪")
+            ts.y_x_leap_to(y, x=x, writes_by_dy_dx=writes_by_dy_dx)
             se.write("\0338")
+
+            se.write("\033[m")
+            for style in with_styles:
+                se.write(style)
+            assert pt.styles == styles, (pt.styles, styles)
 
             return
 
@@ -3914,11 +4069,17 @@ class SnuckLife:
         if foods and (foods[-1] in tile_by_food.keys()):
             food = foods[-1]
 
-            tile = tile_by_food[food]
+            tile = tile_by_food[food]  # todo13: pairs of Halfwidth as Tile
+            if len(yexe_pairs) == 3:
+                tile = "🟧"
+            elif len(yexe_pairs) == 4:
+                tile = "🟫"
+
             yexe_pairs.append(yzxy_pairs_tail)
             dydx_pairs_writes = dydx_pairs_writes + ((tile,),)
 
             ts.reads_by_yx[yx] = foods[:-1] + (" ",)  # todo12: eaten food fabricated Space
+            ts.reads_by_yx[yx1] = foods[:-1] + (" ",)  # todo12: eaten food fabricated Space
 
         tprint(f"{yexe_pairs=}  # .do_snuck_step_ahead")
 
@@ -3927,10 +4088,12 @@ class SnuckLife:
             (ye, xe) = yexe
             (dy, dx) = (ye - yd, xe - xd)
 
-            dy_d = d[dy] if (dy in d.keys()) else dict()
-            d[dy] = dy_d
+            if not dy in d.keys():
+                d[dy] = dict()
 
+            dy_d = d[dy]
             assert dx not in dy_d.keys(), (dx, dy_d.keys())
+
             dy_d[dx] = yexe_writes
 
         self.writes_by_dy_dx = d  # replace
@@ -3941,9 +4104,16 @@ class SnuckLife:
 
         tprint(f"{yd=} {xd=}  # .do_snuck_step_ahead")
 
+        self.snuck_head_point_ahead("")
+
         se.write("\0337")
         ts.y_x_leap_to(yd, x=xd, writes_by_dy_dx=d)
         se.write("\0338")
+
+        se.write("\033[m")
+        for style in with_styles:
+            se.write(style)
+        assert pt.styles == styles, (pt.styles, styles)
 
         self.yx = ydxd
 
@@ -4045,29 +4215,7 @@ class TerminalSprite:
 
         self.yx_write_pairs = stamped_yx_write_pairs
 
-    def y_x_uncover_at(self, y: int, x: int) -> None:
-        """Write again what was overwitten, on the way towards dropping this memory"""
-
-        pt = self.proxy_terminal
-
-        assert CUP_Y_X == "\033[" "{};{}" "H"
-
-        yx = (y, x)
-        yx_reads = self.reads_by_yx[yx]
-
-        defaults: tuple[str, ...]
-        defaults = ("\033[48;5;255m", " ")  # todo12: name fabricated blank color
-        defaults = (" ",)  # last wins
-
-        reads = yx_reads if yx_reads else defaults
-
-        pt.proxy_write(f"\033[{y};{x}H")  # for .y_x_uncover_at
-
-        for read in reads[:-1]:
-            pt.proxy_write(read)
-
-        read = reads[-1]
-        pt.proxy_write(read)
+        # doesn't end with pt.proxy_write("\033[m")
 
     def y_x_stamp_at(  # ) -> ...:
         self, y: int, x: int, writes_by_dy_dx: dict[int, dict[int, tuple[str, ...]]]
@@ -4083,27 +4231,34 @@ class TerminalSprite:
                 xd = x + dx
 
                 ydxd_writes = writes_by_dy_dx[dy][dx]
-                if ydxd_writes:
-                    for ydxd_write in ydxd_writes[:-1]:
-                        pt.proxy_write(ydxd_write)
 
-                    yx_pairs = self.add_y_x_text_write(yd, x=xd, text=ydxd_writes[-1])
+                if ydxd_writes:
+
+                    assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
+                    pt.proxy_write(f"\033[{yd};{xd}H")  # for .y_x_stamp_at
+
+                    yx_pairs = self.add_writes(ydxd_writes)
+
                     yx_list.extend(yx_pairs)
 
         yx_pairs = tuple(sorted(set(yx_list)))
 
         return yx_pairs
 
-    def add_y_x_text_write(self, y: int, x: int, text: str) -> tuple[tuple[int, int], ...]:
+    def add_writes(self, writes: tuple[str, ...]) -> tuple[tuple[int, int], ...]:
         """Add some Text at one Y X Place"""
 
         pt = self.proxy_terminal
 
+        text = writes[-1]
         assert text.isprintable(), (text,)  # doesn't duck typing
-        assert CUP_Y_X == "\033[" "{}" ";" "{}" "H"
-        pt.proxy_write(f"\033[{y};{x}H")  # for .proxy_y_x_text_write
 
         yx_pairs = self.read_before_add(text)
+
+        pt.proxy_write("\033[m")
+        for write in writes[:-1]:
+            pt.proxy_write(write)
+
         pt.proxy_write_printable(text)
 
         return yx_pairs
@@ -4175,6 +4330,31 @@ class TerminalSprite:
         yx = (y, x)
         if yx not in reads_by_yx.keys():
             reads_by_yx[yx] = reads
+
+    def y_x_uncover_at(self, y: int, x: int) -> None:
+        """Write again what was overwitten, on the way towards dropping this memory"""
+
+        pt = self.proxy_terminal
+
+        assert CUP_Y_X == "\033[" "{};{}" "H"
+
+        yx = (y, x)
+        yx_reads = self.reads_by_yx[yx]
+
+        defaults: tuple[str, ...]
+        defaults = ("\033[48;5;255m", " ")  # todo12: name fabricated blank color
+        defaults = (" ",)  # last wins
+
+        reads = yx_reads if yx_reads else defaults
+
+        pt.proxy_write(f"\033[{y};{x}H")  # for .y_x_uncover_at
+
+        pt.proxy_write("\033[m")
+        for read in reads[:-1]:
+            pt.proxy_write(read)
+
+        read = reads[-1]
+        pt.proxy_write(read)
 
 
 class ProxyTerminal:
@@ -4664,7 +4844,11 @@ class ProxyTerminal:
 
         # Split fitting from not-fitting
 
-        tprint(f"{row_y};{column_x} {repr(text)[1:-1]}")
+        rep = repr(text)[1:-1]
+        if " " in rep:
+            tprint(f"{row_y};{column_x}", repr(text))
+        else:
+            tprint(f"{row_y};{column_x}", rep)
 
         start = ""
         end = ""
@@ -4721,6 +4905,9 @@ class ProxyTerminal:
 
                 self.write_out(t)  # trust caller to .tprint enough
 
+                # todo14: insert \x20\x20\b\b for backcolor of double-wide chars
+                # todo14: (when not mirrored as that already)
+
         # Always do write the Mirrors
 
         matching = self._mirror_write_(t)
@@ -4739,14 +4926,32 @@ class ProxyTerminal:
         g_width = 0
         for t in text:
             eaw = unicodedata.east_asian_width(t)
+
+            if t in ("⬅", "⮕", "⬆", "⬇"):
+                assert eaw == "N" == "Normal"[0], (t, eaw)
+
+                eaw = "W"  # Mypy dislikes you saying:  eaw = "Wide"[0]
+                assert eaw == "W" == "Wide"[0]
+
+                # todo13: .eaw varies by context, like not "W" in 
+
             g_width += 1
-            if eaw in ("F", "W"):
+            if eaw in ("Fullwidth"[0], "Wide"[0]):
                 g_width += 1
 
         if len(text) <= 1:
             assert g_width in (0, 1, 2), (g_width, text)
 
         return g_width
+
+        # 'N' Neutral = 1 Column
+        # 'Na' Narrow = 1 Column
+        # 'H' Halfwidth = 1 Column
+        #
+        # 'F' Fullwidth = 2 Columns
+        # 'W' Wide = 2 Columns
+        #
+        # 'A' Ambiguous = often 1 Column
 
     #
     # Write into the Mirrors
@@ -4757,10 +4962,14 @@ class ProxyTerminal:
 
         matching = self._mirror_write_(text)
 
-        if matching:
-            tprint(f"{y};{x}", repr(text)[1:-1])
-        else:
+        rep = repr(text)[1:-1]
+        if not matching:
             tprint(f"{y};{x} No mirror of {text!r}")
+        else:
+            if " " in rep:
+                tprint(f"{y};{x}", repr(text))
+            else:
+                tprint(f"{y};{x}", rep)
 
     def _mirror_write_(self, text: str) -> bool:
         """Mirror the Screen Panel"""
@@ -4924,7 +5133,7 @@ class ProxyTerminal:
 
                     mirrored = 0
                     for _ in range(pn):
-                        if not self._mirror_leap_bytes_(sdata_pack):
+                        if self._mirror_leap_bytes_(sdata_pack):
                             mirrored += 1
 
                     if mirrored < pn:
