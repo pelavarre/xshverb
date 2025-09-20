@@ -1073,10 +1073,7 @@ class ScreenEditor:
 
         # Prompt at Launch  # todo4: 'with' Context Handlers to undo Autolaunchers
 
-        autolaunchers = [11, 21, 99]
-        autolaunchers = [11, 21, 32, 66, 99]
-        # autolaunchers = [11, 21, 32, 77, 99]
-        # autolaunchers = [11, 32, 77, 99]  # last wins
+        autolaunchers = [11, 32, 66, 99]
 
         if 11 in autolaunchers:
             pt.proxy_read_row_y_column_x()
