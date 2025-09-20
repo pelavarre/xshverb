@@ -178,6 +178,8 @@ def platforms_fit_if(platforms: list[str] | None) -> None:
     flags.apple = apple
     flags.google = google
 
+    # todo: --platform=iterm2 --platform=iterm could change what --platform=apple means
+
 
 def theme_fit_in(theme: str | None) -> None:
     """Fit to a theme, else print help and exit nonzero"""
@@ -2511,7 +2513,10 @@ class ScreenEditor:
 
         # Run like the basic ScreenEditor, but with Keyboard Chords bound to ConwayLife
 
-        sl = SnuckLife(screen_editor=self)
+        if not snuck_lifes:
+            sl = SnuckLife(screen_editor=self)
+        else:
+            sl = snuck_lifes[-1]
 
         func_by_str = dict(with_func_by_str)
         snuck_func_by_str = sl.form_snuck_func_by_str()
@@ -3675,7 +3680,10 @@ BackGreen = "\033[48;5;46m"  # rgb #050
 BackRed = "\033[48;5;196m"  # rgb #500
 
 
-class SnuckLife:
+snuck_lifes = list()
+
+
+class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenEditor ?
     """Lead with one Sprite, and link more to follow in a chain"""
 
     screen_editor: ScreenEditor
@@ -3687,6 +3695,8 @@ class SnuckLife:
     dx: int
 
     def __init__(self, screen_editor: ScreenEditor) -> None:
+
+        snuck_lifes.append(self)
 
         se = screen_editor
         pt = se.proxy_terminal
@@ -3747,6 +3757,8 @@ class SnuckLife:
         ts = self.terminal_sprite
         writes_by_dy_dx = self.writes_by_dy_dx
 
+        yx = self.yx
+
         #
 
         with_styles = list(styles)
@@ -3754,6 +3766,8 @@ class SnuckLife:
         # Say Hello
 
         autolaunchers = [81]
+        if yx != (-1, -1):
+            autolaunchers = [97]
 
         if 81 in autolaunchers:
 
@@ -3884,6 +3898,19 @@ class SnuckLife:
 
             for _ in Jabberwocky.splitlines()[:6]:  # todo12: no need to split  # and why 6?
                 se.print(_)
+
+        #
+
+        if 97 in autolaunchers:
+
+            with_exit_styles = list(pt.styles)  # todo13: more elegantly remove Snake at exit
+
+            ts.y_x_leap_to(y=yx[0], x=yx[-1], writes_by_dy_dx=dict(writes_by_dy_dx))
+
+            se.write("\033[m")
+            for style in with_exit_styles:
+                se.write(style)
+            assert pt.styles == with_exit_styles, (pt.styles, styles)
 
         # Walk one step after another
 
