@@ -1278,10 +1278,11 @@ class ScreenEditor:
             if not pack:
                 self.arrows = 0  # written only by Init & this Def
 
-                pack = self.read_arrows_as_byte_packet()  # todo: say n > 1 ?
-                assert pack, (pack,)
+                if n > 2:  # rejects mashing the Arrows Keypad as a Mouse Stroke
+                    pack = self.read_arrows_as_byte_packet()
+                    assert pack, (pack,)
 
-                return (pack, n)
+                    return (pack, n)
 
         t1 = time.time()
 
