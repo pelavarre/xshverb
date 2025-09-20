@@ -2537,7 +2537,7 @@ class ScreenEditor:
         xshverb = cwd / "xshverb.py"
         assert xshverb.exists(), (xshverb,)
 
-        argv = [str(xshverb), "turtling"]
+        argv = [sys.executable, str(xshverb), "turtling"]
 
         self.__exit__(*sys.exc_info())
         subprocess.run(argv)
@@ -4088,7 +4088,7 @@ class SnuckLife:
             (ye, xe) = yexe
             (dy, dx) = (ye - yd, xe - xd)
 
-            if not dy in d.keys():
+            if dy not in d.keys():
                 d[dy] = dict()
 
             dy_d = d[dy]
@@ -4933,7 +4933,7 @@ class ProxyTerminal:
                 eaw = "W"  # Mypy dislikes you saying:  eaw = "Wide"[0]
                 assert eaw == "W" == "Wide"[0]
 
-                # todo13: .eaw varies by context, like not "W" in 
+                # todo13: .eaw varies by context, like not "W" in
 
             g_width += 1
             if eaw in ("Fullwidth"[0], "Wide"[0]):
