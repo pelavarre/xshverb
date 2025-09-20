@@ -4418,7 +4418,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         try:
             while True:
-                self.puck_try_play(with_tcgetattr)
+                self.puck_try_play()
         except SystemExit:
             pass
         finally:
@@ -4431,7 +4431,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         self.chat_line_break()
         eprint("Thank you")
 
-    def puck_try_play(self, with_tcgetattr: list[int]) -> None:  # FIXME  # noqa C901
+    def puck_try_play(self) -> None:  # FIXME  # noqa C901
         """Take in Keyboard Chords to move the Puck, till Return pressed"""
 
         fileno = self.fileno
@@ -4459,15 +4459,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         if byte0 == b" ":  # Spacebar
 
-            # when = termios.TCSADRAIN
-            # attributes = with_tcgetattr
-            # termios.tcsetattr(fileno, when, attributes)
-
             self.puck_move()
-
-            # with_tcgetattr_ = termios.tcgetattr(fileno)
-            # tty.setraw(fileno, when=termios.TCSADRAIN)  # vs default when=termios.TCSAFLUSH
-            # assert with_tcgetattr_ == with_tcgetattr, (with_tcgetattr_, with_tcgetattr)
 
             return
 
@@ -4486,59 +4478,101 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         if byte0 == b"\x1b":
             byte1 = os.read(fileno, 1)
 
-            if byte1 == b"[":
-                byte2 = os.read(fileno, 1)
-
-                assert PuckHeight == 1
-                assert PuckWidth == 2
-
-                # ← ↑ → ↓ Arrows
-
-                if byte2 == b"B":  # ↓ Down
-                    dy, dx = self.find_puck_dy_dx(dy=1, dx=0)
-                    if (dy, dx) != (0, 0):
-                        self.puck_warp_to_dy_dx(dy, dx=dx)
-                        self.puck_stomp_if()
-                        return
-                elif byte2 == b"D":  # ← Left
-                    dy, dx = self.find_puck_dy_dx(dy=0, dx=-2)
-                    if (dy, dx) != (0, 0):
-                        self.puck_warp_to_dy_dx(dy, dx=dx)
-                        self.puck_stomp_if()
-                        return
-                elif byte2 == b"C":  # → Right
-                    dy, dx = self.find_puck_dy_dx(dy=0, dx=2)
-                    if (dy, dx) != (0, 0):
-                        self.puck_warp_to_dy_dx(dy, dx=dx)
-                        self.puck_stomp_if()
-                        return
-                elif byte2 == b"A":  # ↑ Up
-                    dy, dx = self.find_puck_dy_dx(dy=-1, dx=0)
-                    if (dy, dx) != (0, 0):
-                        self.puck_warp_to_dy_dx(dy, dx=dx)
-                        self.puck_stomp_if()
-                        return
-
-                # ⇧ Fn ← ↑ → ↓ Arrows
-
-                elif byte2 == b"6":
-                    byte3 = os.read(fileno, 1)
-                    if byte3 == b"~":  # ⇧ Fn ↓ Down
-                        self.puck_step_down_else_wrap()
-                        return
-                elif byte2 == b"H":  # ⇧ Fn ← Left
-                    self.puck_step_left_else_wrap()
-                    return
-                elif byte2 == b"F":  # ⇧ Fn → Right
-                    self.puck_step_right_else_wrap()
-                    return
-                elif byte2 == b"5":
-                    byte3 = os.read(fileno, 1)
-                    if byte3 == b"~":  # ⇧ Fn ↑ Up
-                        self.puck_step_up_else_wrap()
-                        return
+            self.puck_try_play_esc_bytes(byte0 + byte1)
+            return
 
         stdio.write("\a")
+
+    def puck_try_play_esc_bytes(self, kbytes: bytes) -> None:
+        """Take in an Esc Byte and more to move the Puck, else ring the Bell"""
+
+        stdio = self.stdio
+
+        assert PuckHeight == 1
+        assert PuckWidth == 2
+
+        kcaps = self.puck_close_kbytes(kbytes)
+
+        if not kcaps:
+            stdio.write("\a")
+            return
+
+        # Unshifted Arrows ← ↑ → ↓
+
+        if kcaps in ("←", "↑", "→", "↓"):
+
+            if kcaps == "↓":  # ↓ Down
+                dy, dx = self.find_puck_dy_dx(dy=1, dx=0)
+                if (dy, dx) != (0, 0):
+                    self.puck_warp_to_dy_dx(dy, dx=dx)
+                    self.puck_stomp_if()
+                    return
+            elif kcaps == "←":  # ← Left
+                dy, dx = self.find_puck_dy_dx(dy=0, dx=-2)
+                if (dy, dx) != (0, 0):
+                    self.puck_warp_to_dy_dx(dy, dx=dx)
+                    self.puck_stomp_if()
+                    return
+            elif kcaps == "→":  # → Right
+                dy, dx = self.find_puck_dy_dx(dy=0, dx=2)
+                if (dy, dx) != (0, 0):
+                    self.puck_warp_to_dy_dx(dy, dx=dx)
+                    self.puck_stomp_if()
+                    return
+            elif kcaps == "↑":  # ↑ Up
+                dy, dx = self.find_puck_dy_dx(dy=-1, dx=0)
+                if (dy, dx) != (0, 0):
+                    self.puck_warp_to_dy_dx(dy, dx=dx)
+                    self.puck_stomp_if()
+                    return
+
+            stdio.write("\a")
+            return
+
+        # Shifted Arrows ← ↑ → ↓
+
+        if "↓" in kcaps:  # ↓ Down
+            self.puck_step_down_else_wrap()
+            return
+        elif "←" in kcaps:  # ← Left
+            self.puck_step_left_else_wrap()
+            return
+        elif "→" in kcaps:  # → Right
+            self.puck_step_right_else_wrap()
+            return
+        elif "↑" in kcaps:  # ↑ Up
+            self.puck_step_up_else_wrap()
+            return
+
+        stdio.write("\a")
+
+    def puck_close_kbytes(self, kbytes: bytes) -> str:
+        """Take in an Esc Byte and more to move the Puck, else ring the Bell"""
+
+        fileno = self.fileno
+
+        kcap_by_kchars = KCAP_BY_KCHARS
+
+        while True:
+
+            found = False
+            for kcodes, kcaps in kcap_by_kchars.items():
+                kcodebytes = kcodes.encode()
+
+                if kbytes == kcodebytes:
+                    # pathlib.Path(f"__pycache__/t.trace").open("a").write(f"{kbytes=} {kcaps=}\n")
+                    return kcaps
+
+                if kcodebytes.startswith(kbytes):
+                    found = True
+                    break
+
+            if found:
+                byten = os.read(fileno, 1)
+                kbytes += byten
+                continue
+
+            return ""
 
     def puck_rows_write(self) -> None:
         """Write the Rows of the Gameboard"""
@@ -5948,6 +5982,128 @@ def pathlib_path_read_version(pathname: str) -> str:
     return version
 
     # 0.15.255
+
+
+#
+# Amp up Import Select, or Import Termios, or Import Tty
+#
+
+
+# Encode each Key Chord as a Str without a " " Space in it
+
+KCAP_SEP = " "  # separates '⇧Tab' from '⇧T a b', '⎋⇧FnX' from '⎋⇧Fn X', etc
+
+KCAP_BY_KCHARS = {  # r"←|↑|→|↓" and so on  # ⌃ ⌥ ⇧ ⌃⌥ ⌃⇧ ⌥⇧ ⌃⌥⇧ and so on
+    "\x00": "⌃Spacebar",  # ⌃@  # ⌃⇧2
+    "\x09": "Tab",  # '\t' ⇥
+    "\x0d": "Return",  # '\r' ⏎
+    # "\033": "⎋",  # Esc  # Meta  # includes ⎋Spacebar ⎋Tab ⎋Return ⎋Delete without ⌥
+    "\033" "\x01": "⌥⇧Fn←",  # ⎋⇧Fn←   # coded with ⌃A
+    "\033" "\x03": "⎋FnReturn",  # coded with ⌃C  # not ⌥FnReturn
+    "\033" "\x04": "⌥⇧Fn→",  # ⎋⇧Fn→   # coded with ⌃D
+    "\033" "\x08": "⎋⌃Delete",  # ⎋⌃Delete  # coded with ⌃H  # aka \b
+    "\033" "\x0b": "⌥⇧Fn↑",  # ⎋⇧Fn↑   # coded with ⌃K
+    "\033" "\x0c": "⌥⇧Fn↓",  # ⎋⇧Fn↓  # coded with ⌃L  # aka \f
+    "\033" "\x10": "⎋⇧Fn",  # ⎋ Meta ⇧ Shift of FnF1..FnF12  # not ⌥⇧Fn  # coded with ⌃P
+    # "\033" "\033": "⎋⎋",  # Meta Esc  # not ⌥⎋
+    "\033" "\033O" "A": "⌃⌥↑",  # ESC SS3 ⇧A  # Google
+    "\033" "\033O" "B": "⌃⌥↓",  # ESC SS3 ⇧B  # Google
+    "\033" "\033O" "C": "⌃⌥→",  # ESC SS3 ⇧C  # Google
+    "\033" "\033O" "D": "⌃⌥←",  # ESC SS3 ⇧D  # Google
+    "\033" "\033[" "3;5~": "⎋⌃FnDelete",  # ⌥⌃FnDelete
+    "\033" "\033[" "A": "⌥↑",  # CSI 04/01 Cursor Up (CUU)  # Option-as-Meta  # Google
+    "\033" "\033[" "B": "⌥↓",  # CSI 04/02 Cursor Down (CUD)  # Option-as-Meta  # Google
+    "\033" "\033[" "C": "⌥→",  # CSI 04/03 Cursor [Forward] Right (CUF_X)  # Google
+    "\033" "\033[" "D": "⌥←",  # CSI 04/04 Cursor [Back] Left (CUB_X)  # Google
+    "\033" "\033[" "Z": "⎋⇧Tab",  # ⇤  # CSI 05/10 CBT  # not ⌥⇧Tab
+    "\033" "\x28": "⎋FnDelete",  # not ⌥FnDelete
+    "\033O" "P": "F1",  # SS3 ⇧P
+    "\033O" "Q": "F2",  # SS3 ⇧Q
+    "\033O" "R": "F3",  # SS3 ⇧R
+    "\033O" "S": "F4",  # SS3 ⇧S
+    "\033[" "15~": "F5",  # Esc 07/14 is LS1R, but CSI 07/14 is unnamed
+    "\033[" "17~": "F6",  # ⌥F1  # ⎋F1
+    "\033[" "18~": "F7",  # ⌥F2  # ⎋F2
+    "\033[" "19~": "F8",  # ⌥F3  # ⎋F3
+    "\033[" "1;2A": "⇧↑",  # iTerm2 Apple
+    "\033[" "1;2B": "⇧↓",  # iTerm2 Apple
+    "\033[" "1;2C": "⇧→",  # CSI 04/03 Cursor [Forward] Right (CUF_YX) Y=1 X=2  # Apple
+    "\033[" "1;2D": "⇧←",  # CSI 04/04 Cursor [Back] Left (CUB_YX) Y=1 X=2  # Apple
+    "\033[" "1;2F": "⇧Fn→",  # iTerm2 Apple
+    "\033[" "1;2H": "⇧Fn←",  # iTerm2 Apple
+    "\033[" "1;3A": "⌥↑",  # iTerm2 Apple
+    "\033[" "1;3B": "⌥↓",  # iTerm2 Apple
+    "\033[" "1;3C": "⌥→",  # iTerm2 Apple
+    "\033[" "1;3D": "⌥←",  # iTerm2 Apple
+    "\033[" "1;3F": "⌥Fn→",  # iTerm2 Apple
+    "\033[" "1;3H": "⌥Fn←",  # iTerm2 Apple
+    "\033[" "1;4A": "⌥⇧↑",  # iTerm2 Apple
+    "\033[" "1;4B": "⌥⇧↓",  # iTerm2 Apple
+    "\033[" "1;4C": "⌥⇧→",  # iTerm2 Apple
+    "\033[" "1;4D": "⌥⇧←",  # iTerm2 Apple
+    "\033[" "1;4F": "⌥⇧Fn→",  # iTerm2 Apple
+    "\033[" "1;4H": "⌥⇧Fn←",  # iTerm2 Apple
+    "\033[" "1;6A": "⌃⇧↑",  # iTerm2 Apple
+    "\033[" "1;6B": "⌃⇧↓",  # iTerm2 Apple
+    "\033[" "1;6C": "⌃⇧→",  # iTerm2 Apple
+    "\033[" "1;6D": "⌃⇧←",  # iTerm2 Apple
+    "\033[" "1;7A": "⌃⌥↑",  # iTerm2 Apple
+    "\033[" "1;7B": "⌃⌥↓",  # iTerm2 Apple
+    "\033[" "1;7C": "⌃⌥→",  # iTerm2 Apple
+    "\033[" "1;7D": "⌃⌥←",  # iTerm2 Apple
+    "\033[" "1;7F": "⌃⌥Fn←",  # iTerm2 Apple
+    "\033[" "1;7H": "⌃⌥Fn→",  # iTerm2 Apple
+    "\033[" "1;8A": "⌃⌥⇧↑",  # iTerm2 Apple
+    "\033[" "1;8B": "⌃⌥⇧↓",  # iTerm2 Apple
+    "\033[" "1;8C": "⌃⌥⇧→",  # iTerm2 Apple
+    "\033[" "1;8D": "⌃⌥⇧←",  # iTerm2 Apple
+    "\033[" "20~": "F9",  # ⌥F4  # ⎋F4
+    "\033[" "21~": "F10",  # ⌥F5  # ⎋F5
+    "\033[" "23~": "F11",  # ⌥F6  # ⎋F6  # Apple takes F11
+    "\033[" "24~": "F12",  # ⌥F7  # ⎋F7
+    "\033[" "25~": "⇧F5",  # ⌥F8  # ⎋F8
+    "\033[" "26~": "⇧F6",  # ⌥F9  # ⎋F9
+    "\033[" "28~": "⇧F7",  # ⌥F10  # ⎋F10
+    "\033[" "29~": "⇧F8",  # ⌥F11  # ⎋F11
+    "\033[" "31~": "⇧F9",  # ⌥F12  # ⎋F12
+    "\033[" "32~": "⇧F10",
+    "\033[" "33~": "⇧F11",
+    "\033[" "34~": "⇧F12",
+    "\033[" "3;2~": "⇧FnDelete",
+    "\033[" "3;5~": "⌃FnDelete",
+    "\033[" "3~": "FnDelete",
+    "\033[" "5;3~": "⌥Fn↑",  # iTerm2 Apple
+    "\033[" "5;4~": "⌥⇧Fn↑",  # iTerm2 Apple
+    "\033[" "5;7~": "⌃⌥Fn↑",  # iTerm2 Apple
+    "\033[" "5~": "⇧Fn↑",  # Apple
+    "\033[" "6;3~": "⌥Fn↓",  # iTerm2 Apple
+    "\033[" "6;4~": "⌥⇧Fn↓",  # iTerm2 Apple
+    "\033[" "6;7~": "⌃⌥Fn↓",  # iTerm2 Apple
+    "\033[" "6~": "⇧Fn↓",  # Apple
+    "\033[" "A": "↑",  # CSI 04/01 Cursor Up (CUU)  # also ⌥↑ Apple
+    "\033[" "B": "↓",  # CSI 04/02 Cursor Down (CUD)  # also ⌥↓ Apple
+    "\033[" "C": "→",  # CSI 04/03 Cursor Right [Forward] (CUF)  # also ⌥→ Apple
+    "\033[" "D": "←",  # CSI 04/04 Cursor [Back] Left (CUB)  # also ⌥← Apple
+    "\033[" "F": "⇧Fn→",  # Apple  # CSI 04/06 Cursor Preceding Line (CPL)
+    "\033[" "H": "⇧Fn←",  # Apple  # CSI 04/08 Cursor Position (CUP)
+    "\033[" "Z": "⇧Tab",  # ⇤  # CSI 05/10 Cursor Backward Tabulation (CBT)
+    "\033" "b": "⌥←",  # ⎋B  # ⎋←  # Emacs M-b Backword-Word  # Apple
+    "\033" "f": "⌥→",  # ⎋F  # ⎋→  # Emacs M-f Forward-Word  # Apple
+    "\x20": "Spacebar",  # ' '  # ␠  # ␣  # ␢
+    "\x7f": "Delete",  # ␡  # ⌫  # ⌦
+    "\xa0": "⌥Spacebar",  # '\N{No-Break Space}'
+}
+
+assert list(KCAP_BY_KCHARS.keys()) == sorted(KCAP_BY_KCHARS.keys())
+
+assert KCAP_SEP == " "
+for _KCAP in KCAP_BY_KCHARS.values():
+    assert " " not in _KCAP, (_KCAP,)
+
+# the ⌥⇧Fn Key Cap quotes only the Shifting Keys, dropping the substantive final Key Cap,
+# except that four Shifted Arrows exist at ⎋⇧Fn← ⎋⇧Fn→ ⎋⇧Fn↑ ⎋⇧Fn↓
+
+# todo: KCAP_BY_KCHARS differs from plus.py by commenting out "⎋" and "⎋⎋"
 
 
 #
