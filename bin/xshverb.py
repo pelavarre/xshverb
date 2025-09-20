@@ -4821,13 +4821,13 @@ class TurtleScreen:  # type of .ts, .turtle_screen
     def find_puck_dy_dx(self, dy: int, dx: int) -> tuple[int, int]:
         """Find if the Puck can move 1 Spot away, even off the Floor into the Frame"""
 
-        puck_y = self.puck_y
-        puck_x = self.puck_x
+        # puck_y = self.puck_y
+        # puck_x = self.puck_x
 
-        puck_y_min = self.puck_y_min
-        puck_y_max = self.puck_y_max
-        puck_x_min = self.puck_x_min
-        puck_x_max = self.puck_x_max
+        # puck_y_min = self.puck_y_min
+        # puck_y_max = self.puck_y_max
+        # puck_x_min = self.puck_x_min
+        # puck_x_max = self.puck_x_max
 
         assert FrameWidth == 4
         assert FrameHeight == 2
@@ -4839,10 +4839,10 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             paints_by_dx = paints_by_dy_dx[wrap_dy]
             if wrap_dx in paints_by_dx.keys():
 
-                if (puck_y_min + 2) <= (puck_y + dy) <= (puck_y_max - 2):
-                    if (puck_x_min + 4) <= (puck_x + dx) <= (puck_x_max - 4):
+                # if (puck_y_min + 2) <= (puck_y + dy) <= (puck_y_max - 2):
+                #     if (puck_x_min + 4) <= (puck_x + dx) <= (puck_x_max - 4):
 
-                        return (wrap_dy, wrap_dx)
+                return (wrap_dy, wrap_dx)
 
         return (0, 0)
 
