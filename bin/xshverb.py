@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
 
-# FIXME: add 'pq datetime'
-# FIXME: add 'pq less'
-# FIXME: add 'pq find' and 'pq f'
-# FIXME: explain more at 'pq python' than at 'pq p'
-# FIXME: add usage: v|vi|vim
-# FIXME: add usage: e|em|emacs
-
 r"""
 usage: xshverb.py [-h] [-V] [HINT ...]
 
@@ -106,6 +99,8 @@ _: dict[str, int] | None  # new since Oct/2021 Python 3.10
 
 if not __debug__:
     raise NotImplementedError([__debug__])  # refuses to run without live Asserts
+
+default_eq_None = None
 
 if zoneinfo:
     Pacific = zoneinfo.ZoneInfo("America/Los_Angeles")
@@ -5787,22 +5782,27 @@ class ArgDocParser:
         # Fetch from a Black Terminal of 89 columns, not from the current Terminal width
         # Fetch from later Python of "options:", not earlier Python of "optional arguments:"
 
-        if "COLUMNS" not in os.environ:
+        with_columns_else = os.environ.get("COLUMNS", default_eq_None)  # checkpoints
+        with_no_color_else = os.environ.get("NO_COLOR", default_eq_None)  # checkpoints
 
-            os.environ["COLUMNS"] = str(89)  # adds
-            try:
-                b_text = parser.format_help()
-            finally:
+        os.environ["COLUMNS"] = str(89)  # adds or replaces
+        os.environ["NO_COLOR"] = "True"  # adds or replaces
+
+        try:
+
+            b_text = parser.format_help()
+
+        finally:
+
+            if with_no_color_else is None:
+                del os.environ["NO_COLOR"]  # removes
+            else:
+                os.environ["NO_COLOR"] = with_no_color_else  # reverts
+
+            if with_columns_else is None:
                 del os.environ["COLUMNS"]  # removes
-
-        else:
-
-            with_columns = os.environ["COLUMNS"]  # backs up
-            os.environ["COLUMNS"] = str(89)  # replaces
-            try:
-                b_text = parser.format_help()
-            finally:
-                os.environ["COLUMNS"] = with_columns  # restores
+            else:
+                os.environ["COLUMNS"] = with_columns_else  # reverts
 
         b = b_text.splitlines()
 
@@ -6333,6 +6333,14 @@ turtle_screen = TurtleScreen()
 
 if __name__ == "__main__":
     main()
+
+
+# __main.__doc__ todo: add 'pq datetime'
+# __main.__doc__ todo: add 'pq less'
+# __main.__doc__ todo: add 'pq find' and 'pq f'
+# __main.__doc__ todo: explain more at 'pq python' than at 'pq p'
+# __main.__doc__ todo: add usage: v|vi|vim
+# __main.__doc__ todo: add usage: e|em|emacs
 
 
 # todo: bug: no regex choosing @ cat bin/xshverb.py |g '(def.do_)'  a 2  c

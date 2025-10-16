@@ -1,5 +1,14 @@
 things to do, futures to build
 
+3/Oct
+
+    Smooth the production of:  ~/Desktop/Pastebuffer 2025-10-03 at 17:04.txt
+
+30/Sep
+
+    Vim !!
+        |a 1
+
 16/Sep
 
     |pq yaml should pretty-print it
