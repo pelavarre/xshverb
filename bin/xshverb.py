@@ -67,6 +67,7 @@ import hashlib
 import importlib
 import io
 import json
+import logging
 import math
 import os
 import pathlib
@@ -2437,6 +2438,14 @@ def globals_add_do_python_names() -> None:
     if "np" not in g.keys():
         np = LazyImport(import_="numpy", as_="np")
         g["np"] = np
+
+    if "logger" not in g.keys():
+        logger = logging.getLogger(__name__)
+        g["logger"] = logger
+
+    if "p" not in g.keys():
+        p = print
+        g["p"] = p
 
     if "parser" not in g.keys():
         parser = argparse.ArgumentParser()
