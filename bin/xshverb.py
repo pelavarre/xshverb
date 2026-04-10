@@ -1675,7 +1675,8 @@ def do_datetime(argv: list[str]) -> None:
     shline = " ".join(shlex.quote(_) for _ in shargv)
     eprint("+", shline)
 
-    run = subprocess.run(shargv, shell=True, stdin=None)
+    # run = subprocess.run(shargv, shell=False, stdin=None)
+    run = subprocess.run(shline, shell=True, stdin=None)
     returncode = run.returncode
     eprint(f"+ exit {returncode}")  # printed even when zero
 
