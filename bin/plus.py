@@ -68,7 +68,7 @@ flags_apple = sys.platform == "darwin"
 flags_google = bool(os.environ.get("CLOUD_SHELL", default_eq_None))
 
 
-themes = list()
+themes: list[str | None] = list()
 
 
 def main() -> None:
@@ -3680,7 +3680,7 @@ BackGreen = "\033[48;5;46m"  # rgb #050
 BackRed = "\033[48;5;196m"  # rgb #500
 
 
-snuck_lifes = list()
+snuck_lifes: list[SnuckLife] = list()
 
 
 class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenEditor ?
@@ -6044,7 +6044,7 @@ class ProxyTerminal:
 #
 
 
-color_picker_ps_list = list()
+color_picker_ps_list: list[int] = list()
 
 
 def color_picker_plot(se: ScreenEditor, ya: int, xa: int, yb: int, xb: int, dc: int) -> None:
