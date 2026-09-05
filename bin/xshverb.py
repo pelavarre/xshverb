@@ -1229,11 +1229,11 @@ def do_diff(argv: list[str]) -> None:
 
     if ns.a is None:
         assert ns.b is None, (ns.b,)
-        (a, b) = ("a", "b")
+        a, b = ("a", "b")
     elif ns.b is None:
-        (a, b) = ("a", ns.a)
+        a, b = ("a", ns.a)
     else:
-        (a, b) = (ns.a, ns.b)
+        a, b = (ns.a, ns.b)
 
     # Do the Diff & exit
 
@@ -3397,7 +3397,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         ts = turtle_screen
         stdio = ts.stdio
 
-        (m_int, str_m_int, m_colorspace_if, m_stilled) = self._color_plus_decode(
+        m_int, str_m_int, m_colorspace_if, m_stilled = self._color_plus_decode(
             tile, lamp_if=lamp_if, step=0
         )
 
@@ -3480,7 +3480,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
         assert len(penscapes) == 1, (penscapes,)
         penscape = penscapes[-1]
 
-        (m_int, str_m_int, m_colorspace_if, m_stilled) = self._color_plus_decode(
+        m_int, str_m_int, m_colorspace_if, m_stilled = self._color_plus_decode(
             tile, lamp_if=lamp_if, step=step
         )
 
@@ -3541,7 +3541,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
             g = (rgb // 6) % 6
             b = rgb % 6
 
-            (mr, mb, mg) = (r, b, g)
+            mr, mb, mg = (r, b, g)
             if lamp_if == "Red":
                 mr = r + step
                 mr = max(0, min(5, mr))
@@ -3601,7 +3601,7 @@ class PuckColorPicker:  # type of .pcp, .puck_color_picker
 
         ts = turtle_screen
 
-        (m_int, str_m_int, m_colorspace_if, m_stilled) = self._color_plus_decode(
+        m_int, str_m_int, m_colorspace_if, m_stilled = self._color_plus_decode(
             tile, lamp_if=lamp_if, step=0
         )
 
@@ -3689,7 +3689,7 @@ class TurtleConsole(code.InteractiveConsole):
 
         # Scroll up to make room for Prompt
 
-        (y0, x0) = ts.row_y_column_x_read()
+        y0, x0 = ts.row_y_column_x_read()
         if y0 > north_panel_y_max:
             ts.chat_line_break()
 
@@ -3704,7 +3704,7 @@ class TurtleConsole(code.InteractiveConsole):
 
         # Scroll up to make room for Output
 
-        (y1, x1) = ts.row_y_column_x_read()  # replaces
+        y1, x1 = ts.row_y_column_x_read()  # replaces
         if y1 > north_panel_y_max:  # '>' not '>='
             ts.chat_line_break()
 
@@ -3942,7 +3942,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             stdio.write(width * " ")
             stdio.write("\n")  # skips down a Row
 
-        (read_y, read_x) = self.row_y_column_x_read()
+        read_y, read_x = self.row_y_column_x_read()
         assert read_y == puck_panel_y_min, (read_y, puck_panel_y_min)
 
         self.puck_rows_write()
@@ -4293,7 +4293,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         y = puck_y
         x = puck_x
         for paint in paints_below:
-            (ch, yx_penscapes) = paint
+            ch, yx_penscapes = paint
 
             new_yx_penscapes = self.puck_read_yx_tile(
                 y, x=x, ch=ch, yx_penscapes=yx_penscapes, tile=tile, penscapes=penscapes
@@ -4778,7 +4778,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
         assert FloorMarks == "  ", (FloorMarks,)
         assert JoltMark == "@", (JoltMark,)
 
-        (ch0, ch1) = self.puck_read_layout()
+        ch0, ch1 = self.puck_read_layout()
 
         pair = ch0 + ch1
         if pair in ("  ", "()", "@@"):
@@ -4821,7 +4821,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
             for dx, paints in paints_by_dx.items():
                 dydx = (dy, dx)
 
-                ((ch0, penscapes_0), (ch1, penscapes_1)) = paints
+                (ch0, penscapes_0), (ch1, penscapes_1) = paints
                 pair = ch0 + ch1
 
                 pairs_by_dydx[dydx] = pair
@@ -4850,7 +4850,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         # Choose 1 Move
 
-        (warp_dy, warp_dx) = random.choice(list(pairs_by_dydx.keys()))
+        warp_dy, warp_dx = random.choice(list(pairs_by_dydx.keys()))
 
         # Move & eat
 
@@ -4873,7 +4873,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         paints_by_dy_dx = self.find_puck_moves()
 
-        (wrap_dy, wrap_dx) = self.dy_dx_puck_wrap(dy, dx)
+        wrap_dy, wrap_dx = self.dy_dx_puck_wrap(dy, dx)
         if wrap_dy in paints_by_dy_dx.keys():
             paints_by_dx = paints_by_dy_dx[wrap_dy]
             if wrap_dx in paints_by_dx.keys():
@@ -5103,7 +5103,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         #
 
-        ((ch0, penscapes_0), (ch1, penscapes_1)) = paints
+        (ch0, penscapes_0), (ch1, penscapes_1) = paints
         assert len(penscapes_0) <= 1, (penscapes_0,)
         assert len(penscapes_1) <= 1, (penscapes_1,)
 
@@ -5146,7 +5146,7 @@ class TurtleScreen:  # type of .ts, .turtle_screen
 
         stdio.flush()  # before select.select of .kbhit
 
-        (r, w, x) = select.select([fileno], [], [], timeout)
+        r, w, x = select.select([fileno], [], [], timeout)
         hit = fileno in r
 
         return hit

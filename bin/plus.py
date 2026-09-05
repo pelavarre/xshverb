@@ -150,7 +150,7 @@ def platforms_fit_if(platforms: list[str] | None) -> None:
     if platforms:
         for platform in platforms:
             if platform.title() not in defined_platforms:
-                (choice, choices) = (platform, defined_platforms)
+                choice, choices = (platform, defined_platforms)
 
                 s = "plus.py: error:"
                 s += f" argument --platform: invalid choice: {choice!r} (choose from {choices})"
@@ -188,7 +188,7 @@ def theme_fit_in(theme: str | None) -> None:
 
     if theme is not None:
         if theme.title() not in defined_themes:
-            (choice, choices) = (theme, defined_themes)
+            choice, choices = (theme, defined_themes)
 
             s = "plus.py: error:"
             s += f" argument --theme: invalid choice: {choice!r} (choose from {choices})"
@@ -418,7 +418,7 @@ class ConwayLife:
 
         # Checkpoint the Y X place of the Screen Cursor
 
-        (ya, xa) = (pt.row_y, pt.column_x)  # = pt.proxy_read_row_y_column_x()
+        ya, xa = (pt.row_y, pt.column_x)  # = pt.proxy_read_row_y_column_x()
         x_width = bt.read_x_width()
 
         assert CUP_Y_X1 == "\033[" "{}" "H"
@@ -473,9 +473,9 @@ class ConwayLife:
         se = self.screen_editor
         pt = se.proxy_terminal
 
-        (ya, xb) = (pt.row_y, pt.column_x)
+        ya, xb = (pt.row_y, pt.column_x)
 
-        (y, x) = (ya, xb)
+        y, x = (ya, xb)
         for t in text:
             if t == "🔵":
                 se.write("\033[2C")  # todo: Conway Spots always 2 Columns wide?
@@ -1165,7 +1165,7 @@ class ScreenEditor:
         # Fetch & time & log 1 whole TerminalBytePacket,
         # and do swap in b'\033[' b'M' Csi ⇧M for b'\033[M' incomplete 6 Char Mouse Report
 
-        (pack, n) = self.read_one_pack()
+        pack, n = self.read_one_pack()
         pack.close_if_csi_shift_m()
 
         kdata = pack.to_bytes()
@@ -1205,7 +1205,7 @@ class ScreenEditor:
         # Fetch and time one Keyboard-Chord Terminal-Byte-Packet
 
         t0 = time.time()
-        (pack, n) = self.read_arrows_or_one_pack()
+        pack, n = self.read_arrows_or_one_pack()
         t1 = time.time()
         t1t0 = t1 - t0
         millis = int(t1t0 * 1000)
@@ -1313,7 +1313,7 @@ class ScreenEditor:
 
                     self.arrows += 1  # written only by Init & this Def
 
-                    (y, x) = (row_y, column_x)
+                    y, x = (row_y, column_x)
                     if was_pack_kdata == b"\033[A":
                         y += 1  # goes up, not down
                     elif was_pack_kdata == b"\033[B":
@@ -1375,7 +1375,7 @@ class ScreenEditor:
 
         assert CUP_Y_X == "\033[" "{};{}" "H"
 
-        (row_y, column_x) = yx = (pt.row_y, pt.column_x)  # = pt.proxy_read_row_y_column_x()
+        row_y, column_x = yx = (pt.row_y, pt.column_x)  # = pt.proxy_read_row_y_column_x()
 
         cup = f"\033[{arrow_row_y};{arrow_column_x}H"
         self.write(f"\033[{arrow_row_y};{arrow_column_x}H")  # for .read_arrows_as_byte_packet
@@ -1558,7 +1558,7 @@ class ScreenEditor:
     def do_quote_one_kdata(self) -> None:
         """Loopback the Bytes of the next 1 Keyboard Chord onto the screen"""
 
-        (pack, n) = self.read_one_pack()
+        pack, n = self.read_one_pack()
 
         kdata = pack.to_bytes()
         self.do_write_kdata_as_sdata(kdata)  # for .do_quote_one_kdata
@@ -1683,7 +1683,7 @@ class ScreenEditor:
         m = re.fullmatch(b"<([0-9]+);([0-9]+);([0-9]+)", string=neck)
         assert m, (m, neck, pack)
 
-        (f, x, y) = (int(m.group(1)), int(m.group(2)), int(m.group(3)))  # ⎋[<{f};{x};{y}m
+        f, x, y = (int(m.group(1)), int(m.group(2)), int(m.group(3)))  # ⎋[<{f};{x};{y}m
 
         tprint(f"{f=} {x=} {y=}  # _take_csi_mouse_release_if_")
 
@@ -2582,7 +2582,7 @@ class ScreenEditor:
 
         # Plot the Right Panel
 
-        (yc, yd) = (ya, yb)
+        yc, yd = (ya, yb)
 
         xd = x_width - x_frame
         xc = xd - board_width + 1
@@ -3046,7 +3046,7 @@ class ScreenEditor:
         # Eval a 24-Bit Color
 
         if re.fullmatch(r"#[0-9A-Fa-f]{6}", string=keycaps):
-            (r, g, b) = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
+            r, g, b = self.twenty_four_bit_color_verb_to_r_g_b(keycaps)
 
             if not flags.apple:  # Apple lacks native 24-Bit RGB Color
                 neck_end = f"2;{r};{g};{b}"
@@ -3304,7 +3304,7 @@ class ScreenEditor:
         pt = self.proxy_terminal
         styles = list(pt.styles)
 
-        (west_x, wide_text) = (x, text)
+        west_x, wide_text = (x, text)
         if (text[:1] + text[-1:]) != "<>":
             west_x = (x - 1) if (x > X1) else x
             wide_text = " " + text + " "
@@ -3327,7 +3327,7 @@ class ScreenEditor:
     def y_x_write_text_released(self, y: int, x: int, text: str, styles: list[str]) -> None:
         """Show the Widget as Released"""
 
-        (west_x, wide_text) = (x, text)
+        west_x, wide_text = (x, text)
         if (text[:1] + text[-1:]) != "<>":
             west_x = (x - 1) if (x > X1) else x
             wide_text = " " + text + " "
@@ -3387,13 +3387,13 @@ class ScreenEditor:
         }
 
         digit = -1
-        (y, x) = (-1, -1)
+        y, x = (-1, -1)
 
         def digit_next() -> None:
             nonlocal digit, y, x
             digit += 1
-            (dy, dx) = dy_dx_by_digit[digit]
-            (y, x) = (row_y + dy * 9, column_x + 10 + dx * 10)
+            dy, dx = dy_dx_by_digit[digit]
+            y, x = (row_y + dy * 9, column_x + 10 + dx * 10)
 
         def self_y_x_text_write(text: str) -> None:
             nonlocal y
@@ -3510,7 +3510,7 @@ class ScreenEditor:
 
         #
 
-        (y, x) = (row_y, column_x)
+        y, x = (row_y, column_x)
         self.write(f"\033[{y};{x}H")  # todo14: call to move Y X without writing [H from caller
 
         # todo14: macOS of is the Os theme light/ dark, is the Terminal theme light/ dark
@@ -3583,14 +3583,14 @@ class ScreenEditor:
 
         # Block till at least a first Keyboard Chord
 
-        (pack1, n1) = self.read_one_pack()
+        pack1, n1 = self.read_one_pack()
         kdata1 = pack1.to_bytes()
 
         # Quote together a Mouse Press & Release, encoded as Sgr ⇧M followed by a Keyboard Chord
 
         if self._match_csi_mouse_(pack1) and (pack1.tail == b"M"):  # drops Mouse Press
 
-            (pack2, n2) = self.read_one_pack()
+            pack2, n2 = self.read_one_pack()
             self.write_kcaps_plus(pack2)  # usually prints Mouse Release
 
         # Quote one Keyboard Chord that isn't a plain Arrow quickly followed by a Chord
@@ -3615,7 +3615,7 @@ class ScreenEditor:
                     kdata2 = kdata1
                     while True:
                         self.write(kdata2.decode())
-                        (pack2, n2) = self.read_one_pack()
+                        pack2, n2 = self.read_one_pack()
 
                         kdata2 = pack2.to_bytes()
                         if kdata2 not in unshifted_arrow_encodes:
@@ -3711,7 +3711,7 @@ class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenE
             -4: {0: ("⬜",)},  # Body
         }
 
-        (dy, dx) = (1, 0)
+        dy, dx = (1, 0)
 
         #
 
@@ -3731,7 +3731,7 @@ class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenE
             }
         }
 
-        (dy, dx) = (0, 2)  # todo12: pick .dy .dx out of .writes_by_dy_dx
+        dy, dx = (0, 2)  # todo12: pick .dy .dx out of .writes_by_dy_dx
 
         #
 
@@ -3794,7 +3794,7 @@ class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenE
             se.print()
             se.print()
 
-            (y, x) = (pt.row_y, pt.column_x)
+            y, x = (pt.row_y, pt.column_x)
             x4 = x + 2 * 2
             x6 = x4 + 2  # starts a Snuck of 3 double-wide Tiles at X = 3
 
@@ -3846,8 +3846,8 @@ class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenE
             se.write(3 * 2 * " ")
             se.write(3 * 2 * "\b")
 
-            (y, x) = (pt.row_y, pt.column_x)
-            (y, x) = (5, 15)  # last wins
+            y, x = (pt.row_y, pt.column_x)
+            y, x = (5, 15)  # last wins
 
             self.snuck_head_point_ahead("")
             ts.y_x_leap_to(y=y, x=x, writes_by_dy_dx=dict(writes_by_dy_dx))
@@ -4053,7 +4053,7 @@ class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenE
 
         # Visibly collide with Snuck Tiles when found beneath Head Tile
 
-        (y, x) = yx
+        y, x = yx
 
         x1 = x + 1
         yx1 = (y, x1)
@@ -4110,8 +4110,8 @@ class SnuckLife:  # todo13: shuffle Gameboard Classes all above or below ScreenE
 
         d: dict[int, dict[int, tuple[str, ...]]] = dict()
         for yexe, yexe_writes in zip(yexe_pairs, dydx_pairs_writes):
-            (ye, xe) = yexe
-            (dy, dx) = (ye - yd, xe - xd)
+            ye, xe = yexe
+            dy, dx = (ye - yd, xe - xd)
 
             if dy not in d.keys():
                 d[dy] = dict()
@@ -4227,7 +4227,7 @@ class TerminalSprite:
 
         yx_uncovered_pairs = list()
         for yx in sorted(yx_write_pairs):  # 'better ordered than muddled'
-            (y, x) = yx
+            y, x = yx
             if yx not in stamped_yx_write_pairs:
                 yx_uncovered_pairs.append(yx)
 
@@ -4235,7 +4235,7 @@ class TerminalSprite:
                 self.y_x_uncover_at(y, x=x)
 
         for yx in yx_uncovered_pairs:
-            (y, x) = yx
+            y, x = yx
             del reads_by_yx[yx]
 
         self.yx_write_pairs = stamped_yx_write_pairs
@@ -4297,7 +4297,7 @@ class TerminalSprite:
         for index, t in enumerate(text):
             rindex = index - len(text)
 
-            (y, x) = yx = (pt.row_y, pt.column_x)
+            y, x = yx = (pt.row_y, pt.column_x)
 
             xb = x - 1  # at West of the Text, may add 0 Columns or 1 Column
             xf = x + 1  # at East of the Text, may add 0 or 1 or 2 Columns
@@ -4647,14 +4647,14 @@ class ProxyTerminal:
     def proxy_read_row_y(self) -> int:
         """Read the Terminal Cursor Y Row, but through the Mirrors"""
 
-        (row_y, column_x) = self.proxy_read_row_y_column_x()
+        row_y, column_x = self.proxy_read_row_y_column_x()
 
         return row_y
 
     def proxy_read_column_x(self) -> int:
         """Read the Terminal Cursor X Column, but through the Mirrors"""
 
-        (row_y, column_x) = self.proxy_read_row_y_column_x()
+        row_y, column_x = self.proxy_read_row_y_column_x()
 
         return column_x
 
@@ -4663,7 +4663,7 @@ class ProxyTerminal:
 
         bt = self.bytes_terminal
 
-        (row_y, column_x) = bt.read_row_y_column_x()
+        row_y, column_x = bt.read_row_y_column_x()
         self.row_y = row_y  # for .proxy_read_row_y_column_x
         self.column_x = column_x  # for .proxy_read_row_y_column_x
 
@@ -4672,14 +4672,14 @@ class ProxyTerminal:
     def proxy_read_y_height(self) -> int:
         """Read the Terminal Cursor Y Row, but through the Mirrors"""
 
-        (y_height, x_width) = self.proxy_read_y_height_x_width()
+        y_height, x_width = self.proxy_read_y_height_x_width()
 
         return y_height
 
     def proxy_read_x_width(self) -> int:
         """Read the Terminal Cursor X Column, but through the Mirrors"""
 
-        (y_height, x_width) = self.proxy_read_y_height_x_width()
+        y_height, x_width = self.proxy_read_y_height_x_width()
 
         return x_width
 
@@ -4688,7 +4688,7 @@ class ProxyTerminal:
 
         bt = self.bytes_terminal
 
-        (y_height, x_width) = bt.read_y_height_x_width()
+        y_height, x_width = bt.read_y_height_x_width()
         self.y_height = y_height  # for .proxy_read_y_height_x_width
         self.x_width = x_width  # for .proxy_read_y_height_x_width
 
@@ -4892,7 +4892,7 @@ class ProxyTerminal:
         # Trace what's not fitting
 
         if end:
-            (y, x) = (row_y, column_x)
+            y, x = (row_y, column_x)
             if not start:
                 tprint(f"{y};{x} No proxy of {end!r}")
             else:
@@ -5455,14 +5455,14 @@ class ProxyTerminal:
 
                         if ps == 0:
                             self._write_row_erase_(ps)
-                            (ya, yb) = (row_y + 1, y_height)  # default to PS0 ⎋[⇧J after-erase
+                            ya, yb = (row_y + 1, y_height)  # default to PS0 ⎋[⇧J after-erase
                         elif ps == 1:  # ⎋[1⇧J before-erase
                             self._write_row_erase_(ps)
-                            (ya, yb) = (Y1, row_y - 1)  # includes the Char beneath the Cursor
+                            ya, yb = (Y1, row_y - 1)  # includes the Char beneath the Cursor
                         else:
                             assert ps == 2, (ps,)  # ⎋[2⇧J screen-erase
                             # self._write_row_erase_(ps)  # harmless, but unneeded
-                            (ya, yb) = (1, y_height)
+                            ya, yb = (1, y_height)
 
                         for y in range(ya, yb + 1):
                             self.row_y = y
@@ -6592,7 +6592,7 @@ class BytesTerminal:
 
         stdio.flush()  # for .kbhit of BytesTerminal
 
-        (r, w, x) = select.select([fileno], [], [], timeout)
+        r, w, x = select.select([fileno], [], [], timeout)
         hit = fileno in r
 
         return hit
@@ -6670,14 +6670,14 @@ class BytesTerminal:
     def read_y_height(self) -> int:
         """Count Terminal Screen Pane Rows"""
 
-        (y_height, _) = self.read_y_height_x_width()
+        y_height, _ = self.read_y_height_x_width()
 
         return y_height
 
     def read_x_width(self) -> int:
         """Count Terminal Screen Pane Columns"""
 
-        (_, x_width) = self.read_y_height_x_width()
+        _, x_width = self.read_y_height_x_width()
 
         return x_width
 
@@ -6698,7 +6698,7 @@ class BytesTerminal:
     def read_column_x(self) -> int:
         """Find the Terminal Cursor Column"""
 
-        (y, x) = self.read_row_y_column_x()
+        y, x = self.read_row_y_column_x()
 
         return x
 
@@ -7029,7 +7029,7 @@ class TerminalBytePacket:
 
         # Take 1 Byte into Stash, if next Bytes could make it Decodable
 
-        (stash_plus_decodes, stash_extras) = self._take_one_stashable_if(byte)
+        stash_plus_decodes, stash_extras = self._take_one_stashable_if(byte)
         assert len(stash_plus_decodes) <= 1, (stash_plus_decodes, stash_extras, byte)
         if not stash_extras:
             return b""  # holds 1..3 possibly Decodable Bytes in Stash
