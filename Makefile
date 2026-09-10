@@ -45,7 +45,7 @@ help:
 #
 
 bin:
-	cp -p bin/? bin/dt bin/ht bin/pq bin/xshverb.py ~/bin/.
+	cp -p bin/pq bin/xshverb.py ~/bin/.
 
 
 #
